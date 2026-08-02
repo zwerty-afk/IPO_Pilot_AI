@@ -37,8 +37,11 @@ if (!GEMINI_API_KEY) {
 }
 
 const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
-// Use gemini-2.0-flash standard model
-const GEMINI_MODEL = 'gemini-2.0-flash';
+// gemini-2.0-flash returns 429 with "limit: 0" on this project — the free tier
+// grants it no allowance at all, so no amount of waiting helps. The *-latest
+// aliases do have an allowance and pass a PDF vision probe, which is what OCR
+// needs. Overridable so a paid project can pin an exact version.
+const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-flash-latest';
 
 const app = express();
 app.use(cors());
