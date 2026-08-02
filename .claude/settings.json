@@ -10,7 +10,12 @@
       "Bash(rm -f server/_verify_serverless.mjs)",
       "Bash(./client/node_modules/.bin/vite build *)",
       "Bash(git rm *)",
-      "Bash(git add *)"
+      "Bash(git add *)",
+      "Bash(git merge *)",
+      "Bash(awk '/^ *)",
+      "Bash(git commit -q -m 'Merge GitHub scaffolding \\(LICENSE\\) into project history *)",
+      "Bash(git stash *)",
+      "Bash(git remote *)"
     ]
   }
 }
