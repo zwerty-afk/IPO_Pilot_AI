@@ -809,6 +809,7 @@ app.post('/api/documents/:companyId/upload', authenticateToken, (req, res) => {
     const { companyId } = req.params;
     const { doc_type } = req.body;
     if (!req.file) return res.status(400).json({ message: 'No file uploaded.' });
+    if (!doc_type) return res.status(400).json({ message: 'doc_type is required.' });
 
     // Duplicate check: same original name + doc_type for this company
     const existingDocs = db.getDocuments(companyId);
