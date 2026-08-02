@@ -1,10 +1,15 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Bell, X } from 'lucide-react';
-import { getNotifications, markNotificationRead } from '../services/api';
+import { Bell, X, RotateCcw, Loader2 } from 'lucide-react';
+import { getNotifications, markNotificationRead, markAllNotificationsRead } from '../services/api';
 
 const SECTION_ROUTES = {
   documents: '/documents',
+  sebi_updates: '/sebi-updates',
+  invitation: '/invitations',
+  export: '/export',
+  dashboard: '/dashboard',
+  reviewer: '/reviewer-workspace',
   capital_structure: '/draft',
   objects: '/draft',
   business_overview: '/draft',
@@ -16,6 +21,8 @@ const SECTION_ROUTES = {
 
 export default function NotificationBell() {
   const [notifications, setNotifications] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
   const [open, setOpen] = useState(false);
   const [panelPos, setPanelPos] = useState({ top: 0, left: 0 });
   const buttonRef = useRef(null);
@@ -24,16 +31,18 @@ export default function NotificationBell() {
 
   const loadNotifications = useCallback(async () => {
     try {
+      setError(null);
       const res = await getNotifications();
       setNotifications(Array.isArray(res.data) ? res.data : []);
     } catch (err) {
       console.error('Failed to load notifications:', err);
+      setError('Could not load notifications.');
     }
   }, []);
 
   useEffect(() => {
     loadNotifications();
-    const interval = setInterval(loadNotifications, 12000);
+    const interval = setInterval(loadNotifications, 8000);
     return () => clearInterval(interval);
   }, [loadNotifications]);
 
@@ -55,13 +64,24 @@ export default function NotificationBell() {
   const toggleOpen = () => {
     if (!open && buttonRef.current) {
       const rect = buttonRef.current.getBoundingClientRect();
-      // Place panel to the right of the sidebar (w-72 = 288px wide)
-      setPanelPos({ top: rect.bottom + 8, left: 296 });
+      const panelHeight = 360;
+      // Place panel smartly above the bottom-left sidebar bell button
+      const topPos = rect.top - panelHeight > 10 ? rect.top - panelHeight + 30 : Math.max(10, rect.bottom - panelHeight);
+      setPanelPos({ top: topPos, left: 296 });
     }
     setOpen((prev) => !prev);
   };
 
   const unreadCount = notifications.filter((n) => !n.is_read).length;
+
+  const handleMarkAllRead = async () => {
+    try {
+      await markAllNotificationsRead();
+      setNotifications(prev => prev.map(n => ({ ...n, is_read: true })));
+    } catch (err) {
+      console.error('Failed to mark all read:', err);
+    }
+  };
 
   const handleNotifClick = async (notif) => {
     if (!notif.is_read) {
@@ -113,9 +133,18 @@ export default function NotificationBell() {
             </div>
             <div className="flex items-center gap-2">
               {unreadCount > 0 && (
-                <span className="text-[10px] font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full">
-                  {unreadCount} new
-                </span>
+                <>
+                  <span className="text-[10px] font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full">
+                    {unreadCount} new
+                  </span>
+                  <button
+                    onClick={handleMarkAllRead}
+                    type="button"
+                    className="text-[10px] font-medium text-slate-500 hover:text-indigo-600 transition-colors"
+                  >
+                    Mark all read
+                  </button>
+                </>
               )}
               <button
                 onClick={() => setOpen(false)}
@@ -129,7 +158,17 @@ export default function NotificationBell() {
 
           {/* Notification list */}
           <div className="max-h-80 overflow-y-auto">
-            {notifications.length === 0 ? (
+            {error ? (
+              <div className="p-6 text-center space-y-2">
+                <p className="text-red-600 text-xs font-semibold">{error}</p>
+                <button
+                  onClick={loadNotifications}
+                  className="px-3 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-medium rounded-lg transition-colors inline-flex items-center gap-1"
+                >
+                  <RotateCcw className="w-3 h-3" /> Retry
+                </button>
+              </div>
+            ) : notifications.length === 0 ? (
               <div className="p-8 text-center">
                 <Bell className="w-8 h-8 text-slate-200 mx-auto mb-2" />
                 <p className="text-slate-400 text-xs font-medium">No notifications yet</p>

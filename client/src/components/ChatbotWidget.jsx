@@ -25,16 +25,25 @@ export default function ChatbotWidget() {
     const q = question || input.trim();
     if (!q) return;
     
-    setMessages(prev => [...prev, { role: 'user', content: q }]);
+    const userMsg = { role: 'user', content: q };
+    const updatedMessages = [...messages, userMsg];
+    setMessages(updatedMessages);
     setInput('');
     setLoading(true);
     
     try {
-      const res = await chatbotQuery(q);
+      // Pass full conversation history for multi-turn Gemini context
+      const history = updatedMessages.slice(-10).map(m => ({ role: m.role, content: m.content }));
+      const res = await chatbotQuery(q, history.slice(0, -1)); // exclude the current question from history
       const answer = res.data?.answer || 'I could not process that request. Please try again.';
-      setMessages(prev => [...prev, { role: 'assistant', content: answer }]);
+      setMessages(prev => [...prev, { role: 'assistant', content: answer, model: res.data?.model }]);
     } catch (err) {
-      setMessages(prev => [...prev, { role: 'assistant', content: 'Something went wrong. Please try again.' }]);
+      const errData = err.response?.data;
+      const errorMsg = errData?.answer || 
+        (err.response?.status === 429 ? 'Rate limit reached. Please wait a moment and try again.' : 
+         err.response?.status === 500 ? 'The AI assistant is temporarily unavailable. Please try again.' :
+         'Something went wrong. Please try again.');
+      setMessages(prev => [...prev, { role: 'assistant', content: errorMsg, isError: true }]);
     } finally {
       setLoading(false);
     }

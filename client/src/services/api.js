@@ -1,7 +1,15 @@
 import axios from 'axios';
 
+// In dev, talk to the local Express server directly. In a deployed build the API
+// is served from the same origin (Vercel rewrites /api/* to the function), so a
+// relative base keeps the app working on any domain without a rebuild.
+// VITE_API_BASE_URL overrides both, for a separately hosted backend.
+const API_BASE_URL =
+  import.meta.env.VITE_API_BASE_URL ||
+  (import.meta.env.DEV ? 'http://localhost:3001/api' : '/api');
+
 const api = axios.create({
-  baseURL: 'http://localhost:3001/api',
+  baseURL: API_BASE_URL,
   headers: { 'Content-Type': 'application/json' },
 });
 
@@ -306,17 +314,44 @@ const INITIAL_SEED = {
     { id: 'sebi-3', title: 'SME Framework Review Committee Report', description: 'SEBI publishes the final report of the SME Advisory Committee recommending streamlined listing timelines and reduced compliance burden for Emerge/SME boards.', date: '2026-06-28', category: 'SME Framework Circular' },
     { id: 'sebi-4', title: 'Guidelines on AI-Assisted Document Preparation', description: 'Draft guidelines issued for public consultation on the use of AI and automation tools in preparation of offer documents, emphasizing human accountability and audit trails.', date: '2026-06-15', category: 'Technology Guidelines' },
     { id: 'sebi-5', title: 'Revised Timeline for SME IPO Processing', description: 'SEBI reduces the mandatory observation period for SME Draft Red Herring Prospectus (DRHP) from 30 days to 21 days for companies with clean compliance records.', date: '2026-05-30', category: 'ICDR Amendment' }
-  ]
+  ],
+  merchant_bankers: [
+    { id: 'mb-001', name: 'Axis Capital Limited', registration_no: 'INM000012029', status: 'Registered', category: 'Category I', address: 'Axis House, C-2, Wadia International Centre, Pandurang Budhkar Marg, Worli, Mumbai - 400025', sebi_source: 'https://www.sebi.gov.in/sebiweb/home/HomeAction.do?doListing=yes&sid=3&ssid=6&smid=0&pageno=1', registered_since: '2003-01-01' },
+    { id: 'mb-002', name: 'IIFL Securities Ltd', registration_no: 'INM000010940', status: 'Registered', category: 'Category I', address: 'IIFL House, Sun Infotech Park, Road No. 16V, Wagle Industrial Estate, Thane - 400604', sebi_source: 'https://www.sebi.gov.in/sebiweb/home/HomeAction.do?doListing=yes&sid=3&ssid=6&smid=0&pageno=1', registered_since: '2002-01-01' },
+    { id: 'mb-003', name: 'Emkay Global Financial Services Ltd', registration_no: 'INM000011229', status: 'Registered', category: 'Category I', address: '7th Floor, The Ruby, Senapati Bapat Marg, Dadar West, Mumbai - 400028', sebi_source: 'https://www.sebi.gov.in/sebiweb/home/HomeAction.do?doListing=yes&sid=3&ssid=6&smid=0&pageno=1', registered_since: '2005-01-01' },
+    { id: 'mb-004', name: 'Hem Securities Limited', registration_no: 'INM000010981', status: 'Registered', category: 'Category I', address: 'Ground Floor, 1 Bhagwat House, 2 Roop Nagar, Delhi - 110007', sebi_source: 'https://www.sebi.gov.in/sebiweb/home/HomeAction.do?doListing=yes&sid=3&ssid=6&smid=0&pageno=1', registered_since: '2004-01-01' },
+    { id: 'mb-005', name: 'Beeline Capital Advisors Pvt Ltd', registration_no: 'INM000012871', status: 'Registered', category: 'Category II', address: '401, Harlim Chambers, 1st Road, Khar (W), Mumbai - 400052', sebi_source: 'https://www.sebi.gov.in/sebiweb/home/HomeAction.do?doListing=yes&sid=3&ssid=6&smid=0&pageno=1', registered_since: '2010-01-01' },
+    { id: 'mb-006', name: 'Expert Global Consultants Pvt Ltd', registration_no: 'INM000012289', status: 'Registered', category: 'Category II', address: 'Goregaon East, Mumbai - 400063', sebi_source: 'https://www.sebi.gov.in/sebiweb/home/HomeAction.do?doListing=yes&sid=3&ssid=6&smid=0&pageno=1', registered_since: '2008-01-01' },
+    { id: 'mb-007', name: 'GYR Capital Advisors Pvt Ltd', registration_no: 'INM000014149', status: 'Registered', category: 'Category II', address: 'Lower Parel, Mumbai - 400013', sebi_source: 'https://www.sebi.gov.in/sebiweb/home/HomeAction.do?doListing=yes&sid=3&ssid=6&smid=0&pageno=1', registered_since: '2016-01-01' },
+    { id: 'mb-008', name: 'Indorient Financial Services Ltd', registration_no: 'INM000011120', status: 'Registered', category: 'Category I', address: '101, Indira Chambers, M.G. Road, Indore - 452001', sebi_source: 'https://www.sebi.gov.in/sebiweb/home/HomeAction.do?doListing=yes&sid=3&ssid=6&smid=0&pageno=1', registered_since: '2004-01-01' },
+    { id: 'mb-009', name: 'Pantomath Capital Advisors Pvt Ltd', registration_no: 'INM000012110', status: 'Registered', category: 'Category I', address: 'Unit No.908, 9th Floor, Hallmark Business Plaza, Sant Dnyaneshwar Marg, Bandra (E), Mumbai - 400051', sebi_source: 'https://www.sebi.gov.in/sebiweb/home/HomeAction.do?doListing=yes&sid=3&ssid=6&smid=0&pageno=1', registered_since: '2007-01-01' },
+    { id: 'mb-010', name: 'Saffron Capital Advisors Pvt Ltd', registration_no: 'INM000012708', status: 'Registered', category: 'Category II', address: 'Nariman Point, Mumbai - 400021', sebi_source: 'https://www.sebi.gov.in/sebiweb/home/HomeAction.do?doListing=yes&sid=3&ssid=6&smid=0&pageno=1', registered_since: '2009-01-01' }
+  ],
+  invitations: []
 };
 
 // Check if localStorage has database, if not initialize it
+const DB_VERSION = 'v2.2'; // Increment this to force-reset stale invitation data
 const getMockDb = () => {
   const dbStr = localStorage.getItem('ipo_local_db');
   if (!dbStr) {
-    localStorage.setItem('ipo_local_db', JSON.stringify(INITIAL_SEED));
-    return INITIAL_SEED;
+    const fresh = { ...INITIAL_SEED, db_version: DB_VERSION };
+    localStorage.setItem('ipo_local_db', JSON.stringify(fresh));
+    return fresh;
   }
   const parsed = JSON.parse(dbStr);
+  // Version-gated reset: if DB version changed, clear invitations to remove stale test data
+  if (parsed.db_version !== DB_VERSION) {
+    parsed.invitations = [];
+    parsed.db_version = DB_VERSION;
+    localStorage.setItem('ipo_local_db', JSON.stringify(parsed));
+  }
+  // Revoked invitations are terminal and carry no useful state — drop them so the
+  // list starts clean instead of accumulating "REVOKED" rows.
+  if (Array.isArray(parsed.invitations) && parsed.invitations.some(i => i.status === 'revoked')) {
+    parsed.invitations = parsed.invitations.filter(i => i.status !== 'revoked');
+    localStorage.setItem('ipo_local_db', JSON.stringify(parsed));
+  }
   // Schema migration: merge any new top-level keys from INITIAL_SEED
   // This handles the case where users have old data lacking notifications/sebi_notices
   let migrated = false;
@@ -640,13 +675,53 @@ const runMock = (method, url, data) => {
   // POST /auth/login
   if (url === '/auth/login') {
     const { email, password } = data;
-    const user = dbData.users.find(u => u.email === email && u.password === password);
-    if (!user) return Promise.reject({ response: { status: 400, data: { message: 'Invalid credentials' } } });
-    
+    const user = dbData.users.find(u => u.email.toLowerCase() === String(email || '').toLowerCase() && u.password === password);
+    if (!user) return Promise.reject({ response: { status: 400, data: { message: 'Invalid email or password.' } } });
+
     // Simulate JWT token
     const token = `mock-token-for-${user.email}`;
     // Save to localStorage token
     return Promise.resolve({ data: { token, user: { email: user.email, role: user.role, name: user.name } } });
+  }
+
+  // POST /auth/register
+  if (url === '/auth/register') {
+    const { name, email, password, role, companyName } = data || {};
+    if (!name || !email || !password) {
+      return Promise.reject({ response: { status: 400, data: { message: 'Name, email, and password are required.' } } });
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return Promise.reject({ response: { status: 400, data: { message: 'Please enter a valid email address.' } } });
+    }
+    if (String(password).length < 6) {
+      return Promise.reject({ response: { status: 400, data: { message: 'Password must be at least 6 characters.' } } });
+    }
+    const normalizedRole = role === 'reviewer' ? 'reviewer' : 'issuer';
+    const exists = dbData.users.some(u => u.email.toLowerCase() === String(email).toLowerCase());
+    if (exists) {
+      return Promise.reject({ response: { status: 409, data: { message: 'An account with this email already exists. Please sign in.' } } });
+    }
+    if (normalizedRole === 'issuer' && !companyName) {
+      return Promise.reject({ response: { status: 400, data: { message: 'Company name is required for issuer accounts.' } } });
+    }
+
+    let companyId = null;
+    if (normalizedRole === 'issuer') {
+      const slug = String(companyName).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40) || 'company';
+      companyId = slug;
+      let n = 1;
+      while (dbData.companies.some(c => c.id === companyId)) companyId = `${slug}-${n++}`;
+      dbData.companies.push({ id: companyId, name: companyName, legal_name: companyName });
+      if (!dbData.intake[companyId]) dbData.intake[companyId] = {};
+      if (!dbData.drafts[companyId]) dbData.drafts[companyId] = {};
+    }
+
+    const newUser = { email: String(email).toLowerCase(), password, role: normalizedRole, name, companyId };
+    dbData.users.push(newUser);
+    saveMockDb(dbData);
+
+    const token = `mock-token-for-${newUser.email}`;
+    return Promise.resolve({ data: { token, user: { email: newUser.email, role: newUser.role, name: newUser.name } } });
   }
 
   // GET /auth/me
@@ -654,13 +729,22 @@ const runMock = (method, url, data) => {
     const token = localStorage.getItem('ipo_token');
     if (!token) return Promise.reject({ response: { status: 401 } });
     const email = token.replace('mock-token-for-', '');
-    const user = dbData.users.find(u => u.email === email);
+    const user = dbData.users.find(u => u.email.toLowerCase() === email.toLowerCase());
     if (!user) return Promise.reject({ response: { status: 401 } });
-    return Promise.resolve({ data: { user } });
+    // Never hand the password back to the client.
+    const { password: _pw, ...safeUser } = user;
+    return Promise.resolve({ data: { user: safeUser } });
   }
 
   // GET /companies
   if (url === '/companies') {
+    const token = localStorage.getItem('ipo_token') || '';
+    const email = token.replace('mock-token-for-', '');
+    const user = dbData.users.find(u => u.email.toLowerCase() === email.toLowerCase());
+    // Issuers only see their own company; reviewers see all companies.
+    if (user && user.role === 'issuer' && user.companyId) {
+      return Promise.resolve({ data: { companies: dbData.companies.filter(c => c.id === user.companyId) } });
+    }
     return Promise.resolve({ data: { companies: dbData.companies } });
   }
 
@@ -750,7 +834,7 @@ const runMock = (method, url, data) => {
   }
 
   // GET /documents/:companyId
-  if (url.startsWith('/documents/') && !url.includes('/upload')) {
+  if (method === 'get' && url.startsWith('/documents/') && !url.includes('/upload') && !url.includes('/confirm') && !url.includes('/verify') && url.split('/').length === 3) {
     const companyId = url.split('/')[2];
     const companyDocs = dbData.documents.filter(d => d.companyId === companyId);
     return Promise.resolve({ data: companyDocs });
@@ -803,6 +887,23 @@ const runMock = (method, url, data) => {
     saveMockDb(dbData);
     mockGenerateDraftData(doc.companyId);
     return Promise.resolve({ data: { message: 'Confirmed', document: doc } });
+  }
+
+  // PUT /documents/:id/verify (reviewer only in real mode; works in mock for any role)
+  if (method === 'put' && url.startsWith('/documents/') && url.endsWith('/verify')) {
+    const parts = url.split('/');
+    const docId = parts[2];
+    const doc = dbData.documents.find(d => d.id === docId);
+    if (!doc) return Promise.reject({ response: { status: 404, data: { message: 'Document not found' } } });
+    const validStatuses = ['under_review', 'verified', 'changes_requested'];
+    if (!data?.status || !validStatuses.includes(data.status)) {
+      return Promise.reject({ response: { status: 400, data: { message: `Invalid status. Allowed: ${validStatuses.join(', ')}` } } });
+    }
+    doc.verification_status = data.status;
+    doc.verification_remarks = data.remarks || '';
+    if (data.status === 'verified') doc.status = 'confirmed';
+    saveMockDb(dbData);
+    return Promise.resolve({ data: { message: 'Document verification updated.', document: doc } });
   }
 
   // DELETE /documents/:id
@@ -951,10 +1052,27 @@ const runMock = (method, url, data) => {
     const token = localStorage.getItem('ipo_token') || '';
     const email = token.replace('mock-token-for-', '');
     const user = dbData.users.find(u => u.email === email);
-    if (!user) return Promise.resolve({ data: [] });
-    const userNotifs = (dbData.notifications || []).filter(n => n.recipient_email === email);
+    const role = user?.role || 'issuer';
+    const userNotifs = (dbData.notifications || []).filter(
+      n => n.recipient_email === email || (n.recipient_role && n.recipient_role === role) || n.recipient_email === 'all'
+    );
     userNotifs.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
     return Promise.resolve({ data: userNotifs });
+  }
+
+  // PUT /notifications/mark-all-read
+  if (method === 'put' && url === '/notifications/mark-all-read') {
+    const token = localStorage.getItem('ipo_token') || '';
+    const email = token.replace('mock-token-for-', '');
+    const user = dbData.users.find(u => u.email === email);
+    const role = user?.role || 'issuer';
+    (dbData.notifications || []).forEach(n => {
+      if (n.recipient_email === email || (n.recipient_role && n.recipient_role === role) || n.recipient_email === 'all') {
+        n.is_read = true;
+      }
+    });
+    saveMockDb(dbData);
+    return Promise.resolve({ data: { message: 'All marked read' } });
   }
 
   // PUT /notifications/:id/read
@@ -987,7 +1105,175 @@ const runMock = (method, url, data) => {
 
   // GET /sebi-notices
   if (url === '/sebi-notices') {
-    return Promise.resolve({ data: dbData.sebi_notices || [] });
+    const notices = dbData.sebi_notices || [];
+    const meta = {
+      last_fetched: new Date().toISOString(),
+      fetch_count: 1,
+      source: 'curated',
+      error: null
+    };
+    return Promise.resolve({ data: { notices, meta } });
+  }
+
+  // GET /merchant-bankers
+  if (url.startsWith('/merchant-bankers')) {
+    const search = url.includes('?q=') ? decodeURIComponent(url.split('?q=')[1] || '').toLowerCase() : '';
+    const bankers = dbData.merchant_bankers || INITIAL_SEED.merchant_bankers;
+    const filtered = search ? bankers.filter(b => b.name.toLowerCase().includes(search) || b.registration_no.toLowerCase().includes(search) || b.address.toLowerCase().includes(search)) : bankers;
+    return Promise.resolve({
+      data: {
+        merchant_bankers: filtered,
+        source: 'SEBI Registered Merchant Bankers Directory',
+        source_url: 'https://www.sebi.gov.in/sebiweb/home/HomeAction.do?doListing=yes&sid=3&ssid=6&smid=0&pageno=1',
+        attribution: 'Data sourced from SEBI official merchant banker registration records.'
+      }
+    });
+  }
+
+  // GET /invitations
+  if (url === '/invitations') {
+    const token = localStorage.getItem('ipo_token') || '';
+    const email = token.replace('mock-token-for-', '');
+    const user = dbData.users.find(u => u.email === email);
+    const role = user?.role || 'issuer';
+    const allInvs = dbData.invitations || [];
+    
+    if (role === 'reviewer') {
+      // Reviewer only sees invitations sent to them
+      const forReviewer = allInvs.filter(inv =>
+        inv.merchant_banker_email === email ||
+        inv.invited_to_email === email
+      );
+      // Fallback: show all non-revoked invitations if no email match (demo mode)
+      return Promise.resolve({ data: forReviewer.length > 0 ? forReviewer : allInvs.filter(i => i.status !== 'revoked') });
+    } else {
+      // Issuer sees only their company's invitations
+      const companyId = user?.companyId || 'aarav-precision';
+      return Promise.resolve({ data: allInvs.filter(i => i.company_id === companyId) });
+    }
+  }
+
+  // POST /invitations
+  if (method === 'post' && url === '/invitations') {
+    if (!dbData.invitations) dbData.invitations = [];
+    const newInv = {
+      id: 'inv-' + Date.now(),
+      token: 'inv_token_' + Math.random().toString(36).substring(2) + Date.now(),
+      company_id: data.company_id || (() => { const tok = localStorage.getItem('ipo_token') || ''; const u = dbData.users.find(u => u.email === tok.replace('mock-token-for-', '')); return u?.companyId || 'aarav-precision'; })(),
+      company_name: data.company_name || 'Aarav Precision Engineering Pvt Ltd',
+      merchant_banker_id: data.merchant_banker_id,
+      merchant_banker_name: data.merchant_banker_name,
+      // Map the invited merchant banker to the reviewer email for demo purposes
+      merchant_banker_email: 'priya@example.com',
+      invited_by_email: (() => { const tok = localStorage.getItem('ipo_token') || ''; return tok.replace('mock-token-for-', ''); })(),
+      invited_by_name: (() => { const tok = localStorage.getItem('ipo_token') || ''; const u = dbData.users.find(u => u.email === tok.replace('mock-token-for-', '')); return u?.name || 'Issuer'; })(),
+      message: data.message || 'Invitation to review IPO draft.',
+      status: 'pending',
+      invited_at: new Date().toISOString(),
+      expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString()
+    };
+    dbData.invitations.push(newInv);
+    saveMockDb(dbData);
+    return Promise.resolve({ data: newInv });
+  }
+
+  // PUT /invitations/:id/accept
+  if (method === 'put' && url.includes('/invitations/') && url.endsWith('/accept')) {
+    const invId = url.split('/')[2];
+    const inv = (dbData.invitations || []).find(i => i.id === invId);
+    if (inv) {
+      inv.status = 'accepted';
+      inv.responded_at = new Date().toISOString();
+      saveMockDb(dbData);
+    }
+    return Promise.resolve({ data: inv || {} });
+  }
+
+  // PUT /invitations/:id/decline
+  if (method === 'put' && url.includes('/invitations/') && url.endsWith('/decline')) {
+    const invId = url.split('/')[2];
+    const inv = (dbData.invitations || []).find(i => i.id === invId);
+    if (inv) {
+      inv.status = 'declined';
+      inv.responded_at = new Date().toISOString();
+      saveMockDb(dbData);
+    }
+    return Promise.resolve({ data: inv || {} });
+  }
+
+  // PUT /invitations/:id/revoke
+  // Revoking removes the invitation outright — the banker reappears in the search
+  // list as un-invited, instead of leaving a dead "REVOKED" row behind.
+  if (method === 'put' && url.includes('/invitations/') && url.endsWith('/revoke')) {
+    const invId = url.split('/')[2];
+    const inv = (dbData.invitations || []).find(i => i.id === invId);
+    dbData.invitations = (dbData.invitations || []).filter(i => i.id !== invId);
+    saveMockDb(dbData);
+    return Promise.resolve({ data: inv || {} });
+  }
+
+  // PUT /invitations/:id/status (generic status update)
+  if (method === 'put' && url.includes('/invitations/') && url.endsWith('/status')) {
+    const parts = url.split('/');
+    const invId = parts[2];
+    const inv = (dbData.invitations || []).find(i => i.id === invId);
+    if (inv && data?.status) {
+      inv.status = data.status;
+      inv.responded_at = new Date().toISOString();
+      saveMockDb(dbData);
+    }
+    return Promise.resolve({ data: inv || {} });
+  }
+
+  // POST /invitations/:id/resend
+  if (method === 'post' && url.includes('/invitations/') && url.endsWith('/resend')) {
+    const invId = url.split('/')[2];
+    const inv = (dbData.invitations || []).find(i => i.id === invId);
+    if (inv) {
+      inv.status = 'pending';
+      inv.token = 'inv_token_' + Math.random().toString(36).substring(2) + Date.now();
+      inv.expires_at = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+      inv.invited_at = new Date().toISOString();
+      saveMockDb(dbData);
+    }
+    return Promise.resolve({ data: inv || {} });
+  }
+
+  // GET /notifications
+  if (url === '/notifications') {
+    const token = localStorage.getItem('ipo_token') || '';
+    const email = token.replace('mock-token-for-', '');
+    const user = dbData.users.find(u => u.email === email) || { email, role: 'issuer' };
+    const notifs = (dbData.notifications || []).filter(
+      n => n.recipient_email === email || (user.role && n.recipient_role === user.role) || n.recipient_email === 'all'
+    ).sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+    return Promise.resolve({ data: notifs });
+  }
+
+  // PUT /notifications/mark-all-read
+  if (method === 'put' && url === '/notifications/mark-all-read') {
+    const token = localStorage.getItem('ipo_token') || '';
+    const email = token.replace('mock-token-for-', '');
+    const user = dbData.users.find(u => u.email === email) || { email, role: 'issuer' };
+    (dbData.notifications || []).forEach(n => {
+      if (n.recipient_email === email || (user.role && n.recipient_role === user.role) || n.recipient_email === 'all') {
+        n.is_read = true;
+      }
+    });
+    saveMockDb(dbData);
+    return Promise.resolve({ data: { message: 'All notifications marked as read' } });
+  }
+
+  // PUT /notifications/:id/read
+  if (method === 'put' && url.includes('/notifications/') && url.endsWith('/read')) {
+    const parts = url.split('/');
+    const id = parts[2];
+    const notif = (dbData.notifications || []).find(n => n.id === id);
+    if (notif) {
+      notif.is_read = true;
+      saveMockDb(dbData);
+    }
+    return Promise.resolve({ data: notif || {} });
   }
 
   // POST /chatbot/query
@@ -1054,14 +1340,18 @@ const runMock = (method, url, data) => {
 // ----------------------------------------------------
 // DUAL-MODE ROUTER DISPATCHER
 // ----------------------------------------------------
-let useLocalMock = true; // Default to local mock for bulletproof demo setup
+let useLocalMock = false; // Disabled — real backend is primary. Falls back to mock if server is unreachable.
 
 const callApi = async (method, url, data = null, config = {}) => {
   if (useLocalMock) {
     return runMock(method, url, data);
   }
   try {
-    const response = await api({ method, url, data, ...config });
+    const opts = { method, url, ...config };
+    if (data !== null && data !== undefined && method.toLowerCase() !== 'delete') {
+      opts.data = data;
+    }
+    const response = await api(opts);
     return response;
   } catch (err) {
     if (!err.response) { // Connection failed (server not running)
@@ -1075,6 +1365,7 @@ const callApi = async (method, url, data = null, config = {}) => {
 };
 
 export const login = (email, password) => callApi('post', '/auth/login', { email, password });
+export const register = (payload) => callApi('post', '/auth/register', payload);
 export const getMe = () => callApi('get', '/auth/me');
 export const getCompanies = () => callApi('get', '/companies');
 export const getCompany = (id) => callApi('get', `/companies/${id}`);
@@ -1084,19 +1375,24 @@ export const getIntakeStep = (companyId, stepKey) => callApi('get', `/intake/${c
 export const saveIntakeStep = (companyId, stepKey, data) => callApi('put', `/intake/${companyId}/${stepKey}`, data);
 export const getDocuments = (companyId) => callApi('get', `/documents/${companyId}`);
 
+// Values OCR pulled out of uploaded documents, mapped onto intake fields.
+export const getPrefillSuggestions = (companyId) => callApi('get', `/intake/${companyId}/prefill/suggestions`);
+// Blanks-only by default; pass overwrite to also replace conflicting answers.
+export const applyPrefill = (companyId, { fields, overwrite } = {}) =>
+  callApi('post', `/intake/${companyId}/prefill/apply`, { fields, overwrite });
+
 export const uploadDocument = (companyId, file, docType) => {
+  const formData = new FormData();
+  formData.append('file', file);
+  formData.append('doc_type', docType);
   if (useLocalMock) {
-    // Client-side mock upload handler
     const mockFormData = new Map();
     mockFormData.set('file', file);
     mockFormData.set('doc_type', docType);
     return callApi('post', `/documents/${companyId}/upload`, mockFormData);
   }
-  const formData = new FormData();
-  formData.append('file', file);
-  formData.append('doc_type', docType);
-  return api.post(`/documents/${companyId}/upload`, formData, {
-    headers: { 'Content-Type': 'multipart/form-data' },
+  return callApi('post', `/documents/${companyId}/upload`, formData, {
+    headers: { 'Content-Type': 'multipart/form-data' }
   });
 };
 
@@ -1114,8 +1410,11 @@ export const updateDraftStatus = (companyId, sectionKey, statusData) =>
 
 export const getGapReport = (companyId) => callApi('get', `/drafts/${companyId}/gap-report`);
 export const getComments = (sectionId) => callApi('get', `/comments/${sectionId}`);
-export const addComment = (sectionId, content, type, blockId = null) => 
-  callApi('post', `/comments/${sectionId}`, { content, type, block_id: blockId });
+export const addComment = (sectionId, content, type, blockId = null, parentId = null) => 
+  callApi('post', `/comments/${sectionId}`, { content, type, block_id: blockId, parent_id: parentId });
+
+export const editComment = (commentId, content) => callApi('put', `/comments/${commentId}`, { content });
+export const deleteComment = (commentId) => callApi('delete', `/comments/${commentId}`);
 
 export const resolveComment = (commentId) => callApi('put', `/comments/${commentId}/resolve`);
 
@@ -1220,10 +1519,47 @@ export const downloadDocx = async (companyId) => {
   return api.get(`/export/${companyId}/docx`, { responseType: 'blob' });
 };
 
+export const downloadPdf = async (companyId) => {
+  if (useLocalMock) {
+    const dbData = getMockDb();
+    const company = dbData.companies.find(c => c.id === companyId) || { name: 'Aarav Precision Engineering Pvt Ltd' };
+    const docHtml = `<html xmlns='http://www.w3.org/TR/REC-html40'><head><title>IPO Offer Document - PDF Draft</title></head><body><h1>${company.name.toUpperCase()} - DRAFT PDF</h1></body></html>`;
+    const blob = new Blob([docHtml], { type: 'application/pdf' });
+    return Promise.resolve({ data: blob, headers: { 'content-type': 'application/pdf' } });
+  }
+  return api.get(`/export/${companyId}/pdf`, { responseType: 'blob' });
+};
+
 export const getNotifications = () => callApi('get', '/notifications');
 export const markNotificationRead = (id) => callApi('put', `/notifications/${id}/read`);
+export const markAllNotificationsRead = () => callApi('put', '/notifications/mark-all-read');
 export const createNotification = (data) => callApi('post', '/notifications', data);
+
 export const getSebiNotices = () => callApi('get', '/sebi-notices');
-export const chatbotQuery = (question) => callApi('post', '/chatbot/query', { question });
+export const refreshSebiNotices = () => callApi('post', '/sebi-notices/refresh');
+
+export const chatbotQuery = (question, history = []) => callApi('post', '/chatbot/query', { question, history });
+
+export const getAuditLogs = (companyId, page = 1, limit = 10, search = '') => {
+  const queryParams = new URLSearchParams();
+  if (companyId) queryParams.append('companyId', companyId);
+  queryParams.append('page', page);
+  queryParams.append('limit', limit);
+  if (search) queryParams.append('search', search);
+  return callApi('get', `/audit-logs?${queryParams.toString()}`);
+};
+
+export const getIpoReadiness = (companyId) => callApi('get', `/companies/${companyId}/ipo-readiness`);
+
+export const getMerchantBankers = (query = '') => callApi('get', `/merchant-bankers${query ? `?q=${encodeURIComponent(query)}` : ''}`);
+export const createInvitation = (data) => callApi('post', '/invitations', data);
+export const getInvitations = () => callApi('get', '/invitations');
+export const updateInvitationStatus = (id, status) => callApi('put', `/invitations/${id}/status`, { status });
+export const acceptInvitation = (id) => callApi('put', `/invitations/${id}/accept`);
+export const declineInvitation = (id) => callApi('put', `/invitations/${id}/decline`);
+export const revokeInvitation = (id) => callApi('put', `/invitations/${id}/revoke`);
+export const resendInvitation = (id) => callApi('post', `/invitations/${id}/resend`);
+export const verifyDocument = (id, status, remarks) => callApi('put', `/documents/${id}/verify`, { status, remarks });
+export const updateIpoReadinessItem = (companyId, itemKey, status, remarks) => callApi('put', `/companies/${companyId}/ipo-readiness/item-status`, { itemKey, status, remarks });
 
 export default api;

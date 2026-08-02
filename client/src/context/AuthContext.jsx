@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { login as loginApi, getMe } from '../services/api';
+import { login as loginApi, register as registerApi, getMe } from '../services/api';
 
 const AuthContext = createContext(null);
 
@@ -37,6 +37,15 @@ export function AuthProvider({ children }) {
     return res.data;
   }, []);
 
+  const register = useCallback(async (payload) => {
+    const res = await registerApi(payload);
+    const { token: newToken, user: userData } = res.data;
+    localStorage.setItem('ipo_token', newToken);
+    setToken(newToken);
+    setUser(userData);
+    return res.data;
+  }, []);
+
   const logout = useCallback(() => {
     localStorage.removeItem('ipo_token');
     setToken(null);
@@ -46,7 +55,7 @@ export function AuthProvider({ children }) {
   const isAuthenticated = !!user && !!token;
 
   return (
-    <AuthContext.Provider value={{ user, token, loading, login, logout, isAuthenticated }}>
+    <AuthContext.Provider value={{ user, token, loading, login, register, logout, isAuthenticated }}>
       {children}
     </AuthContext.Provider>
   );

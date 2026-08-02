@@ -8,9 +8,18 @@
     "start": "node server.js"
   },
   "dependencies": {
-    "express": "^4.19.2",
+    "@aws-sdk/client-dynamodb": "^3.1101.0",
+    "@aws-sdk/client-s3": "^3.1101.0",
+    "@aws-sdk/lib-dynamodb": "^3.1101.0",
+    "@google/generative-ai": "^0.24.1",
     "cors": "^2.8.5",
+    "docx": "^8.5.0",
+    "dotenv": "^17.4.2",
+    "express": "^4.19.2",
     "multer": "^1.4.5-lts.1",
-    "docx": "^8.5.0"
+    "multer-s3": "^3.0.1",
+    "node-cron": "^4.6.0",
+    "node-fetch": "^3.3.2",
+    "pdfkit": "^0.19.1"
   }
 }

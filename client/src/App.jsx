@@ -13,6 +13,7 @@ import DraftPreview from './pages/DraftPreview';
 import ReviewerWorkspace from './pages/ReviewerWorkspace';
 import ExportPage from './pages/ExportPage';
 import SebiUpdatesPage from './pages/SebiUpdatesPage';
+import InvitationsPage from './pages/InvitationsPage';
 
 export default function App() {
   return (
@@ -43,6 +44,7 @@ export default function App() {
                   />
                   <Route path="/export" element={<ExportPage />} />
                   <Route path="/sebi-updates" element={<SebiUpdatesPage />} />
+                  <Route path="/invitations" element={<InvitationsPage />} />
                   <Route path="*" element={<Dashboard />} />
                 </Routes>
               </Layout>

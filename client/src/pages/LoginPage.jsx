@@ -1,9 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { Shield, Loader2, User, Lock, Building2, ChevronDown, Fingerprint, AlertCircle } from 'lucide-react';
-
-const BLOCKED_DOMAINS = ['gmail.com', 'yahoo.com', 'hotmail.com', 'outlook.com', 'icloud.com', 'protonmail.com', 'yahoo.co.in', 'rediffmail.com', 'aol.com', 'mail.com', 'zoho.com'];
+import { Shield, Loader2, User, Lock, Building2, Fingerprint, AlertCircle, Mail, Eye, EyeOff } from 'lucide-react';
 
 const roleContent = {
   issuer: {
@@ -13,8 +11,7 @@ const roleContent = {
       'Upload financials, cap tables, and resolutions for automatic extraction',
       'Get a SEBI ICDR-aligned draft with every sentence backed by your data',
       'Track reviewer feedback and resolve comments in one place'
-    ],
-    accent: 'indigo'
+    ]
   },
   reviewer: {
     headline: 'Review, certify, and export SME IPO drafts faster',
@@ -23,26 +20,30 @@ const roleContent = {
       'Flag inconsistencies between intake data and uploaded documents',
       'Lock and certify chapters section by section',
       'Export a watermarked draft that removes the watermark only after full certification'
-    ],
-    accent: 'emerald'
+    ]
   }
 };
 
 export default function LoginPage() {
+  const [mode, setMode] = useState('signin'); // 'signin' | 'signup'
+  const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [companyName, setCompanyName] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [emailError, setEmailError] = useState('');
   const [loading, setLoading] = useState(false);
   const [selectedRole, setSelectedRole] = useState('issuer');
   const [digilockerToast, setDigilockerToast] = useState(false);
-  const { login } = useAuth();
+  const { login, register } = useAuth();
   const navigate = useNavigate();
 
+  const isSignup = mode === 'signup';
+
   const validateEmail = (emailVal) => {
-    const domain = emailVal.split('@')[1]?.toLowerCase();
-    if (domain && BLOCKED_DOMAINS.includes(domain)) {
-      setEmailError('Please use your work/company email to sign in.');
+    if (emailVal && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailVal)) {
+      setEmailError('Please enter a valid email address.');
       return false;
     }
     setEmailError('');
@@ -56,16 +57,27 @@ export default function LoginPage() {
     else setEmailError('');
   };
 
+  const switchMode = (next) => {
+    setMode(next);
+    setError('');
+    setEmailError('');
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
     if (!validateEmail(email)) return;
     setLoading(true);
     try {
-      await login(email, password);
+      if (isSignup) {
+        await register({ name: name.trim(), email: email.trim(), password, role: selectedRole, companyName: companyName.trim() });
+      } else {
+        await login(email.trim(), password);
+      }
       navigate('/dashboard');
     } catch (err) {
-      setError(err.response?.data?.message || 'Invalid credentials. Please try again.');
+      const fallback = isSignup ? 'Could not create your account. Please try again.' : 'Invalid credentials. Please try again.';
+      setError(err.response?.data?.message || fallback);
     } finally {
       setLoading(false);
     }
@@ -77,6 +89,7 @@ export default function LoginPage() {
   };
 
   const fillDemo = (demoEmail, demoPass, role) => {
+    setMode('signin');
     setEmail(demoEmail);
     setPassword(demoPass);
     setSelectedRole(role);
@@ -87,15 +100,15 @@ export default function LoginPage() {
   const content = roleContent[selectedRole];
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-navy-900 via-indigo-950 to-navy-950 flex">
+    <div className="min-h-screen bg-gradient-to-br from-navy-900 via-indigo-950 to-navy-950 flex flex-col lg:flex-row">
       {/* Decorative background */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         <div className="absolute -top-40 -right-40 w-80 h-80 bg-indigo-500/10 rounded-full blur-3xl"></div>
         <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-purple-500/10 rounded-full blur-3xl"></div>
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-indigo-600/5 rounded-full blur-3xl"></div>
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] max-w-full bg-indigo-600/5 rounded-full blur-3xl"></div>
       </div>
 
-      {/* Left Panel — Role-specific messaging */}
+      {/* Left Panel — Role-specific messaging (desktop only) */}
       <div className="hidden lg:flex lg:w-1/2 relative z-10 items-center justify-center p-12">
         <div className="max-w-md animate-fade-in">
           <div className="flex items-center gap-3 mb-8">
@@ -127,25 +140,43 @@ export default function LoginPage() {
         </div>
       </div>
 
-      {/* Right Panel — Login Form */}
-      <div className="w-full lg:w-1/2 flex items-center justify-center p-4 relative z-10">
-        <div className="w-full max-w-md animate-fade-in">
-          <div className="bg-white/10 backdrop-blur-xl border border-white/20 rounded-3xl shadow-2xl p-8">
-            <div className="text-center mb-8 lg:hidden">
-              <div className="w-16 h-16 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg shadow-indigo-500/25">
-                <Shield className="w-8 h-8 text-white" />
+      {/* Right Panel — Auth Form */}
+      <div className="w-full lg:w-1/2 flex items-center justify-center p-4 sm:p-6 relative z-10 min-h-screen lg:min-h-0">
+        <div className="w-full max-w-md animate-fade-in py-8">
+          <div className="bg-white/10 backdrop-blur-xl border border-white/20 rounded-3xl shadow-2xl p-6 sm:p-8">
+            <div className="text-center mb-6 lg:hidden">
+              <div className="w-14 h-14 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-2xl flex items-center justify-center mx-auto mb-3 shadow-lg shadow-indigo-500/25">
+                <Shield className="w-7 h-7 text-white" />
               </div>
               <h1 className="text-2xl font-bold text-white mb-1">IPO Pilot AI</h1>
               <p className="text-slate-400 text-sm">AI-Powered IPO Document Platform</p>
             </div>
 
             <div className="hidden lg:block mb-6">
-              <h2 className="text-xl font-bold text-white">Sign in to your account</h2>
-              <p className="text-slate-400 text-sm mt-1">Access your IPO document workspace</p>
+              <h2 className="text-xl font-bold text-white">{isSignup ? 'Create your account' : 'Sign in to your account'}</h2>
+              <p className="text-slate-400 text-sm mt-1">{isSignup ? 'Set up your IPO document workspace' : 'Access your IPO document workspace'}</p>
+            </div>
+
+            {/* Sign In / Sign Up tabs */}
+            <div className="flex gap-2 mb-6 p-1 bg-white/5 rounded-xl">
+              <button
+                type="button"
+                onClick={() => switchMode('signin')}
+                className={`flex-1 py-2.5 rounded-lg text-sm font-semibold transition-all ${!isSignup ? 'bg-white text-navy-900 shadow-md' : 'text-slate-400 hover:text-white'}`}
+              >
+                Sign In
+              </button>
+              <button
+                type="button"
+                onClick={() => switchMode('signup')}
+                className={`flex-1 py-2.5 rounded-lg text-sm font-semibold transition-all ${isSignup ? 'bg-white text-navy-900 shadow-md' : 'text-slate-400 hover:text-white'}`}
+              >
+                Sign Up
+              </button>
             </div>
 
             {/* Role Selector */}
-            <div className="flex gap-2 mb-6 p-1 bg-white/5 rounded-xl">
+            <div className="flex gap-2 mb-5 p-1 bg-white/5 rounded-xl">
               <button
                 type="button"
                 onClick={() => setSelectedRole('issuer')}
@@ -164,11 +195,35 @@ export default function LoginPage() {
 
             {error && <div className="mb-4 p-3 bg-red-500/10 border border-red-500/20 rounded-xl text-red-300 text-sm text-center">{error}</div>}
 
-            <form onSubmit={handleSubmit} className="space-y-5">
+            <form onSubmit={handleSubmit} className="space-y-4">
+              {isSignup && (
+                <div>
+                  <label className="block text-sm font-medium text-slate-300 mb-2">Full Name</label>
+                  <div className="relative">
+                    <User className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+                    <input type="text" value={name} onChange={(e) => setName(e.target.value)}
+                      className="w-full pl-11 pr-4 py-3 bg-white/5 border border-white/10 focus:border-indigo-500/50 rounded-xl text-white placeholder-slate-500 focus:ring-2 focus:ring-indigo-500/30 outline-none transition-all text-sm"
+                      placeholder="Your full name" required={isSignup} />
+                  </div>
+                </div>
+              )}
+
+              {isSignup && selectedRole === 'issuer' && (
+                <div>
+                  <label className="block text-sm font-medium text-slate-300 mb-2">Company Name</label>
+                  <div className="relative">
+                    <Building2 className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+                    <input type="text" value={companyName} onChange={(e) => setCompanyName(e.target.value)}
+                      className="w-full pl-11 pr-4 py-3 bg-white/5 border border-white/10 focus:border-indigo-500/50 rounded-xl text-white placeholder-slate-500 focus:ring-2 focus:ring-indigo-500/30 outline-none transition-all text-sm"
+                      placeholder="Your company's legal name" required={isSignup && selectedRole === 'issuer'} />
+                  </div>
+                </div>
+              )}
+
               <div>
-                <label className="block text-sm font-medium text-slate-300 mb-2">Work Email Address</label>
+                <label className="block text-sm font-medium text-slate-300 mb-2">Email Address</label>
                 <div className="relative">
-                  <User className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+                  <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
                   <input type="email" value={email} onChange={handleEmailChange}
                     className={`w-full pl-11 pr-4 py-3 bg-white/5 border ${emailError ? 'border-red-500/50 focus:border-red-500/70' : 'border-white/10 focus:border-indigo-500/50'} rounded-xl text-white placeholder-slate-500 focus:ring-2 focus:ring-indigo-500/30 outline-none transition-all text-sm`}
                     placeholder="you@company.com" required />
@@ -185,17 +240,31 @@ export default function LoginPage() {
                 <label className="block text-sm font-medium text-slate-300 mb-2">Password</label>
                 <div className="relative">
                   <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
-                  <input type="password" value={password} onChange={(e) => setPassword(e.target.value)}
-                    className="w-full pl-11 pr-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-slate-500 focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-500/50 outline-none transition-all text-sm"
-                    placeholder="Enter your password" required />
+                  <input type={showPassword ? 'text' : 'password'} value={password} onChange={(e) => setPassword(e.target.value)}
+                    className="w-full pl-11 pr-11 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-slate-500 focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-500/50 outline-none transition-all text-sm"
+                    placeholder={isSignup ? 'Create a password (min. 6 characters)' : 'Enter your password'}
+                    minLength={isSignup ? 6 : undefined} required />
+                  <button type="button" onClick={() => setShowPassword((s) => !s)}
+                    className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 transition-colors"
+                    aria-label={showPassword ? 'Hide password' : 'Show password'}>
+                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
                 </div>
               </div>
 
               <button type="submit" disabled={loading || !!emailError}
                 className="w-full py-3 bg-gradient-to-r from-indigo-600 to-indigo-500 hover:from-indigo-500 hover:to-indigo-400 text-white font-semibold rounded-xl transition-all duration-200 shadow-lg shadow-indigo-600/25 hover:shadow-indigo-500/40 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2">
-                {loading ? (<><Loader2 className="w-4 h-4 animate-spin" />Signing In...</>) : 'Sign In'}
+                {loading ? (<><Loader2 className="w-4 h-4 animate-spin" />{isSignup ? 'Creating Account...' : 'Signing In...'}</>) : (isSignup ? 'Create Account' : 'Sign In')}
               </button>
             </form>
+
+            <p className="text-center text-slate-400 text-xs mt-4">
+              {isSignup ? 'Already have an account? ' : "Don't have an account? "}
+              <button type="button" onClick={() => switchMode(isSignup ? 'signin' : 'signup')}
+                className="text-indigo-400 hover:text-indigo-300 font-semibold">
+                {isSignup ? 'Sign in' : 'Sign up'}
+              </button>
+            </p>
 
             {/* DigiLocker Button */}
             <div className="mt-4 relative">
@@ -205,7 +274,7 @@ export default function LoginPage() {
                 Continue with DigiLocker
               </button>
               {digilockerToast && (
-                <div className="absolute -bottom-10 left-1/2 -translate-x-1/2 bg-slate-800 text-slate-300 text-xs px-3 py-1.5 rounded-lg border border-slate-700 whitespace-nowrap animate-slide-up shadow-lg">
+                <div className="absolute -bottom-10 left-1/2 -translate-x-1/2 bg-slate-800 text-slate-300 text-xs px-3 py-1.5 rounded-lg border border-slate-700 whitespace-nowrap animate-slide-up shadow-lg z-20">
                   Coming soon — DigiLocker integration is under development
                 </div>
               )}

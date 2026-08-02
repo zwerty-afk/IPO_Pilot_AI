@@ -7,9 +7,22 @@
   html {
     scroll-behavior: smooth;
     -webkit-font-smoothing: antialiased;
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
   }
   body {
     @apply bg-slate-50 text-slate-800 font-sans;
+    -webkit-tap-highlight-color: transparent;
+    overflow-x: hidden;
+  }
+  /* Prevent iOS zoom-on-focus by keeping inputs at >=16px on small screens */
+  @media (max-width: 640px) {
+    input, select, textarea {
+      font-size: 16px;
+    }
+  }
+  * {
+    -webkit-overflow-scrolling: touch;
   }
 }
 
@@ -36,7 +49,7 @@
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%) rotate(-30deg);
-    font-size: 1.5rem;
+    font-size: clamp(0.8rem, 4vw, 1.5rem);
     font-weight: 700;
     color: rgba(239, 68, 68, 0.08);
     white-space: nowrap;

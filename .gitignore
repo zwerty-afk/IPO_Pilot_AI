@@ -1,0 +1,20 @@
+node_modules/
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+dist/
+build/
+uploads/
+*.log
+
+# Local DynamoDB fallback store — runtime state, not source. The canonical seed
+# lives in server/db.js (INITIAL_SEED); committing this would ship test users
+# and password hashes.
+server/db.json
+
+# Scratch verification scripts and generated fixtures
+server/mkpdf.mjs
+server/test-incorp.pdf
+server/test_*.js

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { getDrafts, updateDraftStatus, getComments, addComment, resolveComment } from '../services/api';
+import { getDrafts, updateDraftStatus, getComments, addComment, resolveComment, editComment, deleteComment, getInvitations } from '../services/api';
 import StatusBadge from '../components/StatusBadge';
 import ConfidenceBadge from '../components/ConfidenceBadge';
 import { 
@@ -11,7 +11,11 @@ import {
   AlertTriangle,
   RefreshCw,
   CheckCircle2,
-  FileText
+  FileText,
+  Edit2,
+  Trash2,
+  Reply,
+  Building2
 } from 'lucide-react';
 
 const sectionMapping = {
@@ -28,12 +32,22 @@ export default function ReviewerWorkspace() {
   const [drafts, setDrafts] = useState({});
   const [selectedSectionKey, setSelectedSectionKey] = useState('business_overview');
   const [comments, setComments] = useState([]);
+  const [invitations, setInvitations] = useState([]);
   const [newCommentText, setNewCommentText] = useState('');
   const [commentType, setCommentType] = useState('clarification_requested');
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState(false);
+  const [editingCommentId, setEditingCommentId] = useState(null);
+  const [editContent, setEditContent] = useState('');
+  const [replyingToId, setReplyingToId] = useState(null);
+  const [replyContent, setReplyContent] = useState('');
 
-  const companyId = localStorage.getItem('ipo_company_id') || 'aarav-precision';
+  const [companyId, setCompanyId] = useState(localStorage.getItem('ipo_company_id') || 'aarav-precision');
+
+  const handleCompanyChange = (newCompanyId) => {
+    localStorage.setItem('ipo_company_id', newCompanyId);
+    setCompanyId(newCompanyId);
+  };
 
   const loadReviewData = async () => {
     try {
@@ -94,6 +108,41 @@ export default function ReviewerWorkspace() {
     }
   };
 
+  const handleDeleteComment = async (commId) => {
+    try {
+      await deleteComment(commId);
+      setComments(prev => prev.filter(c => c.id !== commId));
+    } catch (err) {
+      console.error("Failed to delete comment:", err);
+    }
+  };
+
+  const handleEditSubmit = async (e, commId) => {
+    e.preventDefault();
+    if (!editContent.trim()) return;
+    try {
+      const res = await editComment(commId, editContent);
+      setComments(prev => prev.map(c => c.id === commId ? { ...c, content: (res.data || res).content } : c));
+      setEditingCommentId(null);
+      setEditContent('');
+    } catch (err) {
+      console.error("Failed to edit comment:", err);
+    }
+  };
+
+  const handleReplySubmit = async (e, parentId) => {
+    e.preventDefault();
+    if (!replyContent.trim()) return;
+    try {
+      const res = await addComment(selectedSectionKey, replyContent, 'note', null, parentId);
+      setComments(prev => [...prev, res.data || res]);
+      setReplyingToId(null);
+      setReplyContent('');
+    } catch (err) {
+      console.error("Failed to post reply:", err);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[50vh]">
@@ -113,9 +162,15 @@ export default function ReviewerWorkspace() {
             Banker / Legal Auditor panel: Inspect chapters, flag clarifications, lock edits, and issue SEBI ICDR certifications.
           </p>
         </div>
-        <div className="flex items-center gap-2 bg-emerald-50 text-emerald-800 border border-emerald-200 px-4 py-2 rounded-xl text-xs font-semibold h-fit">
-          <ShieldCheck className="w-4.5 h-4.5 text-emerald-600" />
-          <span>Active Role: Registered Merchant Banker</span>
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 bg-indigo-50 text-indigo-900 border border-indigo-200 px-4 py-2 rounded-xl text-xs font-semibold h-fit">
+            <Building2 className="w-4.5 h-4.5 text-indigo-600" />
+            <span>Target SME: Aarav Precision Engineering</span>
+          </div>
+          <div className="flex items-center gap-2 bg-emerald-50 text-emerald-800 border border-emerald-200 px-4 py-2 rounded-xl text-xs font-semibold h-fit">
+            <ShieldCheck className="w-4.5 h-4.5 text-emerald-600" />
+            <span>Active Role: Registered Merchant Banker</span>
+          </div>
         </div>
       </div>
 
@@ -218,26 +273,67 @@ export default function ReviewerWorkspace() {
             {comments.length === 0 ? (
               <div className="text-center py-6 text-slate-400 text-xs">No audit findings recorded.</div>
             ) : (
-              comments.map((comm) => (
-                <div 
-                  key={comm.id} 
-                  className={`p-3 rounded-xl border space-y-2 text-xs ${comm.status === 'resolved' ? 'bg-slate-50/50 border-slate-200 opacity-60' : comm.type === 'clarification_requested' ? 'bg-amber-50 border-amber-200' : 'bg-indigo-50/50 border-indigo-100'}`}
-                >
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <span className="font-bold text-slate-800 block">{comm.author}</span>
-                      <span className="text-[9px] text-slate-400 font-mono capitalize">{comm.role} • {comm.type.replace(/_/g, ' ')}</span>
+              comments.filter(c => !c.parent_id).map((comm) => (
+                <div key={comm.id} className="space-y-2">
+                  <div className={`p-3 rounded-xl border space-y-2 text-xs ${comm.status === 'resolved' ? 'bg-slate-50/50 border-slate-200 opacity-60' : comm.type === 'clarification_requested' ? 'bg-amber-50 border-amber-200' : 'bg-indigo-50/50 border-indigo-100'}`}>
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <span className="font-bold text-slate-800 block">{comm.author}</span>
+                        <span className="text-[9px] text-slate-400 font-mono capitalize">{comm.role} • {comm.type.replace(/_/g, ' ')}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {comm.status === 'active' && (
+                          <>
+                            <button onClick={() => setReplyingToId(replyingToId === comm.id ? null : comm.id)} className="text-[9px] text-slate-500 hover:text-slate-800 font-bold" title="Reply"><Reply className="w-3 h-3" /></button>
+                            <button onClick={() => { setEditingCommentId(comm.id); setEditContent(comm.content); }} className="text-[9px] text-blue-600 hover:text-blue-800 font-bold" title="Edit"><Edit2 className="w-3 h-3" /></button>
+                            <button onClick={() => handleDeleteComment(comm.id)} className="text-[9px] text-red-600 hover:text-red-800 font-bold" title="Delete"><Trash2 className="w-3 h-3" /></button>
+                            <button onClick={() => handleResolve(comm.id)} className="text-[9px] text-emerald-600 hover:text-emerald-800 font-bold">Resolve</button>
+                          </>
+                        )}
+                      </div>
                     </div>
-                    {comm.status === 'active' && (
-                      <button 
-                        onClick={() => handleResolve(comm.id)}
-                        className="text-[9px] text-emerald-600 hover:text-emerald-800 font-bold"
-                      >
-                        Resolve
-                      </button>
+                    {editingCommentId === comm.id ? (
+                      <form onSubmit={(e) => handleEditSubmit(e, comm.id)} className="flex gap-2">
+                        <input value={editContent} onChange={e => setEditContent(e.target.value)} className="flex-1 text-xs px-2 py-1 border rounded" />
+                        <button type="submit" className="text-[10px] bg-blue-600 text-white px-2 py-1 rounded">Save</button>
+                        <button type="button" onClick={() => setEditingCommentId(null)} className="text-[10px] text-slate-500 px-2 py-1">Cancel</button>
+                      </form>
+                    ) : (
+                      <p className="text-slate-700 leading-normal">{comm.content}</p>
                     )}
                   </div>
-                  <p className="text-slate-700 leading-normal">{comm.content}</p>
+                  
+                  {/* Replies */}
+                  {comments.filter(c => c.parent_id === comm.id).map(reply => (
+                    <div key={reply.id} className={`ml-6 p-2 rounded-xl border space-y-1 text-xs ${reply.status === 'resolved' ? 'bg-slate-50/50 border-slate-200 opacity-60' : 'bg-slate-50 border-slate-100'}`}>
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <span className="font-bold text-slate-700 block">{reply.author}</span>
+                          <span className="text-[8px] text-slate-400 font-mono capitalize">{reply.role}</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <button onClick={() => { setEditingCommentId(reply.id); setEditContent(reply.content); }} className="text-[9px] text-blue-600 hover:text-blue-800" title="Edit"><Edit2 className="w-3 h-3" /></button>
+                          <button onClick={() => handleDeleteComment(reply.id)} className="text-[9px] text-red-600 hover:text-red-800" title="Delete"><Trash2 className="w-3 h-3" /></button>
+                        </div>
+                      </div>
+                      {editingCommentId === reply.id ? (
+                        <form onSubmit={(e) => handleEditSubmit(e, reply.id)} className="flex gap-2 mt-1">
+                          <input value={editContent} onChange={e => setEditContent(e.target.value)} className="flex-1 text-xs px-2 py-1 border rounded" />
+                          <button type="submit" className="text-[10px] bg-blue-600 text-white px-2 py-1 rounded">Save</button>
+                          <button type="button" onClick={() => setEditingCommentId(null)} className="text-[10px] text-slate-500 px-2 py-1">Cancel</button>
+                        </form>
+                      ) : (
+                        <p className="text-slate-600 leading-normal">{reply.content}</p>
+                      )}
+                    </div>
+                  ))}
+                  
+                  {replyingToId === comm.id && (
+                    <form onSubmit={(e) => handleReplySubmit(e, comm.id)} className="ml-6 flex gap-2">
+                      <input value={replyContent} onChange={e => setReplyContent(e.target.value)} placeholder="Type reply..." className="flex-1 text-xs px-2 py-1.5 border rounded bg-slate-50 focus:bg-white" />
+                      <button type="submit" className="text-[10px] bg-indigo-600 text-white px-3 py-1.5 rounded">Reply</button>
+                    </form>
+                  )}
                 </div>
               ))
             )}

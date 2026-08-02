@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(curl -s --max-time 8 -X PUT -H \"Authorization: Bearer mock-token-for-aarav@example.com\" -H \"Content-Type: application/json\" -d '{\"revenue_fy25\":\"125000000\",\"revenue_fy24\":\"95000000\",\"revenue_fy23\":\"72000000\",\"profit_fy25\":\"11000000\",\"total_debt\":\"25000000\",\"net_worth\":\"\"}' \"http://localhost:3001/api/intake/aarav-precision/financials\")",
+      "Bash(node --check server.js)",
+      "Bash(node --check db.js)",
+      "Bash(gh auth *)",
+      "Bash(gh repo *)",
+      "Bash(node _verify_serverless.mjs)",
+      "Bash(rm -f server/_verify_serverless.mjs)",
+      "Bash(./client/node_modules/.bin/vite build *)",
+      "Bash(git rm *)",
+      "Bash(git add *)"
+    ]
+  }
+}

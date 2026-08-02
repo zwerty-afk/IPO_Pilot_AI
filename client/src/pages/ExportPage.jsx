@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { getCompanyStatus, downloadDocx } from '../services/api';
+import { getCompanyStatus, downloadDocx, downloadPdf, getAuditLogs } from '../services/api';
 import { 
   Download, 
   History, 
@@ -8,19 +8,35 @@ import {
   FileText, 
   Loader2, 
   ArrowDownToLine,
-  Bookmark
+  Bookmark,
+  RefreshCw,
+  File,
+  Search,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
 
-const mockVersions = [
-  { ver: 'v3', date: '2026-07-06T17:15:00Z', author: 'Priya Sharma (Reviewer)', change: 'Certified Litigation and Related Party chapters.' },
-  { ver: 'v2', date: '2026-07-06T16:45:00Z', author: 'Aarav Mehta (Issuer)', change: 'Corrected promoter shareholding ratio to 62% inside Capital Structure.' },
-  { ver: 'v1', date: '2026-07-06T10:30:00Z', author: 'AI Engine', change: 'First synthesis of ICDR draft based on intake form fields.' }
-];
+const ACTION_LABELS = {
+  EXPORT_DOWNLOADED: 'Document exported',
+  SECTION_CERTIFIED: 'Section certified',
+  SECTION_STATUS_UPDATED: 'Status updated',
+  DRAFT_REGENERATED: 'Draft regenerated',
+  INTAKE_UPDATED: 'Intake updated',
+  COMMENT_ADDED: 'Comment added',
+  DOCUMENT_CONFIRMED: 'Document confirmed',
+  LOGIN: 'User logged in',
+};
 
 export default function ExportPage() {
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
+  const [exportingPdf, setExportingPdf] = useState(false);
+  const [auditLogs, setAuditLogs] = useState([]);
+  const [logsLoading, setLogsLoading] = useState(true);
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [search, setSearch] = useState('');
   const companyId = localStorage.getItem('ipo_company_id') || 'aarav-precision';
 
   const loadStats = async () => {
@@ -35,30 +51,87 @@ export default function ExportPage() {
     }
   };
 
+  const loadAuditLogs = async (currentPage = page, currentSearch = search) => {
+    try {
+      setLogsLoading(true);
+      const res = await getAuditLogs(companyId, currentPage, 5, currentSearch);
+      const data = res.data || res;
+      if (data.logs) {
+        setAuditLogs(data.logs);
+        setTotalPages(Math.ceil(data.total / 5));
+      } else {
+        const logs = Array.isArray(data) ? data : [];
+        setAuditLogs(logs);
+      }
+    } catch (err) {
+      console.error("Failed to load audit logs:", err);
+      setAuditLogs([]);
+    } finally {
+      setLogsLoading(false);
+    }
+  };
+
   useEffect(() => {
     loadStats();
   }, [companyId]);
+
+  useEffect(() => {
+    loadAuditLogs();
+  }, [page, search, companyId]);
 
   const handleDownload = async () => {
     try {
       setExporting(true);
       const res = await downloadDocx(companyId);
-      const dataBlob = res.data || res;
+      const dataBlob = res.data;
       
-      const url = window.URL.createObjectURL(new Blob([dataBlob], { type: 'application/msword' }));
+      const blobData = dataBlob instanceof Blob ? dataBlob : new Blob([dataBlob], { 
+        type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' 
+      });
+      
+      const url = window.URL.createObjectURL(blobData);
       const link = document.createElement('a');
       link.href = url;
-      link.setAttribute('download', `IPO_Prospectus_${companyId}_Draft.doc`);
+      link.setAttribute('download', `IPO_Draft_Prospectus_${companyId}_${new Date().toISOString().split('T')[0]}.docx`);
       document.body.appendChild(link);
       link.click();
       
-      // Cleanup
       link.parentNode.removeChild(link);
       window.URL.revokeObjectURL(url);
+
+      setTimeout(loadAuditLogs, 1500);
     } catch (err) {
       console.error("Export download failed:", err);
     } finally {
       setExporting(false);
+    }
+  };
+
+  const handleDownloadPdf = async () => {
+    try {
+      setExportingPdf(true);
+      const res = await downloadPdf(companyId);
+      const dataBlob = res.data;
+      
+      const blobData = dataBlob instanceof Blob ? dataBlob : new Blob([dataBlob], { 
+        type: 'application/pdf' 
+      });
+      
+      const url = window.URL.createObjectURL(blobData);
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `IPO_Draft_Prospectus_${companyId}_${new Date().toISOString().split('T')[0]}.pdf`);
+      document.body.appendChild(link);
+      link.click();
+      
+      link.parentNode.removeChild(link);
+      window.URL.revokeObjectURL(url);
+
+      setTimeout(loadAuditLogs, 1500);
+    } catch (err) {
+      console.error("PDF download failed:", err);
+    } finally {
+      setExportingPdf(false);
     }
   };
 
@@ -75,7 +148,7 @@ export default function ExportPage() {
   return (
     <div className="max-w-4xl mx-auto space-y-8 animate-fade-in">
       <div className="border-b border-slate-200 pb-5">
-        <h2 className="text-2xl font-bold text-slate-900">Compile & Export Draft</h2>
+        <h2 className="text-2xl font-bold text-slate-900">Compile &amp; Export Draft</h2>
         <p className="text-slate-500 text-sm mt-1">
           Generate a publication-ready formatted document containing all disclosure chapters.
         </p>
@@ -93,7 +166,7 @@ export default function ExportPage() {
               <div>
                 <h4 className="font-bold text-emerald-950 text-sm">Ready for Professional Certification</h4>
                 <p className="text-xs text-emerald-800 mt-1 leading-relaxed">
-                  All 7 disclosure chapters have been certified as verified by the reviewer (Priya Sharma). Exported document compiles with a clean corporate designation.
+                  All {stats?.totalSections} disclosure chapters have been certified as verified by the reviewer. Exported document compiles with a clean corporate designation.
                 </p>
               </div>
             </div>
@@ -111,53 +184,127 @@ export default function ExportPage() {
 
           {/* Export Action Card */}
           <div className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm space-y-6 text-center">
-            <div className="w-16 h-16 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center mx-auto shadow-inner">
-              <FileText className="w-8 h-8" />
+            <div className="flex gap-4 justify-center">
+              <div className="w-16 h-16 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center shadow-inner">
+                <FileText className="w-8 h-8" />
+              </div>
+              <div className="w-16 h-16 bg-red-50 text-red-600 rounded-2xl flex items-center justify-center shadow-inner">
+                <File className="w-8 h-8" />
+              </div>
             </div>
             
             <div className="space-y-2">
-              <h3 className="text-lg font-bold text-slate-800">Microsoft Word Prospectus (.doc)</h3>
+              <h3 className="text-lg font-bold text-slate-800">Export Draft Prospectus</h3>
               <p className="text-slate-500 text-xs max-w-md mx-auto leading-relaxed">
-                Compiles all 7 synthesized SEBI ICDR chapters, citations list, and verification confidence metrics into a Word-compatible layout.
+                Compiles all {stats?.totalSections} synthesized SEBI ICDR chapters, source citations, and verification confidence metrics.
               </p>
             </div>
 
-            <button 
-              onClick={handleDownload} 
-              disabled={exporting}
-              className="btn-primary w-full max-w-sm mx-auto flex items-center justify-center gap-2 text-sm shadow-indigo-600/15 disabled:opacity-50 py-3"
-            >
-              {exporting ? <Loader2 className="w-5 h-5 animate-spin" /> : <ArrowDownToLine className="w-5 h-5" />}
-              <span>{exporting ? 'Compiling Chapters...' : 'Download Word Prospectus'}</span>
-            </button>
+            <div className="grid grid-cols-2 gap-4 max-w-md mx-auto">
+              <button 
+                onClick={handleDownload} 
+                disabled={exporting || exportingPdf}
+                className="btn-primary flex items-center justify-center gap-2 text-sm shadow-indigo-600/15 disabled:opacity-50 py-3"
+              >
+                {exporting ? <Loader2 className="w-5 h-5 animate-spin" /> : <ArrowDownToLine className="w-5 h-5" />}
+                <span>Word (.docx)</span>
+              </button>
+              
+              <button 
+                onClick={handleDownloadPdf} 
+                disabled={exporting || exportingPdf}
+                className="bg-red-600 hover:bg-red-700 text-white flex items-center justify-center gap-2 text-sm rounded-lg font-bold shadow-sm shadow-red-600/15 disabled:opacity-50 py-3 transition-colors"
+              >
+                {exportingPdf ? <Loader2 className="w-5 h-5 animate-spin" /> : <ArrowDownToLine className="w-5 h-5" />}
+                <span>PDF Document</span>
+              </button>
+            </div>
+
+            <p className="text-[10px] text-slate-400 max-w-sm mx-auto leading-relaxed">
+              AI-generated content. Must be reviewed by a SEBI-registered Merchant Banker and legal counsel before filing.
+            </p>
           </div>
         </div>
 
-        {/* Version History (Right/Bottom) */}
+        {/* Version Audit Log (Right/Bottom) */}
         <div className="md:col-span-1 space-y-4">
-          <h3 className="font-bold text-slate-800 text-sm uppercase tracking-wider flex items-center gap-2">
-            <History className="w-4.5 h-4.5 text-indigo-500" />
-            <span>Version Audit Log</span>
-          </h3>
-
-          <div className="space-y-4">
-            {mockVersions.map((v, idx) => (
-              <div key={v.ver} className="bg-white p-4 rounded-xl border border-slate-200/60 shadow-sm space-y-1 relative">
-                {idx === 0 && (
-                  <span className="absolute top-3 right-3 text-[9px] bg-indigo-100 text-indigo-800 font-bold px-1.5 py-0.5 rounded">
-                    Latest
-                  </span>
-                )}
-                <div className="flex items-center gap-1.5">
-                  <Bookmark className="w-3.5 h-3.5 text-slate-400" />
-                  <span className="font-bold text-xs text-slate-800 font-mono">{v.ver}</span>
-                </div>
-                <p className="text-[10px] text-slate-400 font-mono">{new Date(v.date).toLocaleString()}</p>
-                <p className="text-[10px] text-slate-500 font-semibold mt-1">Edited by: {v.author}</p>
-                <p className="text-[11px] text-slate-600 leading-normal mt-1 italic">{v.change}</p>
-              </div>
-            ))}
+          <div className="flex items-center justify-between">
+            <h3 className="font-bold text-slate-800 text-sm uppercase tracking-wider flex items-center gap-2">
+              <History className="w-4.5 h-4.5 text-indigo-500" />
+              <span>Version Audit Log</span>
+            </h3>
+            <button
+              onClick={() => loadAuditLogs()}
+              disabled={logsLoading}
+              className="p-1.5 text-slate-400 hover:text-indigo-600 transition-colors rounded-lg"
+              title="Refresh audit log"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${logsLoading ? 'animate-spin' : ''}`} />
+            </button>
           </div>
+
+          <div className="relative">
+            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+            <input 
+              type="text" 
+              placeholder="Search logs..." 
+              value={search}
+              onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+              className="w-full pl-9 pr-4 py-2 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+            />
+          </div>
+
+          <div className="space-y-3">
+            {logsLoading ? (
+              <div className="flex items-center justify-center h-20">
+                <Loader2 className="w-5 h-5 text-indigo-500 animate-spin" />
+              </div>
+            ) : auditLogs.length === 0 ? (
+              <div className="bg-white p-4 rounded-xl border border-slate-200/60 shadow-sm text-center">
+                <p className="text-xs text-slate-400">No audit events yet.</p>
+                <p className="text-[10px] text-slate-300 mt-1">Events appear here as you use the system.</p>
+              </div>
+            ) : (
+              auditLogs.map((log, idx) => (
+                <div key={log.id} className="bg-white p-4 rounded-xl border border-slate-200/60 shadow-sm space-y-1 relative">
+                  {idx === 0 && (
+                    <span className="absolute top-3 right-3 text-[9px] bg-indigo-100 text-indigo-800 font-bold px-1.5 py-0.5 rounded">
+                      Latest
+                    </span>
+                  )}
+                  <div className="flex items-center gap-1.5">
+                    <Bookmark className="w-3.5 h-3.5 text-slate-400" />
+                    <span className="font-bold text-xs text-slate-800 font-mono">
+                      {ACTION_LABELS[log.action] || log.action}
+                    </span>
+                  </div>
+                  <p className="text-[10px] text-slate-400 font-mono">{new Date(log.created_at).toLocaleString()}</p>
+                  <p className="text-[10px] text-slate-500 font-semibold mt-1">By: {log.actor_name} ({log.actor_role})</p>
+                  <p className="text-[11px] text-slate-600 leading-normal mt-1 italic line-clamp-2">{log.description}</p>
+                </div>
+              ))
+            )}
+          </div>
+
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between mt-4 border-t border-slate-100 pt-4">
+              <button 
+                onClick={() => setPage(p => Math.max(1, p - 1))}
+                disabled={page === 1}
+                className="p-1 rounded hover:bg-slate-100 disabled:opacity-50 text-slate-600"
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+              <span className="text-xs text-slate-500 font-medium">Page {page} of {totalPages}</span>
+              <button 
+                onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                disabled={page === totalPages}
+                className="p-1 rounded hover:bg-slate-100 disabled:opacity-50 text-slate-600"
+              >
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
+          )}
         </div>
 
       </div>
