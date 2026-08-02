@@ -758,7 +758,18 @@ export const db = {
   saveIpoReadiness: (companyId, readiness) => {
     const data = getDb();
     if (!data.ipo_readiness) data.ipo_readiness = {};
-    data.ipo_readiness[companyId] = { ...readiness, computed_at: new Date().toISOString() };
+    // Preserve `items` unless the caller explicitly supplies it. The readiness
+    // GET handler recomputes and saves the whole payload, which carries no
+    // `items` key — a naive spread therefore deleted every reviewer sign-off on
+    // each page load, so verifications silently vanished the moment the issuer
+    // refreshed the dashboard.
+    const existing = data.ipo_readiness[companyId] || {};
+    data.ipo_readiness[companyId] = {
+      ...existing,
+      ...readiness,
+      items: readiness.items ?? existing.items ?? {},
+      computed_at: new Date().toISOString()
+    };
     saveDb(data);
   },
 

@@ -46,6 +46,102 @@ const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
 // needs. Overridable so a paid project can pin an exact version.
 const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-flash-latest';
 
+// Models to fall through to when the primary is overloaded. These are demand
+// problems, not quota problems: a 503 "model is overloaded" or a 429 with a
+// retry delay clears on its own, so retrying the same model then trying a
+// sibling recovers far more often than failing straight to the canned fallback.
+// Ordered cheapest-and-fastest last, since a degraded answer beats no answer.
+const GEMINI_FALLBACK_MODELS = (process.env.GEMINI_FALLBACK_MODELS ||
+  'gemini-flash-latest,gemini-flash-lite-latest')
+  .split(',').map((m) => m.trim()).filter(Boolean);
+
+// Ordered, de-duplicated: primary first, then any fallback not equal to it.
+const GEMINI_MODEL_CHAIN = [GEMINI_MODEL, ...GEMINI_FALLBACK_MODELS]
+  .filter((m, i, arr) => arr.indexOf(m) === i);
+
+// A hung request is worse than a failed one: without a deadline the SDK can sit
+// for minutes on an overloaded model while the user stares at a spinner, and on
+// Vercel the function is killed at maxDuration with no response at all.
+const GEMINI_TIMEOUT_MS = Number(process.env.GEMINI_TIMEOUT_MS || 20000);
+const GEMINI_MAX_ATTEMPTS = Number(process.env.GEMINI_MAX_ATTEMPTS || 3);
+
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+/** True for errors that a retry or a different model can plausibly fix. */
+function isTransientGeminiError(err) {
+  const status = err?.status ?? err?.response?.status;
+  if (status === 429 || status === 500 || status === 503 || status === 504) {
+    // 429 with "limit: 0" means the tier grants this model no allowance at all,
+    // so waiting cannot help — treat it as permanent for the current model and
+    // let the chain move on to the next one.
+    if (status === 429 && /limit:\s*0/i.test(err?.message || '')) return false;
+    return true;
+  }
+  const msg = String(err?.message || err).toLowerCase();
+  return msg.includes('overloaded') || msg.includes('unavailable') ||
+         msg.includes('timed out') || msg.includes('timeout') ||
+         msg.includes('fetch failed') || msg.includes('socket hang up') ||
+         msg.includes('econnreset') || msg.includes('etimedout');
+}
+
+/** Honour the server's own backoff hint when it sends one. */
+function retryDelayMs(err, attempt) {
+  const hinted = /retry(?:Delay|-after)"?[:\s]+"?(\d+)/i.exec(err?.message || '');
+  if (hinted) {
+    const secs = Number(hinted[1]);
+    if (Number.isFinite(secs) && secs > 0 && secs <= 30) return secs * 1000;
+  }
+  // Exponential with jitter, so concurrent uploads don't retry in lockstep.
+  return Math.min(8000, 600 * 2 ** attempt) + Math.floor(Math.random() * 400);
+}
+
+/**
+ * Runs a Gemini call against each model in the chain, retrying transient
+ * failures with backoff and enforcing a wall-clock deadline per attempt.
+ *
+ * `run(modelName)` receives the model to use and returns the SDK promise.
+ * Throws the last error if every model in the chain is exhausted, so callers
+ * keep their existing catch/fallback behaviour.
+ *
+ * `onModel` is invoked with the model that actually produced the result, so a
+ * caller can report the true model rather than assuming the primary was used.
+ */
+async function callGemini(run, { label = 'gemini', timeoutMs = GEMINI_TIMEOUT_MS, onModel } = {}) {
+  let lastErr;
+  for (const modelName of GEMINI_MODEL_CHAIN) {
+    for (let attempt = 0; attempt < GEMINI_MAX_ATTEMPTS; attempt++) {
+      try {
+        // Promise.race, not an abort signal: the SDK does not expose one on all
+        // call shapes. The underlying request may keep running after we give up,
+        // but it is unreferenced and the caller is no longer blocked on it.
+        const value = await Promise.race([
+          run(modelName),
+          sleep(timeoutMs).then(() => {
+            throw new Error(`Gemini call timed out after ${timeoutMs}ms`);
+          })
+        ]);
+        if (onModel) onModel(modelName);
+        return value;
+      } catch (err) {
+        lastErr = err;
+        if (!isTransientGeminiError(err)) {
+          console.warn(`[${label}] ${modelName} failed permanently: ${err?.message}`);
+          break; // Next model — retrying this one cannot help.
+        }
+        const isLastAttempt = attempt === GEMINI_MAX_ATTEMPTS - 1;
+        if (isLastAttempt) {
+          console.warn(`[${label}] ${modelName} exhausted ${GEMINI_MAX_ATTEMPTS} attempts: ${err?.message}`);
+          break;
+        }
+        const wait = retryDelayMs(err, attempt);
+        console.warn(`[${label}] ${modelName} transient (${err?.message}) — retry ${attempt + 1}/${GEMINI_MAX_ATTEMPTS - 1} in ${wait}ms`);
+        await sleep(wait);
+      }
+    }
+  }
+  throw lastErr || new Error('Gemini call failed with no error recorded');
+}
+
 const app = express();
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
@@ -978,11 +1074,18 @@ Return ONLY valid JSON: { cin, legal_name, incorporation_date, registered_state,
 
           const ocrPrompt = docPrompts[doc_type] || `Extract text and key data from this document. Return JSON: { ocr_text: "...", extracted_data: {} }`;
 
-          const model = genAI.getGenerativeModel({ model: GEMINI_MODEL });
-          const result = await model.generateContent([
-            ocrPrompt,
-            { inlineData: { mimeType, data: base64Data } }
-          ]);
+          // Retries transient overload/rate-limit failures and falls through to a
+          // sibling model before giving up, instead of failing the upload on the
+          // first 503 from a busy model.
+          const result = await callGemini(
+            (modelName) => genAI.getGenerativeModel({ model: modelName }).generateContent([
+              ocrPrompt,
+              { inlineData: { mimeType, data: base64Data } }
+            ]),
+            // Vision on a multi-page PDF is slower than a text turn, so it gets a
+            // longer deadline than the chatbot.
+            { label: 'OCR', timeoutMs: Number(process.env.GEMINI_OCR_TIMEOUT_MS || 45000) }
+          );
 
           const rawText = result.response.text().trim();
           const jsonText = rawText.replace(/^```(?:json)?\n?/i, '').replace(/\n?```$/i, '').trim();
@@ -1381,17 +1484,88 @@ app.get('/api/companies/:id/ipo-readiness', authenticateToken, async (req, res) 
     const sections = Object.keys(drafts);
     const certifiedCount = sections.reduce((acc, s) => acc + (drafts[s].status === 'certified' ? 1 : 0), 0);
 
-    // Dynamic readiness score calculation across 6 categories
-    const finScore = intake.financials?.revenue_fy25 && intake.financials?.net_worth ? 85 : 40;
-    const docScore = Math.min(100, Math.round((docs.filter(d => d.status === 'confirmed').length / Math.max(docs.length, 1)) * 100));
+    // Saved reviewer verifications. Read before scoring, not after: the whole
+    // point of a merchant banker signing off on a milestone is that it should
+    // move the score.
+    const savedReadiness = db.getIpoReadiness(companyId) || {};
+    const itemStatuses = savedReadiness.items || {};
+
+    // ── Category scores ──────────────────────────────────────────────────────
+    // Each is graduated rather than pass/fail, so that partial progress shows up.
+    // A score that only moves when a whole category flips reads as broken to the
+    // user filling the form in one field at a time.
+
+    // Financials: credit each disclosed figure instead of requiring two specific
+    // ones. Previously this was 40 or 85 with nothing in between, so filling in
+    // four of five financial fields moved the needle not at all.
+    const finFields = ['revenue_fy25', 'net_worth', 'pat_fy25', 'ebitda_fy25', 'total_debt'];
+    const finPresent = finFields.filter((f) => {
+      const v = intake.financials?.[f];
+      return v !== undefined && v !== null && String(v).trim() !== '';
+    }).length;
+    const finScore = Math.round(30 + (finPresent / finFields.length) * 70);
+
+    // Documents: measure against the document types an SME DRHP actually needs,
+    // not against however many files happen to be uploaded. The old ratio
+    // (confirmed / uploaded) *fell* when a user uploaded a new document, which
+    // punished exactly the action the page asks for. A confirmed doc counts full,
+    // an uploaded-but-unconfirmed one counts half.
+    const EXPECTED_DOC_TYPES = [
+      'incorporation_certificate', 'audited_financials', 'cap_table',
+      'board_resolution', 'gst_returns'
+    ];
+    const docCredit = EXPECTED_DOC_TYPES.reduce((acc, t) => {
+      const forType = docs.filter((d) => d.doc_type === t);
+      if (forType.some((d) => d.status === 'confirmed')) return acc + 1;
+      if (forType.length > 0) return acc + 0.5;
+      return acc;
+    }, 0);
+    const docScore = Math.round((docCredit / EXPECTED_DOC_TYPES.length) * 100);
+
     const draftScore = Math.round((certifiedCount / Math.max(sections.length, 1)) * 100);
     const gapScore = Math.max(0, 100 - gapReport.length * 20);
     const bankerAccepted = invitations.some(i => i.status === 'accepted');
     const bankerScore = bankerAccepted ? 100 : (invitations.length > 0 ? 50 : 10);
-    const govScore = intake.capital_structure?.promoter_holding_pct ? 90 : 50;
 
+    // Governance: graduated across the fields that actually evidence it.
+    const govFields = [
+      intake.capital_structure?.promoter_holding_pct,
+      intake.capital_structure?.total_shares,
+      intake.company?.independent_directors,
+      intake.company?.board_size
+    ];
+    const govPresent = govFields.filter((v) => v !== undefined && v !== null && String(v).trim() !== '').length;
+    const govScore = Math.round(40 + (govPresent / govFields.length) * 60);
+
+    // Reviewer verification: the merchant banker's sign-off on each milestone.
+    // This category was missing entirely — itemStatuses was read only to render
+    // the checklist, so a banker could verify all six milestones and watch the
+    // score sit unchanged. Weighted terminal states so "verified" outranks
+    // "submitted for review".
+    const ITEM_KEYS = [
+      'board_governance', 'audited_financials_3yr', 'cap_table_verification',
+      'sebi_icdr_disclosures', 'merchant_banker_appointment', 'chapter_certifications'
+    ];
+    const STATUS_CREDIT = {
+      completed: 1, verified: 1, submitted_for_review: 0.5,
+      in_progress: 0.25, needs_changes: 0, not_started: 0
+    };
+    const verificationCredit = ITEM_KEYS.reduce(
+      (acc, k) => acc + (STATUS_CREDIT[itemStatuses[k]?.status] ?? 0), 0
+    );
+    const verificationScore = Math.round((verificationCredit / ITEM_KEYS.length) * 100);
+
+    // Weights sum to 1.0. Verification gets 15% — meaningful enough that a full
+    // banker sign-off is visible, without letting it alone carry a company that
+    // has filed nothing.
     const overall_score = Math.round(
-      finScore * 0.2 + docScore * 0.2 + draftScore * 0.25 + gapScore * 0.15 + bankerScore * 0.1 + govScore * 0.1
+      finScore * 0.18 +
+      docScore * 0.17 +
+      draftScore * 0.20 +
+      gapScore * 0.15 +
+      bankerScore * 0.08 +
+      govScore * 0.07 +
+      verificationScore * 0.15
     );
 
     let overall_label = 'Needs Work';
@@ -1399,10 +1573,6 @@ app.get('/api/companies/:id/ipo-readiness', authenticateToken, async (req, res) 
     else if (overall_score >= 70) overall_label = 'Good';
     else if (overall_score >= 50) overall_label = 'Fair';
     else if (overall_score < 35) overall_label = 'Critical';
-
-    // Retrieve saved item verifications
-    const savedReadiness = db.getIpoReadiness(companyId) || {};
-    const itemStatuses = savedReadiness.items || {};
 
     const milestoneItems = [
       { key: 'board_governance', title: 'Board Governance & Independent Directors', category: 'governance', status: itemStatuses.board_governance?.status || (govScore > 70 ? 'completed' : 'in_progress'), verified_by: itemStatuses.board_governance?.updated_by_name || null },
@@ -1420,12 +1590,13 @@ app.get('/api/companies/:id/ipo-readiness', authenticateToken, async (req, res) 
       overall_label,
       summary: `IPO readiness score is ${overall_score}/100. ${certifiedCount} of ${sections.length} draft chapters certified. ${bankerAccepted ? 'Merchant Banker active.' : 'Merchant Banker engagement pending.'}`,
       sections: {
-        financial_disclosures: { score: finScore, status: finScore >= 75 ? 'ok' : 'warning', note: '3-year audited financials & revenue disclosures' },
+        financial_disclosures: { score: finScore, status: finScore >= 75 ? 'ok' : 'warning', note: `${finPresent} of ${finFields.length} financial disclosures provided` },
         legal_compliance: { score: govScore, status: govScore >= 75 ? 'ok' : 'warning', note: 'Promoter holding & litigation records' },
-        corporate_governance: { score: govScore, status: 'ok', note: 'Board structure & lock-in readiness' },
-        document_completeness: { score: docScore, status: docScore >= 75 ? 'ok' : 'warning', note: `${docs.filter(d => d.status === 'confirmed').length} of ${docs.length} documents confirmed` },
+        corporate_governance: { score: govScore, status: govScore >= 75 ? 'ok' : 'warning', note: `${govPresent} of ${govFields.length} governance fields provided` },
+        document_completeness: { score: docScore, status: docScore >= 75 ? 'ok' : 'warning', note: `${docCredit} of ${EXPECTED_DOC_TYPES.length} required document types in place` },
         draft_readiness: { score: draftScore, status: draftScore >= 75 ? 'ok' : 'warning', note: `${certifiedCount} of ${sections.length} chapters certified` },
-        merchant_banker_engagement: { score: bankerScore, status: bankerAccepted ? 'ok' : 'warning', note: bankerAccepted ? 'Banker engaged' : 'Invitation pending' }
+        merchant_banker_engagement: { score: bankerScore, status: bankerAccepted ? 'ok' : 'warning', note: bankerAccepted ? 'Banker engaged' : 'Invitation pending' },
+        reviewer_verification: { score: verificationScore, status: verificationScore >= 75 ? 'ok' : 'warning', note: `${verificationCredit} of ${ITEM_KEYS.length} milestones signed off by the Merchant Banker` }
       },
       milestone_items: milestoneItems,
       top_gaps: gapReport.slice(0, 3).map(g => g.message),
@@ -1522,25 +1693,29 @@ Rules:
 IMPORTANT DISCLAIMER: Your responses are informational only and do not constitute legal, compliance, financial, or merchant-banking advice.`;
 
   try {
-    const model = genAI.getGenerativeModel({
-      model: GEMINI_MODEL,
-      systemInstruction: { role: 'system', parts: [{ text: systemContext }] }
-    });
+    // Retries transient overload/rate-limit failures and falls through to a
+    // sibling model before giving up. Without this a busy model could hold the
+    // request open for minutes (the SDK retries internally with no deadline).
+    let modelUsed = GEMINI_MODEL;
+    const result = await callGemini(async (modelName) => {
+      const model = genAI.getGenerativeModel({
+        model: modelName,
+        systemInstruction: { role: 'system', parts: [{ text: systemContext }] }
+      });
 
-    // Build conversation history for multi-turn context
-    const chatHistory = history.slice(-10).map(msg => ({
-      role: msg.role === 'user' ? 'user' : 'model',
-      parts: [{ text: msg.content }]
-    }));
+      // Build conversation history for multi-turn context
+      const chatHistory = history.slice(-10).map(msg => ({
+        role: msg.role === 'user' ? 'user' : 'model',
+        parts: [{ text: msg.content }]
+      }));
 
-    const chat = model.startChat({
-      history: chatHistory
-    });
+      const chat = model.startChat({ history: chatHistory });
+      return chat.sendMessage(question);
+    }, { label: 'chatbot', onModel: (m) => { modelUsed = m; } });
 
-    const result = await chat.sendMessage(question);
     const answer = result.response.text();
 
-    res.json({ answer, model: GEMINI_MODEL });
+    res.json({ answer, model: modelUsed });
   } catch (err) {
     console.warn('[Chatbot] Gemini API unavailable or rate-limited:', err.message);
 
