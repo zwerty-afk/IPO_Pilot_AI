@@ -25,7 +25,16 @@ api.interceptors.request.use(
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response && error.response.status === 401) {
+    // Only treat a 401 as "your session is bad, go re-authenticate" when it is
+    // actually about the session. A 401 from a resource you lack permission for
+    // (e.g. another company's document) is not a reason to wipe the token and
+    // bounce the user to /login — the old blanket redirect logged out users on
+    // ordinary access-denied responses mid-session.
+    const isAuthFailure = error.response &&
+      error.response.status === 401 &&
+      (error.config?.url?.includes('/auth/') ||
+       /Missing Token|Invalid Token|Session expired|Unauthorized/i.test(error.response.data?.message || ''));
+    if (isAuthFailure) {
       localStorage.removeItem('ipo_token');
       window.location.href = '/login';
     }

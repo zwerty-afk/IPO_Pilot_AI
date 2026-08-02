@@ -3,6 +3,7 @@ import { S3Client, DeleteObjectCommand, GetObjectCommand } from '@aws-sdk/client
 import express from 'express';
 import cors from 'cors';
 import multer from 'multer';
+import crypto from 'crypto';
 
 import multerS3 from 'multer-s3';
 import path from 'path';
@@ -252,13 +253,76 @@ const getClientIp = (req) => {
     '127.0.0.1';
 };
 
+// ─── Session tokens ───────────────────────────────────────────────────────────
+// Tokens used to be the literal string `mock-token-for-${email}`, which anyone
+// could construct for any address — no signature, no expiry. These are HMAC-signed
+// with an expiry instead, using built-in crypto so no new dependency is needed.
+//
+// AUTH_SECRET should be set in production. Without it we derive a per-boot random
+// secret: still unforgeable, but every restart invalidates outstanding tokens, so
+// users are logged out on redeploy. The warning below says so explicitly.
+const AUTH_SECRET = process.env.AUTH_SECRET || process.env.CRON_SECRET || null;
+if (!AUTH_SECRET) {
+  console.warn(
+    '[auth] AUTH_SECRET is not set — using a random per-boot secret. Sessions will ' +
+    'not survive a restart or scale beyond one instance. Set AUTH_SECRET in production.'
+  );
+}
+const TOKEN_SECRET = AUTH_SECRET || crypto.randomBytes(32).toString('hex');
+const TOKEN_TTL_MS = Number(process.env.AUTH_TOKEN_TTL_MS || 7 * 24 * 60 * 60 * 1000);
+
+const b64url = (buf) => Buffer.from(buf).toString('base64url');
+
+function signToken(email) {
+  // Email is lowercased here so a token minted from "John@x.com" verifies the
+  // same as one from "john@x.com" — findUser is case-insensitive, and the old
+  // scheme's case-sensitive lookup locked out anyone who varied their capitals.
+  const payload = b64url(JSON.stringify({
+    sub: String(email).toLowerCase(),
+    exp: Date.now() + TOKEN_TTL_MS
+  }));
+  const sig = crypto.createHmac('sha256', TOKEN_SECRET).update(payload).digest('base64url');
+  return `${payload}.${sig}`;
+}
+
+/** Returns the email a token attests to, or null if it is forged or expired. */
+function verifyToken(token) {
+  if (typeof token !== 'string' || !token.includes('.')) return null;
+  const idx = token.lastIndexOf('.');
+  const payload = token.slice(0, idx);
+  const sig = token.slice(idx + 1);
+
+  const expected = crypto.createHmac('sha256', TOKEN_SECRET).update(payload).digest('base64url');
+  const a = Buffer.from(sig);
+  const b = Buffer.from(expected);
+  // timingSafeEqual throws on length mismatch, so guard before comparing.
+  if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) return null;
+
+  try {
+    const { sub, exp } = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8'));
+    if (!sub || typeof exp !== 'number' || Date.now() > exp) return null;
+    return String(sub).toLowerCase();
+  } catch {
+    return null;
+  }
+}
+
 const authenticateToken = (req, res, next) => {
   const authHeader = req.headers['authorization'];
   const token = authHeader && authHeader.split(' ')[1];
   if (!token) return res.status(401).json({ message: 'Unauthorized: Missing Token' });
 
-  const email = token.replace('mock-token-for-', '');
-  const user = db.getUsers().find(u => u.email === email);
+  const email = verifyToken(token);
+  if (!email) {
+    // Distinguished from "missing" so the client can tell an expired session from
+    // a never-authenticated one.
+    return res.status(401).json({ message: 'Session expired or invalid. Please sign in again.' });
+  }
+
+  // Case-insensitive, matching db.findUser. The old lookup compared u.email to the
+  // raw token substring, so a user stored as "john@x.com" who signed up typing
+  // "John@x.com" got a token that matched no row and 401'd on every request.
+  const user = db.getUsers().find(u => String(u.email).toLowerCase() === email);
   if (!user) return res.status(401).json({ message: 'Unauthorized: Invalid Token' });
 
   req.user = user;
@@ -694,10 +758,13 @@ app.post('/api/auth/login', (req, res) => {
   if (!user || !verifyPassword(password, user.password)) {
     return res.status(400).json({ message: 'Invalid email or password.' });
   }
-  const token = `mock-token-for-${user.email}`;
+  const token = signToken(user.email);
   // Audit log
   db.addAuditLog({ actor_email: user.email, actor_name: user.name, actor_role: user.role, action: 'LOGIN', entity_type: 'session', entity_id: user.companyId, description: `User ${user.name} logged in.`, metadata: {}, ip: getClientIp(req) });
-  res.json({ token, user: { email: user.email, role: user.role, name: user.name } });
+  // companyId is included so the client knows which company to load immediately.
+  // /auth/me already returned it, but login did not, so the first render after
+  // signing in had no company and pages keyed on it came up empty until a reload.
+  res.json({ token, user: { email: user.email, role: user.role, name: user.name, companyId: user.companyId } });
 });
 
 app.post('/api/auth/register', (req, res) => {
@@ -736,9 +803,12 @@ app.post('/api/auth/register', (req, res) => {
   };
   db.addUser(user);
 
-  const token = `mock-token-for-${user.email}`;
+  const token = signToken(user.email);
   db.addAuditLog({ actor_email: user.email, actor_name: user.name, actor_role: user.role, action: 'REGISTER', entity_type: 'session', entity_id: companyId, description: `New ${normalizedRole} account created for ${user.name}.`, metadata: {}, ip: getClientIp(req) });
-  res.status(201).json({ token, user: { email: user.email, role: user.role, name: user.name } });
+  // companyId mirrors the login response: a fresh issuer gets a company at signup,
+  // and the client needs it in the auth payload so the dashboard can load it
+  // without waiting for a /auth/me round-trip.
+  res.status(201).json({ token, user: { email: user.email, role: user.role, name: user.name, companyId: user.companyId } });
 });
 
 app.get('/api/auth/me', authenticateToken, (req, res) => {
