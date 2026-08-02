@@ -13,6 +13,9 @@ import PDFDocument from 'pdfkit';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import cron from 'node-cron';
 import { db, getDb, saveDb, hashPassword, verifyPassword, initDb, flushDb } from './db.js';
+// Read directly from the store module: db.js deliberately does not re-export
+// these, but /api/health needs to report whether DynamoDB is configured and live.
+import { dynamoEnabled, isReady as isDbReady } from './dynamoStore.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -83,12 +86,19 @@ const ALLOWED_MIME_TYPES = [
   'application/octet-stream'
 ];
 
-const S3_BUCKET = process.env.CLOUD_STORAGE_BUCKET || 
-                  process.env.AWS_S3_BUCKET || 
-                  process.env.AWS_BUCKET_NAME || 
+// S3_BUCKET is the name documented in .env.example and DEPLOYMENT.md, so it has
+// to be first — it was missing from this chain, which meant a correctly-configured
+// deployment resolved to undefined and silently fell back to disk storage.
+const S3_BUCKET = process.env.S3_BUCKET ||
+                  process.env.CLOUD_STORAGE_BUCKET ||
+                  process.env.AWS_S3_BUCKET ||
+                  process.env.AWS_BUCKET_NAME ||
                   process.env.AWS_STORAGE_BUCKET_NAME;
 
-const AWS_REGION = process.env.AWS_REGION || process.env.AWS_DEFAULT_REGION || 'us-east-1';
+// Must match dynamoStore.js's default. They disagreed (us-east-1 vs ap-south-1),
+// so S3 and DynamoDB could end up pointed at different regions when AWS_REGION
+// was unset — uploads landing in one region, records in another.
+const AWS_REGION = process.env.AWS_REGION || process.env.AWS_DEFAULT_REGION || 'ap-south-1';
 
 const hasAwsCredentials = !!(
   process.env.AWS_ACCESS_KEY_ID && 
@@ -113,10 +123,15 @@ const storage = hasAwsCredentials
       metadata: (req, file, cb) => cb(null, { fieldName: file.fieldname }),
       key: (req, file, cb) => cb(null, `documents/${Date.now()}-${file.originalname.replace(/[^a-zA-Z0-9._-]/g, '_')}`)
     })
-  : multer.diskStorage({
-      destination: (req, file, cb) => cb(null, UPLOADS_DIR),
-      filename: (req, file, cb) => cb(null, `${Date.now()}-${file.originalname.replace(/[^a-zA-Z0-9._-]/g, '_')}`)
-    });
+  : process.env.VERCEL
+    // Serverless has no writable disk outside /tmp, and /tmp does not survive
+    // between invocations. Buffer in memory so the upload at least reaches OCR
+    // instead of throwing EROFS deep inside multer.
+    ? multer.memoryStorage()
+    : multer.diskStorage({
+        destination: (req, file, cb) => cb(null, UPLOADS_DIR),
+        filename: (req, file, cb) => cb(null, `${Date.now()}-${file.originalname.replace(/[^a-zA-Z0-9._-]/g, '_')}`)
+      });
 
 const upload = multer({
   storage,
@@ -539,6 +554,41 @@ function generateDraftData(companyId, sectionKey = null) {
   return currentDrafts;
 }
 
+// ─── HEALTH ───────────────────────────────────────────────────────────────────
+
+// Unauthenticated on purpose: when storage is down nobody can log in, so an
+// authenticated diagnostic would be useless exactly when it is needed. It reports
+// only whether each setting resolved — never a key, secret, or credential value.
+app.get('/api/health', async (req, res) => {
+  // Named `report`, not `storage` — the module already has a `storage` const
+  // holding the multer engine, and shadowing it here reads like a bug.
+  const report = {
+    dynamoConfigured: dynamoEnabled,
+    dynamoReady: false,
+    table: process.env.DYNAMO_TABLE || 'ipo_pilot_data',
+    region: AWS_REGION,
+    s3BucketResolved: Boolean(S3_BUCKET),
+    s3Uploads: hasAwsCredentials,
+    awsKeyPresent: Boolean(process.env.AWS_ACCESS_KEY_ID),
+    awsSecretPresent: Boolean(process.env.AWS_SECRET_ACCESS_KEY),
+    geminiKeyPresent: Boolean(GEMINI_API_KEY),
+    geminiModel: GEMINI_MODEL,
+    serverless: isServerless
+  };
+
+  let ok = true;
+  let error = null;
+  try {
+    await ensureHydrated();
+    report.dynamoReady = dynamoEnabled ? isDbReady() : false;
+  } catch (err) {
+    ok = false;
+    error = { reason: err?.name || 'UnknownError', detail: err?.message || String(err) };
+  }
+
+  res.status(ok ? 200 : 503).json({ ok, storage: report, error });
+});
+
 // ─── AUTH ─────────────────────────────────────────────────────────────────────
 
 app.post('/api/auth/login', (req, res) => {
@@ -860,9 +910,13 @@ app.post('/api/documents/:companyId/upload', authenticateToken, (req, res) => {
 
       try {
         let fileBuffer;
-        if (req.file.key && process.env.CLOUD_STORAGE_BUCKET) {
+        // Use the resolved S3_BUCKET, not the raw CLOUD_STORAGE_BUCKET env var.
+        // Reading the env var directly meant a deployment configured with
+        // S3_BUCKET uploaded to S3 but then took the disk branch below, found no
+        // file, and left fileBuffer undefined — OCR "failed" with nothing to read.
+        if (req.file.key && S3_BUCKET) {
           const getObjCmd = new GetObjectCommand({
-            Bucket: process.env.CLOUD_STORAGE_BUCKET,
+            Bucket: S3_BUCKET,
             Key: req.file.key
           });
           const s3Response = await s3.send(getObjCmd);
@@ -1987,7 +2041,16 @@ export default async function handler(req, res) {
     console.error('Storage init failed:', err);
     res.statusCode = 503;
     res.setHeader('Content-Type', 'application/json');
-    return res.end(JSON.stringify({ message: 'Storage unavailable. Please retry.' }));
+    // The bare "Storage unavailable" message left no way to tell a missing table
+    // from a bad region from a denied IAM policy without digging through Vercel's
+    // function logs. AWS error names/codes are classifications, not secrets, so
+    // returning them is safe and turns a dead end into an actionable message.
+    return res.end(JSON.stringify({
+      message: 'Storage unavailable. Please retry.',
+      reason: err?.name || 'UnknownError',
+      detail: err?.message || String(err),
+      hint: 'Check /api/health for which storage settings resolved.'
+    }));
   }
   return app(req, res);
 }

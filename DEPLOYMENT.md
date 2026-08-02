@@ -83,8 +83,43 @@ Open the deployment URL and test:
 3. **Check the intake form** — navigate to Intake and confirm the completeness heatmap appears at the top
 4. **Invite a reviewer** — go to Invitations, send an invite to a test email, and confirm it appears in the list (not as a revoked stub)
 
-If any step fails, check the **Functions** tab in Vercel's dashboard for runtime logs. Common issues:
+If any step fails, check the **Functions** tab in Vercel's dashboard for runtime logs.
 
+**Start with `/api/health`.** Open `https://<your-deploy>.vercel.app/api/health` — it needs no login (deliberately: when storage is down, nobody can log in) and reports which settings actually resolved, without ever echoing a key or secret:
+
+```json
+{
+  "ok": true,
+  "storage": {
+    "dynamoConfigured": true,
+    "dynamoReady": true,
+    "table": "ipo_pilot_data",
+    "region": "ap-south-1",
+    "s3BucketResolved": true,
+    "s3Uploads": true,
+    "awsKeyPresent": true,
+    "awsSecretPresent": true,
+    "geminiKeyPresent": true,
+    "geminiModel": "gemini-flash-latest",
+    "serverless": true
+  },
+  "error": null
+}
+```
+
+Read it like this:
+
+| Field | If false | Fix |
+|---|---|---|
+| `dynamoConfigured` | AWS key/secret missing, or `USE_DYNAMO=false` | Set `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` in Vercel; remove `USE_DYNAMO` |
+| `dynamoReady` | Credentials present but the Scan failed — see `error.reason` | `ResourceNotFoundException` → wrong `DYNAMO_TABLE` or wrong `AWS_REGION`. `AccessDeniedException` → IAM user lacks `dynamodb:Scan`/`PutItem` |
+| `s3BucketResolved` | No bucket env var set | Set `S3_BUCKET` |
+| `s3Uploads` | Bucket set but credentials missing/placeholder | Check the key isn't still `your_access_key_here` |
+| `geminiKeyPresent` | OCR will report `failed` | Set `GEMINI_API_KEY` |
+
+Common issues:
+
+- **`Storage unavailable. Please retry.` on every API call** → DynamoDB hydration is failing. The response now carries `reason` and `detail` (the AWS error name and message) — check those first, then `/api/health`
 - **500 on every API call** → AWS credentials are wrong or the DynamoDB table doesn't exist in `ap-south-1`
 - **OCR stuck at "processing"** → Gemini key is missing or invalid; check the function logs for a 403 or 429
 - **404 on `/api/*` routes** → the serverless function didn't deploy; check that `api/index.js` exists in the repo
@@ -184,6 +219,7 @@ Preview deployments get their own URLs (e.g., `ipo-pilot-ai-git-staging-zwerty-a
 
 | Symptom | Cause | Fix |
 |---|---|---|
+| `Storage unavailable. Please retry.` on every call | DynamoDB hydration failed on cold start | Read `reason`/`detail` in the response, then open `/api/health`. Usually a wrong `DYNAMO_TABLE`, a wrong `AWS_REGION`, or an IAM policy missing `dynamodb:Scan` |
 | Build fails on a `.ts`/`.tsx` file, or mentions TanStack, Next.js, or `vite v8` | Vercel is building a **different repo** — usually a template project like `ipo-pilot-ai-<hash>` | Check the `Cloning github.com/…` line in the build log. This project is plain JS on Vite 5 and has no `.ts` files. Delete the template project and re-import `zwerty-afk/IPO_Pilot_AI` |
 | "Upgrade your plan" prompt on cron | Hobby allows one cron run per day; `vercel.json` asked for more | Already set to `0 3 * * *` (daily). Raise it only on Pro |
 | Build fails with "vite: not found" | `client/package.json` missing or bad lockfile | Run `npm --prefix client install` locally, commit `client/package-lock.json`, push |
