@@ -11,30 +11,31 @@ This guide covers deploying the full-stack IPO Pilot AI app to Vercel with live 
 
 ## 1. Push to GitHub
 
-The repo is currently pointing at `harnoorsingh20/IPO-Pilot-AI`. To deploy under your own account:
+The remote points at `zwerty-afk/IPO_Pilot_AI` (private). Push the local commits:
 
 ```bash
 cd "d:\IPO-Pilot-AI"
-
-# Option A: if you already have a private repo called IPO-Pilot-AI under your account
-git remote set-url origin https://github.com/zwerty-afk/IPO-Pilot-AI.git
 git push -u origin main
-
-# Option B: create a new private repo via GitHub CLI (install from https://cli.github.com if needed)
-gh repo create IPO-Pilot-AI --private --source=. --remote=origin --push
 ```
 
-After the push succeeds, you'll have a private repo at `https://github.com/zwerty-afk/IPO-Pilot-AI`.
+If you're starting from a fresh repo instead, create it empty (no README, no .gitignore) to avoid an unrelated-history merge, then:
 
-**Security note**: the three commits you're pushing (`088f327`, `12c4d4d`, `f99b58f`, `ae3e609`) contain zero secrets — all credentials live in `.env`, which is gitignored. The build scanned the staged diff for AWS and Gemini key patterns before each commit.
+```bash
+git remote set-url origin https://github.com/zwerty-afk/<repo-name>.git
+git push -u origin main
+```
+
+**Security note**: the commits contain zero secrets — all credentials live in `server/.env`, which is gitignored. The staged diff was scanned for AWS (`AKIA…`) and Gemini (`AIza…`) key patterns before each commit. `server/db.json` is also excluded: it's a runtime artifact holding a test user and scrypt password hashes.
 
 ## 2. Import to Vercel
 
 1. Go to https://vercel.com and sign in
 2. Click **Add New → Project**
-3. Import your GitHub repo: `zwerty-afk/IPO-Pilot-AI`
+3. Import your GitHub repo: `zwerty-afk/IPO_Pilot_AI`
 4. Vercel auto-detects the Vite framework from `vercel.json`
 5. **Do not deploy yet** — you need to set environment variables first
+
+**Import your own repo — do not start from a template.** If you create the project from a Vercel/v0 template, Vercel generates a repo named like `ipo-pilot-ai-6c229c0d` containing the *template's* code, and every build compiles that instead of yours. The build log's `Cloning github.com/…` line tells you which repo is actually being built — check it matches.
 
 ## 3. Environment Variables
 
@@ -105,11 +106,18 @@ The cron schedule is defined in `vercel.json`:
 
 ```json
 "crons": [
-  { "path": "/api/cron/sebi-refresh", "schedule": "0 */6 * * *" }
+  { "path": "/api/cron/sebi-refresh", "schedule": "0 3 * * *" }
 ]
 ```
 
-To change the interval, edit the cron expression and push. Vercel updates the schedule on the next deploy.
+Daily at 03:00 UTC, because **Vercel's Hobby plan allows at most one cron run per day** — asking for `0 */6 * * *` (every 6 hours) triggers an upgrade prompt. On Pro you can raise the frequency.
+
+Daily is enough here because the cron isn't the only refresh path:
+
+- On cold start the server checks whether the cached notices are older than 6 hours and refetches if so ([server/server.js](server/server.js) `SEBI` startup block)
+- The SEBI Updates page has a manual **Refresh** button wired to `POST /api/sebi-notices/refresh`
+
+So even with a once-daily cron, notices stay current in practice. If you'd rather drop the cron entirely, delete the `crons` block — the startup check and manual refresh keep working.
 
 ## 8. Monitoring
 
@@ -176,6 +184,8 @@ Preview deployments get their own URLs (e.g., `ipo-pilot-ai-git-staging-zwerty-a
 
 | Symptom | Cause | Fix |
 |---|---|---|
+| Build fails on a `.ts`/`.tsx` file, or mentions TanStack, Next.js, or `vite v8` | Vercel is building a **different repo** — usually a template project like `ipo-pilot-ai-<hash>` | Check the `Cloning github.com/…` line in the build log. This project is plain JS on Vite 5 and has no `.ts` files. Delete the template project and re-import `zwerty-afk/IPO_Pilot_AI` |
+| "Upgrade your plan" prompt on cron | Hobby allows one cron run per day; `vercel.json` asked for more | Already set to `0 3 * * *` (daily). Raise it only on Pro |
 | Build fails with "vite: not found" | `client/package.json` missing or bad lockfile | Run `npm --prefix client install` locally, commit `client/package-lock.json`, push |
 | 500 on first API call, then 200 | DynamoDB hydration failed on cold start | Check function logs; usually a wrong table name or region |
 | OCR never completes | Gemini key wrong, or model quota exhausted | Verify `GEMINI_API_KEY` in Vercel env vars; check function logs for 429 or 403 |
