@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { Shield, Loader2, User, Lock, Building2, Fingerprint, AlertCircle, Mail, Eye, EyeOff } from 'lucide-react';
+import { Shield, Loader2, User, Lock, Building2, AlertCircle, Mail, Eye, EyeOff } from 'lucide-react';
 
 const roleContent = {
   issuer: {
@@ -35,7 +35,6 @@ export default function LoginPage() {
   const [emailError, setEmailError] = useState('');
   const [loading, setLoading] = useState(false);
   const [selectedRole, setSelectedRole] = useState('issuer');
-  const [digilockerToast, setDigilockerToast] = useState(false);
   const { login, register } = useAuth();
   const navigate = useNavigate();
 
@@ -81,11 +80,6 @@ export default function LoginPage() {
     } finally {
       setLoading(false);
     }
-  };
-
-  const handleDigilocker = () => {
-    setDigilockerToast(true);
-    setTimeout(() => setDigilockerToast(false), 3000);
   };
 
   const fillDemo = (demoEmail, demoPass, role) => {
@@ -265,20 +259,6 @@ export default function LoginPage() {
                 {isSignup ? 'Sign in' : 'Sign up'}
               </button>
             </p>
-
-            {/* DigiLocker Button */}
-            <div className="mt-4 relative">
-              <button type="button" onClick={handleDigilocker}
-                className="w-full py-3 bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/20 text-slate-300 font-medium rounded-xl transition-all duration-200 flex items-center justify-center gap-2 text-sm">
-                <Fingerprint className="w-4 h-4" />
-                Continue with DigiLocker
-              </button>
-              {digilockerToast && (
-                <div className="absolute -bottom-10 left-1/2 -translate-x-1/2 bg-slate-800 text-slate-300 text-xs px-3 py-1.5 rounded-lg border border-slate-700 whitespace-nowrap animate-slide-up shadow-lg z-20">
-                  Coming soon — DigiLocker integration is under development
-                </div>
-              )}
-            </div>
 
             <div className="my-6 flex items-center gap-4">
               <div className="flex-1 h-px bg-white/10"></div>
