@@ -258,27 +258,63 @@ const getClientIp = (req) => {
 // could construct for any address — no signature, no expiry. These are HMAC-signed
 // with an expiry instead, using built-in crypto so no new dependency is needed.
 //
-// AUTH_SECRET should be set in production. Without it we derive a per-boot random
-// secret: still unforgeable, but every restart invalidates outstanding tokens, so
-// users are logged out on redeploy. The warning below says so explicitly.
+// AUTH_SECRET should be set in production. When it is missing we no longer fall
+// back to crypto.randomBytes: under serverless every cold start produced a
+// DIFFERENT secret, so a token minted by one instance was rejected by the next.
+// The visible symptom was a login that appeared to succeed and then bounced
+// straight back to /login, because the follow-up /auth/me 401'd and the client
+// cleared the token. Deriving the fallback from stable deployment identifiers
+// keeps every instance of the same deployment in agreement.
 const AUTH_SECRET = process.env.AUTH_SECRET || process.env.CRON_SECRET || null;
-if (!AUTH_SECRET) {
-  console.warn(
-    '[auth] AUTH_SECRET is not set — using a random per-boot secret. Sessions will ' +
-    'not survive a restart or scale beyond one instance. Set AUTH_SECRET in production.'
-  );
+
+function derivedFallbackSecret() {
+  // These are identical across all instances of one deployment and differ between
+  // deployments, which is the property a signing key needs here. AWS credentials
+  // are included because they are always present in this app's configuration and
+  // are not guessable by a client; only a hash of them is ever held.
+  const material = [
+    process.env.VERCEL_URL,
+    process.env.VERCEL_PROJECT_PRODUCTION_URL,
+    process.env.VERCEL_GIT_REPO_SLUG,
+    process.env.AWS_ACCESS_KEY_ID,
+    process.env.AWS_SECRET_ACCESS_KEY,
+    process.env.DYNAMO_TABLE,
+    process.env.GEMINI_API_KEY
+  ].filter(Boolean).join('|');
+
+  if (!material) return null;
+  return crypto.createHash('sha256').update(`ipo-pilot-auth|${material}`).digest('hex');
 }
-const TOKEN_SECRET = AUTH_SECRET || crypto.randomBytes(32).toString('hex');
+
+let TOKEN_SECRET = AUTH_SECRET;
+if (!TOKEN_SECRET) {
+  TOKEN_SECRET = derivedFallbackSecret();
+  if (TOKEN_SECRET) {
+    console.warn(
+      '[auth] AUTH_SECRET is not set — deriving a stable fallback from deployment ' +
+      'configuration. Sessions survive restarts and scale across instances, but a ' +
+      'config change will invalidate them. Set AUTH_SECRET in production.'
+    );
+  } else {
+    // Nothing stable to derive from (bare local dev). Random is acceptable here:
+    // a single long-lived process, and sessions only drop on manual restart.
+    TOKEN_SECRET = crypto.randomBytes(32).toString('hex');
+    console.warn(
+      '[auth] AUTH_SECRET is not set and no stable configuration was found — using ' +
+      'a random per-boot secret. Sessions will not survive a restart. Set AUTH_SECRET.'
+    );
+  }
+}
 const TOKEN_TTL_MS = Number(process.env.AUTH_TOKEN_TTL_MS || 7 * 24 * 60 * 60 * 1000);
 
 const b64url = (buf) => Buffer.from(buf).toString('base64url');
 
 function signToken(email) {
-  // Email is lowercased here so a token minted from "John@x.com" verifies the
-  // same as one from "john@x.com" — findUser is case-insensitive, and the old
-  // scheme's case-sensitive lookup locked out anyone who varied their capitals.
+  // Email is trimmed and lowercased here so a token minted from " John@x.com "
+  // verifies the same as one from "john@x.com" — findUser normalizes identically,
+  // and the old case-sensitive lookup locked out anyone who varied their capitals.
   const payload = b64url(JSON.stringify({
-    sub: String(email).toLowerCase(),
+    sub: String(email).trim().toLowerCase(),
     exp: Date.now() + TOKEN_TTL_MS
   }));
   const sig = crypto.createHmac('sha256', TOKEN_SECRET).update(payload).digest('base64url');
@@ -319,10 +355,10 @@ const authenticateToken = (req, res, next) => {
     return res.status(401).json({ message: 'Session expired or invalid. Please sign in again.' });
   }
 
-  // Case-insensitive, matching db.findUser. The old lookup compared u.email to the
-  // raw token substring, so a user stored as "john@x.com" who signed up typing
-  // "John@x.com" got a token that matched no row and 401'd on every request.
-  const user = db.getUsers().find(u => String(u.email).toLowerCase() === email);
+  // Delegates to db.findUser so token lookup and login lookup normalize the same
+  // way (trim + lowercase). This used to be a separate inline comparison, which
+  // meant the two could drift apart and reject a valid session.
+  const user = db.findUser(email);
   if (!user) return res.status(401).json({ message: 'Unauthorized: Invalid Token' });
 
   req.user = user;
@@ -782,13 +818,18 @@ app.post('/api/auth/register', (req, res) => {
   if (!name || !email || !password) {
     return res.status(400).json({ message: 'Name, email, and password are required.' });
   }
-  const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+  // Normalize before validating and before storing. The regex rejects embedded
+  // whitespace, so an address with a stray leading/trailing space (autofill, paste,
+  // mobile keyboard) failed signup with "Please enter a valid email address" even
+  // though the address itself was fine.
+  const normalizedEmail = String(email).trim().toLowerCase();
+  const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail);
   if (!emailOk) return res.status(400).json({ message: 'Please enter a valid email address.' });
   if (String(password).length < 6) {
     return res.status(400).json({ message: 'Password must be at least 6 characters.' });
   }
   const normalizedRole = role === 'reviewer' ? 'reviewer' : 'issuer';
-  if (db.findUser(email)) {
+  if (db.findUser(normalizedEmail)) {
     return res.status(409).json({ message: 'An account with this email already exists. Please sign in.' });
   }
   if (normalizedRole === 'issuer' && !companyName) {
@@ -803,10 +844,10 @@ app.post('/api/auth/register', (req, res) => {
   }
 
   const user = {
-    email: String(email).toLowerCase(),
+    email: normalizedEmail,
     password: hashPassword(password),
     role: normalizedRole,
-    name,
+    name: String(name).trim(),
     companyId
   };
   db.addUser(user);

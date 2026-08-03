@@ -65,6 +65,15 @@ export default function LoginPage() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
+    // validateEmail passes on an empty string (it only rejects malformed input),
+    // so without these checks a blank submit reached the server and came back as
+    // "Invalid credentials", which reads as though correct details were rejected.
+    if (!email.trim()) { setError('Please enter your email address.'); return; }
+    if (!password) { setError('Please enter your password.'); return; }
+    if (isSignup && !name.trim()) { setError('Please enter your name.'); return; }
+    if (isSignup && selectedRole === 'issuer' && !companyName.trim()) {
+      setError('Please enter your company name.'); return;
+    }
     if (!validateEmail(email)) return;
     setLoading(true);
     try {
@@ -73,7 +82,9 @@ export default function LoginPage() {
       } else {
         await login(email.trim(), password);
       }
-      navigate('/dashboard');
+      // replace: true so the back button cannot return to the login form in an
+      // already-authenticated session.
+      navigate('/dashboard', { replace: true });
     } catch (err) {
       const fallback = isSignup ? 'Could not create your account. Please try again.' : 'Invalid credentials. Please try again.';
       setError(err.response?.data?.message || fallback);

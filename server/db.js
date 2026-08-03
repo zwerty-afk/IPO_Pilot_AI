@@ -532,7 +532,14 @@ export async function flushDb() {
 
 export const db = {
   getUsers: () => getDb().users,
-  findUser: (email) => getDb().users.find(u => u.email.toLowerCase() === String(email || '').toLowerCase()),
+  // Trimmed as well as lowercased: a trailing space from an autofill, a paste, or
+  // a mobile keyboard's auto-inserted space otherwise produced "Invalid email or
+  // password" for credentials that were actually correct.
+  findUser: (email) => {
+    const needle = String(email || '').trim().toLowerCase();
+    if (!needle) return undefined;
+    return getDb().users.find(u => String(u.email || '').trim().toLowerCase() === needle);
+  },
   addUser: (user) => {
     const data = getDb();
     data.users.push(user);

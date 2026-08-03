@@ -52,10 +52,10 @@ In the Vercel project settings (Project → Settings → Environment Variables),
 | `AUTH_SECRET` | `<64-char-hex>` | Signs session tokens. **Set this** — see below |
 | `CRON_SECRET` | `<64-char-hex>` | Generate with `openssl rand -hex 32` |
 
-**`AUTH_SECRET` is not optional in practice.** Session tokens are HMAC-signed with it. If it's unset, the server falls back to a random secret generated at boot, which means:
+**Set `AUTH_SECRET`.** Session tokens are HMAC-signed with it. If it's unset, the server derives a fallback from your deployment configuration (AWS keys, table name, project URL). That fallback is *stable* — identical across instances and across restarts — so sessions do keep working. But it is derived from values you may rotate:
 
-- Every redeploy and every cold start invalidates all sessions — users get bounced to `/login` mid-task
-- Two concurrent serverless instances sign with different secrets, so a token issued by one is rejected by the other
+- Rotating an AWS key, changing the Dynamo table, or moving the deploy URL changes the derived secret and logs everyone out
+- An explicit `AUTH_SECRET` decouples sessions from infrastructure config, which is what you want in production
 
 Generate it with `openssl rand -hex 32`, or:
 
