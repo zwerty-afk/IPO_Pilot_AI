@@ -49,7 +49,21 @@ In the Vercel project settings (Project → Settings → Environment Variables),
 | `DYNAMO_TABLE` | `ipo_pilot_data` | Your DynamoDB table name |
 | `S3_BUCKET` | `ipo-pilot-ai-docs-2026` | Your S3 bucket name |
 | `GEMINI_API_KEY` | `AIza...` or `AQ.Ab...` | Get from https://aistudio.google.com/app/apikey |
+| `AUTH_SECRET` | `<64-char-hex>` | Signs session tokens. **Set this** — see below |
 | `CRON_SECRET` | `<64-char-hex>` | Generate with `openssl rand -hex 32` |
+
+**`AUTH_SECRET` is not optional in practice.** Session tokens are HMAC-signed with it. If it's unset, the server falls back to a random secret generated at boot, which means:
+
+- Every redeploy and every cold start invalidates all sessions — users get bounced to `/login` mid-task
+- Two concurrent serverless instances sign with different secrets, so a token issued by one is rejected by the other
+
+Generate it with `openssl rand -hex 32`, or:
+
+```bash
+node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+```
+
+Changing it later logs everyone out once, which is the intended way to revoke all sessions. Session lifetime defaults to 7 days; override with `AUTH_TOKEN_TTL_MS`.
 
 **Optional overrides** (only if needed):
 
@@ -227,6 +241,8 @@ Preview deployments get their own URLs (e.g., `ipo-pilot-ai-git-staging-zwerty-a
 | OCR never completes | Gemini key wrong, or model quota exhausted | Verify `GEMINI_API_KEY` in Vercel env vars; check function logs for 429 or 403 |
 | Cron job returns 401 | `CRON_SECRET` mismatch | Regenerate with `openssl rand -hex 32`, set it in Vercel, redeploy |
 | Upload works but file is missing after refresh | S3 bucket wrong or IAM permissions insufficient | Verify `S3_BUCKET` and that the IAM user has `s3:PutObject`, `s3:GetObject` on that bucket |
+| Users logged out on every redeploy, or randomly mid-session | `AUTH_SECRET` unset, so each instance signs tokens with its own random per-boot secret | Set `AUTH_SECRET` in Vercel and redeploy |
+| `Session expired or invalid. Please sign in again.` right after signing in | `AUTH_SECRET` differs between the instance that issued the token and the one serving the next request | Same fix — set `AUTH_SECRET`. Check it's set for the **Production** environment, not just Preview |
 
 If a deploy is completely broken and you can't roll back, delete the Vercel project, fix the issue locally, and re-import the repo.
 

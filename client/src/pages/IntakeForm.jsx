@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   getIntakeStep,
   saveIntakeStep,
@@ -212,6 +212,33 @@ export default function IntakeForm() {
     setTouched((prev) => ({ ...prev, [q.name]: true }));
     if (q.dependsOn && formData[q.dependsOn] !== 'yes') return;
     setErrors((prev) => ({ ...prev, [q.name]: validateField(q, formData[q.name]) }));
+    // Persist as the promoter moves off the field, so the readiness score credits
+    // it right away rather than only when the section is submitted. Silent by
+    // design: "Save Progress" and "Next Step" still drive the visible confirmation,
+    // and a failure here is not worth interrupting typing over — the explicit
+    // save will surface it.
+    autoSaveField(q);
+  };
+
+  // Fire-and-forget per-field save. Skipped when the value has not changed since
+  // the last load or save, so tabbing through a filled form makes no requests.
+  const savedValuesRef = useRef({});
+  useEffect(() => { savedValuesRef.current = { ...formData }; }, [currentStepIndex]);
+
+  const autoSaveField = async (q) => {
+    const value = formData[q.name];
+    if (String(savedValuesRef.current[q.name] ?? '') === String(value ?? '')) return;
+    if (String(value ?? '').trim() === '') return;      // nothing to credit yet
+    if (validateField(q, value)) return;                 // don't persist invalid input
+    savedValuesRef.current = { ...savedValuesRef.current, [q.name]: value };
+    try {
+      await saveIntakeStep(companyId, currentStep.key, { ...formData, [q.name]: value });
+      loadAllIntake();
+    } catch (err) {
+      // Roll back the guard so the next blur (or explicit save) retries.
+      delete savedValuesRef.current[q.name];
+      console.error('Auto-save on blur failed:', err);
+    }
   };
 
   const handleSave = async (advance = false) => {
@@ -227,6 +254,9 @@ export default function IntakeForm() {
       setSaving(true);
       setSavedSuccess(false);
       await saveIntakeStep(companyId, currentStep.key, formData);
+      // Keep the blur-autosave guard aligned with what is now persisted, so an
+      // explicit save doesn't leave stale entries that suppress later autosaves.
+      savedValuesRef.current = { ...formData };
       setSavedSuccess(true);
       setTimeout(() => setSavedSuccess(false), 2500);
       
@@ -240,8 +270,30 @@ export default function IntakeForm() {
     }
   };
 
-  const fillExample = (name, exampleVal) => {
-    handleInputChange(name, exampleVal);
+  // Fills every field in the section on screen with its sample value, in one
+  // action. This replaced a per-field "Auto-Fill Sample" button on every row —
+  // same sample data, same validation, just one trigger per section instead of
+  // one per field. Conditional fields whose parent answer is not "yes" are
+  // skipped so the form does not populate rows the promoter cannot see.
+  const fillSectionExamples = () => {
+    const next = { ...formData };
+    // Parents first, so a dependent field sees the sample value its parent just got.
+    questions.filter((q) => !q.dependsOn).forEach((q) => {
+      if (q.example !== undefined) next[q.name] = q.example;
+    });
+    questions.filter((q) => q.dependsOn).forEach((q) => {
+      // A dependent field only applies once its parent answer is "yes".
+      if (q.example !== undefined && next[q.dependsOn] === 'yes') next[q.name] = q.example;
+    });
+    setFormData(next);
+    // Re-validate anything already touched so error text tracks the new values.
+    setErrors((prev) => {
+      const updated = { ...prev };
+      questions.forEach((q) => {
+        if (touched[q.name]) updated[q.name] = validateField(q, next[q.name]);
+      });
+      return updated;
+    });
   };
 
   return (
@@ -283,11 +335,23 @@ export default function IntakeForm() {
                 <span className="text-[10px] font-bold text-indigo-600 uppercase tracking-widest font-mono">Step {currentStepIndex + 1} of {steps.length}</span>
                 <h2 className="text-xl font-bold text-slate-900 mt-1">{currentStep.label}</h2>
               </div>
-              {savedSuccess && (
-                <span className="flex items-center gap-1 text-emerald-600 text-xs font-semibold animate-pulse">
-                  <Check className="w-4 h-4" /> Progress Saved
-                </span>
-              )}
+              <div className="flex items-center gap-3">
+                {savedSuccess && (
+                  <span className="flex items-center gap-1 text-emerald-600 text-xs font-semibold animate-pulse">
+                    <Check className="w-4 h-4" /> Progress Saved
+                  </span>
+                )}
+                {/* One trigger for the whole section, replacing the per-field
+                    "Auto-Fill Sample" buttons that used to sit on every row. */}
+                <button
+                  type="button"
+                  onClick={fillSectionExamples}
+                  disabled={loading}
+                  className="text-[10px] text-indigo-600 hover:text-indigo-800 disabled:opacity-50 transition-colors font-medium border border-indigo-200/50 hover:border-indigo-400 px-2 py-0.5 rounded bg-indigo-50/20"
+                >
+                  Auto-Fill Section
+                </button>
+              </div>
             </div>
 
             {/* Section progress indicator */}
@@ -408,13 +472,6 @@ export default function IntakeForm() {
                       </span>
                     </label>
                     <div className="flex items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={() => fillExample(q.name, q.example)}
-                        className="text-[10px] text-indigo-600 hover:text-indigo-800 transition-colors font-medium border border-indigo-200/50 hover:border-indigo-400 px-2 py-0.5 rounded bg-indigo-50/20"
-                      >
-                        Auto-Fill Sample
-                      </button>
                       <button
                         type="button"
                         onClick={() => setActiveWhy(activeWhy === q.name ? null : q.name)}

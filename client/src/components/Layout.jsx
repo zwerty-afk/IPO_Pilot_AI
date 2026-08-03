@@ -77,9 +77,16 @@ export default function Layout({ children }) {
 
   useEffect(() => {
     loadSidebarData();
-    // refresh every 30 s so readiness tracks intake changes
+    // Immediate refresh when any page signals a score-affecting mutation
+    // (field save, document upload/confirm, certification). Falls back to the
+    // 30s poll for anything that doesn't dispatch the event.
+    const onChanged = () => loadSidebarData();
+    window.addEventListener('ipo-readiness-changed', onChanged);
     const iv = setInterval(loadSidebarData, 30000);
-    return () => clearInterval(iv);
+    return () => {
+      window.removeEventListener('ipo-readiness-changed', onChanged);
+      clearInterval(iv);
+    };
   }, [loadSidebarData]);
 
   // Close the mobile drawer on Escape and lock body scroll while it's open.

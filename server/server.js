@@ -605,7 +605,14 @@ function computeGapReport(companyId, intake, docs) {
     }
   }
   const objectsTimeline = intake.objects?.timeline;
-  if (!objectsTimeline || objectsTimeline.trim() === '') {
+  // Only flag the missing timeline once the promoter has started the Objects
+  // section — firing it on a brand-new company that hasn't touched that section
+  // yet creates a permanent penalty that cancels the first several field credits
+  // and makes the score appear stuck at 0 while the user fills early sections.
+  const objectsStarted = intake.objects && (
+    intake.objects.amount_to_raise || intake.objects.purpose
+  );
+  if (objectsStarted && (!objectsTimeline || objectsTimeline.trim() === '')) {
     gaps.push({ id: 'gap-missing-timeline', severity: 'medium', category: 'gap', fieldName: 'objects.timeline', message: 'Missing Required Disclosure: The estimated timeline and schedule of fund deployment has not been specified.', intakeValue: 'Not specified', docValue: 'N/A', docName: 'N/A' });
   }
   return gaps;
@@ -806,6 +813,24 @@ app.post('/api/auth/register', (req, res) => {
 
   const token = signToken(user.email);
   db.addAuditLog({ actor_email: user.email, actor_name: user.name, actor_role: user.role, action: 'REGISTER', entity_type: 'session', entity_id: companyId, description: `New ${normalizedRole} account created for ${user.name}.`, metadata: {}, ip: getClientIp(req) });
+
+  // Seed the notification bell so a brand-new account does not open onto an empty
+  // panel. Uses the same notifications store as comment/certify events — it is
+  // just triggered once here at signup instead of by another user's action.
+  // Reviewers have no companyId, and getNotifications filters on it, so their
+  // welcome note is keyed to the company they were created against (null) and
+  // still reaches them via recipient_email.
+  db.addNotification({
+    companyId,
+    recipient_role: normalizedRole,
+    recipient_email: user.email,
+    message: normalizedRole === 'issuer'
+      ? 'Welcome to IPOPilotAI! Start by completing your Company Details to begin building your IPO draft.'
+      : 'Welcome to IPOPilotAI! Open the Reviewer Workspace to begin certifying draft chapters.',
+    related_section: normalizedRole === 'issuer' ? 'dashboard' : 'reviewer',
+    type: 'welcome'
+  });
+
   // companyId mirrors the login response: a fresh issuer gets a company at signup,
   // and the client needs it in the auth payload so the dashboard can load it
   // without waiting for a /auth/me round-trip.
@@ -1568,7 +1593,9 @@ app.get('/api/companies/:id/ipo-readiness', authenticateToken, async (req, res) 
     const itemStatuses = savedReadiness.items || {};
 
     // ── INTAKE FORM COMPLETION (40 points) ──────────────────────────────────
-    // 8 sections × 5 points each. A section scores only when ALL required fields filled.
+    // Credited PER FIELD, not per section. 40 points are divided by the number of
+    // required fields across the whole form, so a single saved field moves the
+    // score immediately instead of waiting for its section to be finished.
     const INTAKE_SECTIONS = {
       company_details: ['legal_name', 'cin', 'incorporation_date', 'registered_office', 'industry_type'],
       business_overview: ['industry_desc', 'products', 'customers', 'operations'],
@@ -1579,36 +1606,79 @@ app.get('/api/companies/:id/ipo-readiness', authenticateToken, async (req, res) 
       financials: ['revenue_fy25', 'revenue_fy24', 'revenue_fy23', 'profit_fy25', 'total_debt'],
       litigation: ['has_litigation']  // litigation_details only required if has_litigation === 'yes'
     };
-    const POINTS_PER_INTAKE_SECTION = 40 / Object.keys(INTAKE_SECTIONS).length; // 5
-    let intakeScore = 0;
-    for (const [sectionKey, fields] of Object.entries(INTAKE_SECTIONS)) {
+
+    // Conditional fields only count once their parent answer is "yes", so the
+    // denominator has to be computed from the live data rather than hard-coded.
+    const requiredFieldsFor = (sectionKey, sectionData) => {
+      const fields = [...(INTAKE_SECTIONS[sectionKey] || [])];
+      if (sectionKey === 'rpt' && sectionData.has_rpt === 'yes') fields.push('rpt_details');
+      if (sectionKey === 'litigation' && sectionData.has_litigation === 'yes') fields.push('litigation_details');
+      return fields;
+    };
+    const isFilled = (v) => v !== undefined && v !== null && String(v).trim() !== '';
+
+    let totalIntakeFields = 0;
+    let filledIntakeFields = 0;
+    let completeSections = 0;
+    for (const sectionKey of Object.keys(INTAKE_SECTIONS)) {
       const sectionData = intake[sectionKey] || {};
-      // For rpt and litigation, if the toggle is 'yes', also require the details field
-      let requiredFields = [...fields];
-      if (sectionKey === 'rpt' && sectionData.has_rpt === 'yes') requiredFields.push('rpt_details');
-      if (sectionKey === 'litigation' && sectionData.has_litigation === 'yes') requiredFields.push('litigation_details');
-      const allFilled = requiredFields.every(f => {
-        const v = sectionData[f];
-        return v !== undefined && v !== null && String(v).trim() !== '';
-      });
-      if (allFilled) intakeScore += POINTS_PER_INTAKE_SECTION;
+      const fields = requiredFieldsFor(sectionKey, sectionData);
+      const filledHere = fields.filter(f => isFilled(sectionData[f])).length;
+      totalIntakeFields += fields.length;
+      filledIntakeFields += filledHere;
+      if (fields.length > 0 && filledHere === fields.length) completeSections++;
     }
+    const POINTS_PER_INTAKE_FIELD = totalIntakeFields > 0 ? 40 / totalIntakeFields : 0;
+    const intakeScore = filledIntakeFields * POINTS_PER_INTAKE_FIELD;
 
     // ── DOCUMENT UPLOAD + EXTRACTION (30 points) ────────────────────────────
-    // 7 document types × ~4.29 points each. Counts only when uploaded AND extracted.
+    // 7 document types, 30/7 ≈ 4.29 points each, awarded by quality:
+    //   full  — uploaded, extraction succeeded, no mismatch against the intake
+    //   half  — uploaded and extracted, but a value disagrees with the intake form
+    //   zero  — never uploaded, or upload/extraction failed
+    // Half credit tops itself up to full as soon as the mismatch is resolved,
+    // because it is derived from the live gap report on every request.
     const REQUIRED_DOC_TYPES = [
       'audited_financials', 'incorporation_certificate', 'board_resolution',
       'litigation_records', 'material_contracts', 'promoter_kyc', 'cap_table'
     ];
     const POINTS_PER_DOC = 30 / REQUIRED_DOC_TYPES.length;
+
+    // Which document type each consistency gap implicates. Only mismatch gaps
+    // appear here: a missing-disclosure gap is an intake problem, not a document
+    // quality problem, so it must not dock the document that is otherwise fine.
+    const GAP_FIELD_TO_DOC_TYPE = {
+      'financials.revenue_fy25': 'audited_financials',
+      'capital_structure.promoter_holding_pct': 'cap_table'
+    };
+    const docTypesWithIssues = new Set(
+      gapReport
+        .filter(g => g.category === 'consistency')
+        .map(g => GAP_FIELD_TO_DOC_TYPE[g.fieldName])
+        .filter(Boolean)
+    );
+
+    // Reported back per document type so the dashboard note can explain the split.
+    const docCredit = {};
     let docScore = 0;
     for (const docType of REQUIRED_DOC_TYPES) {
-      const hasCompleted = docs.some(d =>
-        d.doc_type === docType &&
-        (d.status === 'confirmed' || (d.ocr_status === 'completed' && Object.keys(d.extracted_values || {}).length > 0))
+      const uploads = docs.filter(d => d.doc_type === docType);
+      if (uploads.length === 0) { docCredit[docType] = 0; continue; }
+
+      // A confirmed document is trusted even if the OCR pass recorded nothing;
+      // otherwise extraction has to have produced at least one value.
+      const extracted = uploads.some(d =>
+        d.status === 'confirmed' ||
+        (d.ocr_status === 'completed' && Object.keys(d.extracted_values || {}).length > 0)
       );
-      if (hasCompleted) docScore += POINTS_PER_DOC;
+      if (!extracted) { docCredit[docType] = 0; continue; }
+
+      const credit = docTypesWithIssues.has(docType) ? 0.5 : 1;
+      docCredit[docType] = credit;
+      docScore += credit * POINTS_PER_DOC;
     }
+    const docsFullCredit = REQUIRED_DOC_TYPES.filter(t => docCredit[t] === 1).length;
+    const docsPartialCredit = REQUIRED_DOC_TYPES.filter(t => docCredit[t] === 0.5).length;
 
     // ── GAP & INCONSISTENCY PENALTY (up to -20 points) ──────────────────────
     // 3 checks implemented: revenue mismatch, holding mismatch, missing timeline.
@@ -1657,10 +1727,10 @@ app.get('/api/companies/:id/ipo-readiness', authenticateToken, async (req, res) 
       companyName: company.name,
       overall_score,
       overall_label,
-      summary: `IPO readiness score is ${overall_score}/100. ${certifiedCount} of ${CERT_SECTIONS.length} draft chapters certified. ${Math.round(intakeScore)}/40 intake, ${Math.round(docScore)}/30 documents, -${Math.round(gapPenalty)} gaps, ${Math.round(certScore)}/30 certification.`,
+      summary: `IPO readiness score is ${overall_score}/100. ${certifiedCount} of ${CERT_SECTIONS.length} draft chapters certified. ${Math.round(intakeScore)}/40 intake (${filledIntakeFields}/${totalIntakeFields} fields), ${Math.round(docScore)}/30 documents, -${Math.round(gapPenalty)} gaps, ${Math.round(certScore)}/30 certification.`,
       sections: {
-        intake_completion: { score: Math.round(intakeScore), max: 40, status: intakeScore >= 35 ? 'ok' : intakeScore > 0 ? 'warning' : 'critical', note: `${Object.entries(INTAKE_SECTIONS).filter(([k]) => { const sd = intake[k] || {}; let rf = [...INTAKE_SECTIONS[k]]; if (k === 'rpt' && sd.has_rpt === 'yes') rf.push('rpt_details'); if (k === 'litigation' && sd.has_litigation === 'yes') rf.push('litigation_details'); return rf.every(f => { const v = sd[f]; return v !== undefined && v !== null && String(v).trim() !== ''; }); }).length} of ${Object.keys(INTAKE_SECTIONS).length} intake sections complete` },
-        document_completion: { score: Math.round(docScore), max: 30, status: docScore >= 25 ? 'ok' : docScore > 0 ? 'warning' : 'critical', note: `${REQUIRED_DOC_TYPES.filter(t => docs.some(d => d.doc_type === t && (d.status === 'confirmed' || (d.ocr_status === 'completed' && Object.keys(d.extracted_values || {}).length > 0)))).length} of ${REQUIRED_DOC_TYPES.length} document types uploaded & extracted` },
+        intake_completion: { score: Math.round(intakeScore), max: 40, status: intakeScore >= 35 ? 'ok' : intakeScore > 0 ? 'warning' : 'critical', note: `${filledIntakeFields} of ${totalIntakeFields} required fields filled · ${completeSections} of ${Object.keys(INTAKE_SECTIONS).length} sections complete` },
+        document_completion: { score: Math.round(docScore), max: 30, status: docScore >= 25 ? 'ok' : docScore > 0 ? 'warning' : 'critical', note: `${docsFullCredit} of ${REQUIRED_DOC_TYPES.length} document types verified${docsPartialCredit > 0 ? ` · ${docsPartialCredit} at partial credit pending mismatch resolution` : ''}` },
         gap_penalty: { score: -Math.round(gapPenalty), max: -20, status: gapReport.length === 0 ? 'ok' : 'warning', note: `${gapReport.length} unresolved gap(s) / inconsistencies` },
         reviewer_certification: { score: Math.round(certScore), max: 30, status: certScore >= 25 ? 'ok' : certScore > 0 ? 'warning' : 'critical', note: `${certifiedCount} of ${CERT_SECTIONS.length} sections certified by reviewer` },
       },

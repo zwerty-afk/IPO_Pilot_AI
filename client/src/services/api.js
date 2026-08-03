@@ -56,12 +56,33 @@ api.interceptors.response.use(
 //
 // A connection failure is now surfaced as an error the caller can show, rather
 // than being papered over with a parallel store.
+// Mutations that can move the IPO readiness score. After one succeeds we fire a
+// window event so the sidebar score re-fetches immediately instead of waiting for
+// its 30s poll — the score is meant to tick up on every single save, upload, or
+// certification, not once a whole section is finished. Matched against the request
+// URL so no individual page has to remember to announce its own saves.
+const SCORE_AFFECTING = [
+  /^\/intake\//,          // a single field save
+  /^\/documents\//,       // upload, confirm, delete
+  /^\/drafts\//,          // generate / certify a chapter
+  /ipo-readiness\/item-status$/  // reviewer milestone sign-off
+];
+
+const notifyReadinessChanged = (method, url) => {
+  if (method.toLowerCase() === 'get') return;
+  if (!SCORE_AFFECTING.some((re) => re.test(url))) return;
+  if (typeof window === 'undefined') return;
+  window.dispatchEvent(new Event('ipo-readiness-changed'));
+};
+
 const callApi = async (method, url, data = null, config = {}) => {
   const opts = { method, url, ...config };
   if (data !== null && data !== undefined && method.toLowerCase() !== 'delete') {
     opts.data = data;
   }
-  return api(opts);
+  const res = await api(opts);
+  notifyReadinessChanged(method, url);
+  return res;
 };
 
 export const login = (email, password) => callApi('post', '/auth/login', { email, password });
