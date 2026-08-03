@@ -530,6 +530,7 @@ async function fetchSebiNoticesFromRSS() {
         const users = db.getUsers();
         users.forEach(user => {
           db.addNotification({
+            companyId: user.companyId,
             recipient_role: user.role,
             recipient_email: user.email,
             message: `${items.length} new SEBI regulatory update(s): "${items[0].title.substring(0, 80)}..."`,
@@ -843,7 +844,7 @@ app.get('/api/companies/:id/status', authenticateToken, (req, res) => {
   const sections = Object.keys(drafts);
   const certifiedCount = sections.reduce((acc, sec) => acc + (drafts[sec].status === 'certified' ? 1 : 0), 0);
   // Count open comments across all sections
-  const allSectionComments = sections.flatMap(sec => db.getComments(sec));
+  const allSectionComments = sections.flatMap(sec => db.getComments(companyId, sec));
   const openCommentsCount = allSectionComments.filter(c => c.status === 'active').length;
   const heatmap = {};
   sections.forEach(secKey => {
@@ -881,9 +882,9 @@ app.put('/api/intake/:companyId/:stepKey', authenticateToken, (req, res) => {
   generateDraftData(companyId);
   logAudit(req, 'INTAKE_UPDATED', 'intake', companyId, `${req.user.name} updated intake section: ${stepKey}`, { stepKey, old: oldIntake[stepKey], new: req.body });
   // Notify reviewer
-  const reviewer = db.getUsers().find(u => u.role === 'reviewer');
+  const reviewer = db.getUsers().find(u => u.role === 'reviewer' && u.companyId === companyId);
   if (reviewer) {
-    db.addNotification({ recipient_role: 'reviewer', recipient_email: reviewer.email, message: `${req.user.name} updated intake section: ${stepKey.replace(/_/g, ' ')}.`, related_section: stepKey, type: 'intake_update' });
+    db.addNotification({ companyId, recipient_role: 'reviewer', recipient_email: reviewer.email, message: `${req.user.name} updated intake section: ${stepKey.replace(/_/g, ' ')}.`, related_section: stepKey, type: 'intake_update' });
   }
   res.json({ message: 'Step saved successfully.', data: savedStep });
 });
@@ -1057,9 +1058,11 @@ app.post('/api/documents/:companyId/upload', authenticateToken, (req, res) => {
       `${req.user.name} uploaded document: ${newDoc.name}`,
       { doc_type, fileName: newDoc.name, companyId, is_duplicate: newDoc.is_duplicate });
 
+    const reviewer = db.getUsers().find(u => u.role === 'reviewer' && u.companyId === companyId);
     db.addNotification({
+      companyId,
       recipient_role: 'reviewer',
-      recipient_email: 'priya@example.com',
+      recipient_email: reviewer ? reviewer.email : 'priya@example.com',
       message: `Document uploaded: "${newDoc.name}" (${doc_type.replace(/_/g, ' ')}) by ${req.user.name}`,
       related_section: 'documents',
       type: 'document_uploaded'
@@ -1196,6 +1199,7 @@ Return ONLY valid JSON: { cin, legal_name, incorporation_date, registered_state,
           }
 
           db.addNotification({
+            companyId,
             recipient_role: 'issuer',
             recipient_email: newDoc.uploaded_by || 'aarav@example.com',
             message: gotValues
@@ -1218,9 +1222,11 @@ app.put('/api/documents/:id/confirm', authenticateToken, (req, res) => {
   generateDraftData(doc.companyId);
   logAudit(req, 'DOCUMENT_CONFIRMED', 'document', doc.id, `${req.user.name} confirmed document: ${doc.name}`, { companyId: doc.companyId });
 
+  const reviewer = db.getUsers().find(u => u.role === 'reviewer' && u.companyId === doc.companyId);
   db.addNotification({
+    companyId: doc.companyId,
     recipient_role: 'reviewer',
-    recipient_email: 'priya@example.com',
+    recipient_email: reviewer ? reviewer.email : 'priya@example.com',
     message: `Document "${doc.name}" values confirmed and submitted for merchant-banker review by ${req.user.name}.`,
     related_section: 'documents',
     type: 'document_submitted'
@@ -1317,9 +1323,10 @@ app.delete('/api/documents/:id', authenticateToken, async (req, res) => {
 
     // Notify reviewer/issuer
     const notifRole = req.user.role === 'reviewer' ? 'issuer' : 'reviewer';
-    const notifUser = db.getUsers().find(u => u.role === notifRole);
+    const notifUser = db.getUsers().find(u => u.role === notifRole && u.companyId === companyId);
     if (notifUser) {
       db.addNotification({
+        companyId,
         recipient_role: notifRole,
         recipient_email: notifUser.email,
         message: `${req.user.name} deleted document: ${doc.name}`,
@@ -1352,7 +1359,7 @@ app.put('/api/documents/:id/verify', authenticateToken, (req, res) => {
     { doc_type: doc.doc_type, status, remarks, companyId: doc.companyId }
   );
 
-  const issuer = db.getUsers().find(u => u.role === 'issuer');
+  const issuer = db.getUsers().find(u => u.role === 'issuer' && u.companyId === doc.companyId);
   if (issuer) {
     const statusText = status === 'verified' 
       ? `verified by merchant banker ${req.user.name}`
@@ -1361,6 +1368,7 @@ app.put('/api/documents/:id/verify', authenticateToken, (req, res) => {
       : `placed under review by ${req.user.name}`;
 
     db.addNotification({
+      companyId: doc.companyId,
       recipient_role: 'issuer',
       recipient_email: issuer.email,
       message: `Document "${doc.name}" was ${statusText}.${remarks ? ` Remarks: "${remarks}"` : ''}`,
@@ -1394,9 +1402,9 @@ app.put('/api/drafts/:companyId/:sectionKey/status', authenticateToken, (req, re
     logAudit(req, status === 'certified' ? 'SECTION_CERTIFIED' : 'SECTION_STATUS_UPDATED', 'draft_section', sectionKey, `${req.user.name} changed ${sectionKey} status to ${status}.`, { companyId, sectionKey, status });
     // Notify the other party
     const notifRole = req.user.role === 'reviewer' ? 'issuer' : 'reviewer';
-    const notifUser = db.getUsers().find(u => u.role === notifRole);
+    const notifUser = db.getUsers().find(u => u.role === notifRole && u.companyId === companyId);
     if (notifUser && status === 'certified') {
-      db.addNotification({ recipient_role: notifRole, recipient_email: notifUser.email, message: `${req.user.name} certified the ${sectionKey.replace(/_/g, ' ')} section.`, related_section: sectionKey, type: 'section_certified' });
+      db.addNotification({ companyId, recipient_role: notifRole, recipient_email: notifUser.email, message: `${req.user.name} certified the ${sectionKey.replace(/_/g, ' ')} section.`, related_section: sectionKey, type: 'section_certified' });
     }
     res.json(updated);
   } catch (err) {
@@ -1414,18 +1422,18 @@ app.get('/api/drafts/:companyId/gap-report', authenticateToken, (req, res) => {
 // ─── COMMENTS ─────────────────────────────────────────────────────────────────
 
 app.get('/api/comments/:sectionId', authenticateToken, (req, res) => {
-  res.json(db.getComments(req.params.sectionId));
+  res.json(db.getComments(req.user.companyId, req.params.sectionId));
 });
 
 app.post('/api/comments/:sectionId', authenticateToken, (req, res) => {
   const { sectionId } = req.params;
   const { content, type, block_id, parent_id } = req.body;
-  const comment = db.addComment(sectionId, content, type, req.user.name, req.user.role, block_id, parent_id);
+  const comment = db.addComment(req.user.companyId, sectionId, content, type, req.user.name, req.user.role, block_id, parent_id);
   logAudit(req, 'COMMENT_ADDED', 'draft_section', sectionId, `${req.user.name} added a ${type} on ${sectionId}.`, { content: content.substring(0, 100), type });
   const notifRole = req.user.role === 'reviewer' ? 'issuer' : 'reviewer';
-  const notifUser = db.getUsers().find(u => u.role === notifRole);
+  const notifUser = db.getUsers().find(u => u.role === notifRole && u.companyId === req.user.companyId);
   if (notifUser) {
-    db.addNotification({ recipient_role: notifRole, recipient_email: notifUser.email, message: `${req.user.name} added a ${type === 'clarification_requested' ? 'clarification request' : 'comment'} on ${sectionId.replace(/_/g, ' ')}: "${content.substring(0, 80)}${content.length > 80 ? '...' : ''}"`, related_section: sectionId, type: 'comment' });
+    db.addNotification({ companyId: req.user.companyId, recipient_role: notifRole, recipient_email: notifUser.email, message: `${req.user.name} added a ${type === 'clarification_requested' ? 'clarification request' : 'comment'} on ${sectionId.replace(/_/g, ' ')}: "${content.substring(0, 80)}${content.length > 80 ? '...' : ''}"`, related_section: sectionId, type: 'comment' });
   }
   res.json(comment);
 });
@@ -1455,7 +1463,7 @@ app.delete('/api/comments/:commentId', authenticateToken, (req, res) => {
 // ─── NOTIFICATIONS ────────────────────────────────────────────────────────────
 
 app.get('/api/notifications', authenticateToken, (req, res) => {
-  const notifs = db.getNotifications(req.user.email, req.user.role);
+  const notifs = db.getNotifications(req.user.companyId, req.user.email, req.user.role);
   res.json(notifs);
 });
 
@@ -1465,7 +1473,7 @@ app.put('/api/notifications/:id/read', authenticateToken, (req, res) => {
 });
 
 app.put('/api/notifications/mark-all-read', authenticateToken, (req, res) => {
-  db.markAllNotificationsRead(req.user.email, req.user.role);
+  db.markAllNotificationsRead(req.user.companyId, req.user.email, req.user.role);
   res.json({ message: 'All notifications marked as read.' });
 });
 
@@ -1552,7 +1560,6 @@ app.get('/api/companies/:id/ipo-readiness', authenticateToken, async (req, res) 
     const gapReport = computeGapReport(companyId, intake, docs);
     const invitations = db.getInvitations(companyId);
     const sections = Object.keys(drafts);
-    const certifiedCount = sections.reduce((acc, s) => acc + (drafts[s].status === 'certified' ? 1 : 0), 0);
 
     // Saved reviewer verifications. Read before scoring, not after: the whole
     // point of a merchant banker signing off on a milestone is that it should
@@ -1560,97 +1567,89 @@ app.get('/api/companies/:id/ipo-readiness', authenticateToken, async (req, res) 
     const savedReadiness = db.getIpoReadiness(companyId) || {};
     const itemStatuses = savedReadiness.items || {};
 
-    // ── Category scores ──────────────────────────────────────────────────────
-    // Each is graduated rather than pass/fail, so that partial progress shows up.
-    // A score that only moves when a whole category flips reads as broken to the
-    // user filling the form in one field at a time.
-
-    // Financials: credit each disclosed figure instead of requiring two specific
-    // ones. Previously this was 40 or 85 with nothing in between, so filling in
-    // four of five financial fields moved the needle not at all.
-    const finFields = ['revenue_fy25', 'net_worth', 'pat_fy25', 'ebitda_fy25', 'total_debt'];
-    const finPresent = finFields.filter((f) => {
-      const v = intake.financials?.[f];
-      return v !== undefined && v !== null && String(v).trim() !== '';
-    }).length;
-    const finScore = Math.round(30 + (finPresent / finFields.length) * 70);
-
-    // Documents: measure against the document types an SME DRHP actually needs,
-    // not against however many files happen to be uploaded. The old ratio
-    // (confirmed / uploaded) *fell* when a user uploaded a new document, which
-    // punished exactly the action the page asks for. A confirmed doc counts full,
-    // an uploaded-but-unconfirmed one counts half.
-    const EXPECTED_DOC_TYPES = [
-      'incorporation_certificate', 'audited_financials', 'cap_table',
-      'board_resolution', 'gst_returns'
-    ];
-    const docCredit = EXPECTED_DOC_TYPES.reduce((acc, t) => {
-      const forType = docs.filter((d) => d.doc_type === t);
-      if (forType.some((d) => d.status === 'confirmed')) return acc + 1;
-      if (forType.length > 0) return acc + 0.5;
-      return acc;
-    }, 0);
-    const docScore = Math.round((docCredit / EXPECTED_DOC_TYPES.length) * 100);
-
-    const draftScore = Math.round((certifiedCount / Math.max(sections.length, 1)) * 100);
-    const gapScore = Math.max(0, 100 - gapReport.length * 20);
-    const bankerAccepted = invitations.some(i => i.status === 'accepted');
-    const bankerScore = bankerAccepted ? 100 : (invitations.length > 0 ? 50 : 10);
-
-    // Governance: graduated across the fields that actually evidence it.
-    const govFields = [
-      intake.capital_structure?.promoter_holding_pct,
-      intake.capital_structure?.total_shares,
-      intake.company?.independent_directors,
-      intake.company?.board_size
-    ];
-    const govPresent = govFields.filter((v) => v !== undefined && v !== null && String(v).trim() !== '').length;
-    const govScore = Math.round(40 + (govPresent / govFields.length) * 60);
-
-    // Reviewer verification: the merchant banker's sign-off on each milestone.
-    // This category was missing entirely — itemStatuses was read only to render
-    // the checklist, so a banker could verify all six milestones and watch the
-    // score sit unchanged. Weighted terminal states so "verified" outranks
-    // "submitted for review".
-    const ITEM_KEYS = [
-      'board_governance', 'audited_financials_3yr', 'cap_table_verification',
-      'sebi_icdr_disclosures', 'merchant_banker_appointment', 'chapter_certifications'
-    ];
-    const STATUS_CREDIT = {
-      completed: 1, verified: 1, submitted_for_review: 0.5,
-      in_progress: 0.25, needs_changes: 0, not_started: 0
+    // ── INTAKE FORM COMPLETION (40 points) ──────────────────────────────────
+    // 8 sections × 5 points each. A section scores only when ALL required fields filled.
+    const INTAKE_SECTIONS = {
+      company_details: ['legal_name', 'cin', 'incorporation_date', 'registered_office', 'industry_type'],
+      business_overview: ['industry_desc', 'products', 'customers', 'operations'],
+      promoters: ['promoters_list', 'directors'],
+      objects: ['amount_to_raise', 'purpose', 'timeline'],
+      capital_structure: ['total_shares', 'promoter_holding_pct', 'shareholders'],
+      rpt: ['has_rpt'],  // rpt_details only required if has_rpt === 'yes'
+      financials: ['revenue_fy25', 'revenue_fy24', 'revenue_fy23', 'profit_fy25', 'total_debt'],
+      litigation: ['has_litigation']  // litigation_details only required if has_litigation === 'yes'
     };
-    const verificationCredit = ITEM_KEYS.reduce(
-      (acc, k) => acc + (STATUS_CREDIT[itemStatuses[k]?.status] ?? 0), 0
-    );
-    const verificationScore = Math.round((verificationCredit / ITEM_KEYS.length) * 100);
+    const POINTS_PER_INTAKE_SECTION = 40 / Object.keys(INTAKE_SECTIONS).length; // 5
+    let intakeScore = 0;
+    for (const [sectionKey, fields] of Object.entries(INTAKE_SECTIONS)) {
+      const sectionData = intake[sectionKey] || {};
+      // For rpt and litigation, if the toggle is 'yes', also require the details field
+      let requiredFields = [...fields];
+      if (sectionKey === 'rpt' && sectionData.has_rpt === 'yes') requiredFields.push('rpt_details');
+      if (sectionKey === 'litigation' && sectionData.has_litigation === 'yes') requiredFields.push('litigation_details');
+      const allFilled = requiredFields.every(f => {
+        const v = sectionData[f];
+        return v !== undefined && v !== null && String(v).trim() !== '';
+      });
+      if (allFilled) intakeScore += POINTS_PER_INTAKE_SECTION;
+    }
 
-    // Weights sum to 1.0. Verification gets 15% — meaningful enough that a full
-    // banker sign-off is visible, without letting it alone carry a company that
-    // has filed nothing.
-    const overall_score = Math.round(
-      finScore * 0.18 +
-      docScore * 0.17 +
-      draftScore * 0.20 +
-      gapScore * 0.15 +
-      bankerScore * 0.08 +
-      govScore * 0.07 +
-      verificationScore * 0.15
-    );
+    // ── DOCUMENT UPLOAD + EXTRACTION (30 points) ────────────────────────────
+    // 7 document types × ~4.29 points each. Counts only when uploaded AND extracted.
+    const REQUIRED_DOC_TYPES = [
+      'audited_financials', 'incorporation_certificate', 'board_resolution',
+      'litigation_records', 'material_contracts', 'promoter_kyc', 'cap_table'
+    ];
+    const POINTS_PER_DOC = 30 / REQUIRED_DOC_TYPES.length;
+    let docScore = 0;
+    for (const docType of REQUIRED_DOC_TYPES) {
+      const hasCompleted = docs.some(d =>
+        d.doc_type === docType &&
+        (d.status === 'confirmed' || (d.ocr_status === 'completed' && Object.keys(d.extracted_values || {}).length > 0))
+      );
+      if (hasCompleted) docScore += POINTS_PER_DOC;
+    }
 
-    let overall_label = 'Needs Work';
-    if (overall_score >= 85) overall_label = 'Excellent';
-    else if (overall_score >= 70) overall_label = 'Good';
-    else if (overall_score >= 50) overall_label = 'Fair';
-    else if (overall_score < 35) overall_label = 'Critical';
+    // ── GAP & INCONSISTENCY PENALTY (up to -20 points) ──────────────────────
+    // 3 checks implemented: revenue mismatch, holding mismatch, missing timeline.
+    const MAX_GAP_PENALTY = 20;
+    const GAP_CHECK_COUNT = 3;
+    const PENALTY_PER_GAP = MAX_GAP_PENALTY / GAP_CHECK_COUNT;
+    const gapPenalty = Math.min(MAX_GAP_PENALTY, gapReport.length * PENALTY_PER_GAP);
+
+    // ── REVIEWER CERTIFICATION (30 points) ──────────────────────────────────
+    // 7 draft sections × ~4.29 points each. Counts only when status === 'certified'.
+    const CERT_SECTIONS = [
+      'business_overview', 'risk_factors', 'objects', 'capital_structure',
+      'related_party', 'litigation', 'promoter_details'
+    ];
+    const POINTS_PER_CERT = 30 / CERT_SECTIONS.length;
+    let certScore = 0;
+    for (const sec of CERT_SECTIONS) {
+      if (drafts[sec] && drafts[sec].status === 'certified') certScore += POINTS_PER_CERT;
+    }
+    const certifiedCount = CERT_SECTIONS.filter(s => drafts[s] && drafts[s].status === 'certified').length;
+
+    // ── FINAL SCORE ─────────────────────────────────────────────────────────
+    // Intake(40) + Documents(30) - GapPenalty(up to 20) + Certification(30)
+    // Capped between 0 and 100.
+    const rawScore = intakeScore + docScore - gapPenalty + certScore;
+    const overall_score = Math.max(0, Math.min(100, Math.round(rawScore)));
+
+    let overall_label = 'Getting started';
+    if (overall_score >= 100) overall_label = 'Ready for IPO filing review';
+    else if (overall_score >= 70) overall_label = 'Almost ready';
+    else if (overall_score >= 40) overall_label = 'In progress';
+
+    const bankerAccepted = invitations.some(i => i.status === 'accepted');
 
     const milestoneItems = [
-      { key: 'board_governance', title: 'Board Governance & Independent Directors', category: 'governance', status: itemStatuses.board_governance?.status || (govScore > 70 ? 'completed' : 'in_progress'), verified_by: itemStatuses.board_governance?.updated_by_name || null },
+      { key: 'board_governance', title: 'Board Governance & Independent Directors', category: 'governance', status: itemStatuses.board_governance?.status || 'in_progress', verified_by: itemStatuses.board_governance?.updated_by_name || null },
       { key: 'audited_financials_3yr', title: '3-Year Audited Financial Statements', category: 'financials', status: itemStatuses.audited_financials_3yr?.status || (docs.some(d => d.doc_type === 'audited_financials' && d.status === 'confirmed') ? 'verified' : 'in_progress'), verified_by: itemStatuses.audited_financials_3yr?.updated_by_name || null },
       { key: 'cap_table_verification', title: 'Cap Table & Promoter Lock-In', category: 'compliance', status: itemStatuses.cap_table_verification?.status || (docs.some(d => d.doc_type === 'cap_table' && d.status === 'confirmed') ? 'verified' : 'needs_changes'), verified_by: itemStatuses.cap_table_verification?.updated_by_name || null },
       { key: 'sebi_icdr_disclosures', title: 'SEBI ICDR Fund Utilization Timeline', category: 'disclosures', status: itemStatuses.sebi_icdr_disclosures?.status || (gapReport.some(g => g.fieldName === 'objects.timeline') ? 'needs_changes' : 'completed'), verified_by: itemStatuses.sebi_icdr_disclosures?.updated_by_name || null },
       { key: 'merchant_banker_appointment', title: 'SEBI-Registered Merchant Banker Engagement', category: 'merchant_banker', status: itemStatuses.merchant_banker_appointment?.status || (bankerAccepted ? 'completed' : 'in_progress'), verified_by: itemStatuses.merchant_banker_appointment?.updated_by_name || null },
-      { key: 'chapter_certifications', title: 'DRHP Chapter Certifications', category: 'certification', status: itemStatuses.chapter_certifications?.status || (certifiedCount === sections.length ? 'completed' : 'in_progress'), verified_by: itemStatuses.chapter_certifications?.updated_by_name || null }
+      { key: 'chapter_certifications', title: 'DRHP Chapter Certifications', category: 'certification', status: itemStatuses.chapter_certifications?.status || (certifiedCount === CERT_SECTIONS.length ? 'completed' : 'in_progress'), verified_by: itemStatuses.chapter_certifications?.updated_by_name || null }
     ];
 
     const resultPayload = {
@@ -1658,15 +1657,12 @@ app.get('/api/companies/:id/ipo-readiness', authenticateToken, async (req, res) 
       companyName: company.name,
       overall_score,
       overall_label,
-      summary: `IPO readiness score is ${overall_score}/100. ${certifiedCount} of ${sections.length} draft chapters certified. ${bankerAccepted ? 'Merchant Banker active.' : 'Merchant Banker engagement pending.'}`,
+      summary: `IPO readiness score is ${overall_score}/100. ${certifiedCount} of ${CERT_SECTIONS.length} draft chapters certified. ${Math.round(intakeScore)}/40 intake, ${Math.round(docScore)}/30 documents, -${Math.round(gapPenalty)} gaps, ${Math.round(certScore)}/30 certification.`,
       sections: {
-        financial_disclosures: { score: finScore, status: finScore >= 75 ? 'ok' : 'warning', note: `${finPresent} of ${finFields.length} financial disclosures provided` },
-        legal_compliance: { score: govScore, status: govScore >= 75 ? 'ok' : 'warning', note: 'Promoter holding & litigation records' },
-        corporate_governance: { score: govScore, status: govScore >= 75 ? 'ok' : 'warning', note: `${govPresent} of ${govFields.length} governance fields provided` },
-        document_completeness: { score: docScore, status: docScore >= 75 ? 'ok' : 'warning', note: `${docCredit} of ${EXPECTED_DOC_TYPES.length} required document types in place` },
-        draft_readiness: { score: draftScore, status: draftScore >= 75 ? 'ok' : 'warning', note: `${certifiedCount} of ${sections.length} chapters certified` },
-        merchant_banker_engagement: { score: bankerScore, status: bankerAccepted ? 'ok' : 'warning', note: bankerAccepted ? 'Banker engaged' : 'Invitation pending' },
-        reviewer_verification: { score: verificationScore, status: verificationScore >= 75 ? 'ok' : 'warning', note: `${verificationCredit} of ${ITEM_KEYS.length} milestones signed off by the Merchant Banker` }
+        intake_completion: { score: Math.round(intakeScore), max: 40, status: intakeScore >= 35 ? 'ok' : intakeScore > 0 ? 'warning' : 'critical', note: `${Object.entries(INTAKE_SECTIONS).filter(([k]) => { const sd = intake[k] || {}; let rf = [...INTAKE_SECTIONS[k]]; if (k === 'rpt' && sd.has_rpt === 'yes') rf.push('rpt_details'); if (k === 'litigation' && sd.has_litigation === 'yes') rf.push('litigation_details'); return rf.every(f => { const v = sd[f]; return v !== undefined && v !== null && String(v).trim() !== ''; }); }).length} of ${Object.keys(INTAKE_SECTIONS).length} intake sections complete` },
+        document_completion: { score: Math.round(docScore), max: 30, status: docScore >= 25 ? 'ok' : docScore > 0 ? 'warning' : 'critical', note: `${REQUIRED_DOC_TYPES.filter(t => docs.some(d => d.doc_type === t && (d.status === 'confirmed' || (d.ocr_status === 'completed' && Object.keys(d.extracted_values || {}).length > 0)))).length} of ${REQUIRED_DOC_TYPES.length} document types uploaded & extracted` },
+        gap_penalty: { score: -Math.round(gapPenalty), max: -20, status: gapReport.length === 0 ? 'ok' : 'warning', note: `${gapReport.length} unresolved gap(s) / inconsistencies` },
+        reviewer_certification: { score: Math.round(certScore), max: 30, status: certScore >= 25 ? 'ok' : certScore > 0 ? 'warning' : 'critical', note: `${certifiedCount} of ${CERT_SECTIONS.length} sections certified by reviewer` },
       },
       milestone_items: milestoneItems,
       top_gaps: gapReport.slice(0, 3).map(g => g.message),
@@ -1709,9 +1705,10 @@ app.put('/api/companies/:id/ipo-readiness/item-status', authenticateToken, (req,
   logAudit(req, 'READINESS_ITEM_UPDATED', 'ipo_readiness', companyId, `${req.user.name} updated readiness item "${itemKey}" status to "${status}".`, { itemKey, status, remarks });
 
   const notifRole = req.user.role === 'reviewer' ? 'issuer' : 'reviewer';
-  const recipient = db.getUsers().find(u => u.role === notifRole);
+  const recipient = db.getUsers().find(u => u.role === notifRole && u.companyId === companyId);
   if (recipient) {
     db.addNotification({
+      companyId,
       recipient_role: notifRole,
       recipient_email: recipient.email,
       message: `${req.user.name} updated IPO readiness item "${itemKey.replace(/_/g, ' ')}" to "${status.replace(/_/g, ' ')}".`,
@@ -1828,29 +1825,6 @@ IMPORTANT DISCLAIMER: Your responses are informational only and do not constitut
   }
 });
 
-// ─── NOTIFICATIONS ────────────────────────────────────────────────────────────
-
-app.get('/api/notifications', authenticateToken, (req, res) => {
-  const notifs = db.getNotifications(req.user.email, req.user.role);
-  res.json(notifs);
-});
-
-app.put('/api/notifications/mark-all-read', authenticateToken, (req, res) => {
-  db.markAllNotificationsRead(req.user.email, req.user.role);
-  res.json({ message: 'All notifications marked as read.' });
-});
-
-app.put('/api/notifications/:id/read', authenticateToken, (req, res) => {
-  const notif = db.markNotificationRead(req.params.id);
-  if (!notif) return res.status(404).json({ message: 'Notification not found.' });
-  res.json({ message: 'Notification marked as read.', notification: notif });
-});
-
-app.post('/api/notifications', authenticateToken, (req, res) => {
-  const notif = db.addNotification(req.body);
-  res.json(notif);
-});
-
 // ─── EXPORT (Real DOCX) ───────────────────────────────────────────────────────
 
 app.get('/api/export/:companyId/docx', authenticateToken, async (req, res) => {
@@ -1912,9 +1886,9 @@ app.get('/api/export/:companyId/docx', authenticateToken, async (req, res) => {
   logAudit(req, 'EXPORT_DOWNLOADED', 'export', companyId, `${req.user.name} downloaded DOCX export. Status: ${allCertified ? 'certified' : 'draft'}.`, { certified: allCertified, sections: sections.length });
   // Add notification for the other party
   const notifRole = req.user.role === 'reviewer' ? 'issuer' : 'reviewer';
-  const notifUser = db.getUsers().find(u => u.role === notifRole);
+  const notifUser = db.getUsers().find(u => u.role === notifRole && u.companyId === companyId);
   if (notifUser) {
-    db.addNotification({ recipient_role: notifRole, recipient_email: notifUser.email, message: `${req.user.name} exported the draft prospectus document.`, related_section: 'export', type: 'export' });
+    db.addNotification({ companyId, recipient_role: notifRole, recipient_email: notifUser.email, message: `${req.user.name} exported the draft prospectus document.`, related_section: 'export', type: 'export' });
   }
 
   res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
@@ -1983,9 +1957,9 @@ app.get('/api/export/:companyId/pdf', authenticateToken, async (req, res) => {
 
   logAudit(req, 'EXPORT_DOWNLOADED', 'export', companyId, `${req.user.name} downloaded PDF export. Status: ${allCertified ? 'certified' : 'draft'}.`, { certified: allCertified, sections: sections.length });
   const notifRole = req.user.role === 'reviewer' ? 'issuer' : 'reviewer';
-  const notifUser = db.getUsers().find(u => u.role === notifRole);
+  const notifUser = db.getUsers().find(u => u.role === notifRole && u.companyId === companyId);
   if (notifUser) {
-    db.addNotification({ recipient_role: notifRole, recipient_email: notifUser.email, message: `${req.user.name} exported the draft prospectus document as PDF.`, related_section: 'export', type: 'export' });
+    db.addNotification({ companyId, recipient_role: notifRole, recipient_email: notifUser.email, message: `${req.user.name} exported the draft prospectus document as PDF.`, related_section: 'export', type: 'export' });
   }
 });
 
@@ -2092,9 +2066,10 @@ app.post('/api/invitations', authenticateToken, async (req, res) => {
     { merchant_banker_id, merchant_banker_name: mb.name, companyId, token: invitation.token }
   );
 
-  const reviewer = db.getUsers().find(u => u.role === 'reviewer');
+  const reviewer = db.getUsers().find(u => u.role === 'reviewer' && u.companyId === companyId);
   if (reviewer) {
     db.addNotification({
+      companyId,
       recipient_role: 'reviewer',
       recipient_email: reviewer.email,
       message: `${req.user.name} (${company.name}) sent an invitation to ${mb.name} (Reg: ${mb.registration_no}).`,
@@ -2122,9 +2097,10 @@ app.put('/api/invitations/:id/accept', authenticateToken, (req, res) => {
     { companyId: updated.company_id }
   );
 
-  const issuer = db.getUsers().find(u => u.role === 'issuer');
+  const issuer = db.getUsers().find(u => u.role === 'issuer' && u.companyId === updated.company_id);
   if (issuer) {
     db.addNotification({
+      companyId: updated.company_id,
       recipient_role: 'issuer',
       recipient_email: issuer.email,
       message: `Merchant banker ${req.user.name} (${updated.merchant_banker_name}) accepted your invitation!`,
@@ -2152,9 +2128,10 @@ app.put('/api/invitations/:id/decline', authenticateToken, (req, res) => {
     { companyId: updated.company_id }
   );
 
-  const issuer = db.getUsers().find(u => u.role === 'issuer');
+  const issuer = db.getUsers().find(u => u.role === 'issuer' && u.companyId === updated.company_id);
   if (issuer) {
     db.addNotification({
+      companyId: updated.company_id,
       recipient_role: 'issuer',
       recipient_email: issuer.email,
       message: `Merchant banker ${req.user.name} (${updated.merchant_banker_name}) declined the invitation.`,

@@ -16,9 +16,10 @@ import ChatbotWidget from './ChatbotWidget';
 
 
 function readinessColor(score) {
-  if (score >= 80) return { bar: 'bg-emerald-500', text: 'text-emerald-400', label: 'On Track' };
-  if (score >= 50) return { bar: 'bg-amber-400',   text: 'text-amber-400',   label: 'In Progress' };
-  return                   { bar: 'bg-red-500',     text: 'text-red-400',     label: 'Needs Work' };
+  if (score >= 100) return { bar: 'bg-emerald-500', text: 'text-emerald-400', label: 'Ready for IPO filing review' };
+  if (score >= 70) return { bar: 'bg-emerald-500', text: 'text-emerald-400', label: 'Almost ready' };
+  if (score >= 40) return { bar: 'bg-amber-400',   text: 'text-amber-400',   label: 'In progress' };
+  return                   { bar: 'bg-red-500',     text: 'text-red-400',     label: 'Getting started' };
 }
 
 // ─── nav items (SEBI added at end) ────────────────────────────────────────────
@@ -152,7 +153,7 @@ export default function Layout({ children }) {
                   style={{ width: `${readiness}%` }}
                 />
               </div>
-              <p className="text-[10px] text-slate-500 mt-1.5">Based on completeness heatmap</p>
+              <p className="text-[10px] text-slate-500 mt-1.5">Based on intake, documents, gaps & certifications</p>
             </>
           ) : (
             <div className="h-8 flex items-center">

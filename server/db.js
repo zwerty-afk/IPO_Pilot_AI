@@ -298,6 +298,7 @@ const INITIAL_SEED = {
   comments: [
     {
       id: 'comm-1',
+      companyId: 'aarav-precision',
       section_id: 'capital_structure',
       block_id: 'cap-2',
       author: 'Priya Sharma',
@@ -311,6 +312,7 @@ const INITIAL_SEED = {
   notifications: [
     {
       id: 'notif-1',
+      companyId: 'aarav-precision',
       recipient_role: 'issuer',
       recipient_email: 'aarav@example.com',
       message: 'Priya Sharma requested clarification on Capital Structure section.',
@@ -321,6 +323,7 @@ const INITIAL_SEED = {
     },
     {
       id: 'notif-2',
+      companyId: 'aarav-precision',
       recipient_role: 'reviewer',
       recipient_email: 'priya@example.com',
       message: 'Aarav Mehta updated the Objects of the Issue intake section.',
@@ -611,11 +614,12 @@ export const db = {
     saveDb(data);
   },
 
-  getComments: (sectionId) => getDb().comments.filter(c => c.section_id === sectionId),
-  addComment: (sectionId, content, type, author, role, blockId = null, parentId = null) => {
+  getComments: (companyId, sectionId) => getDb().comments.filter(c => c.companyId === companyId && c.section_id === sectionId),
+  addComment: (companyId, sectionId, content, type, author, role, blockId = null, parentId = null) => {
     const data = getDb();
     const newComment = {
       id: 'comm-' + Date.now(),
+      companyId,
       section_id: sectionId,
       block_id: blockId,
       parent_id: parentId,
@@ -662,10 +666,11 @@ export const db = {
   },
 
   // Notifications
-  getNotifications: (recipientEmail, recipientRole) => {
+  getNotifications: (companyId, recipientEmail, recipientRole) => {
     const data = getDb();
     const notifs = (data.notifications || []).filter(
-      n => n.recipient_email === recipientEmail || (recipientRole && n.recipient_role === recipientRole) || n.recipient_email === 'all'
+      n => n.companyId === companyId &&
+           (n.recipient_email === recipientEmail || (recipientRole && n.recipient_role === recipientRole) || n.recipient_email === 'all')
     );
     return notifs.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
   },
@@ -675,6 +680,7 @@ export const db = {
 
     // Deduplication check: prevent identical notification message to same recipient within 5 seconds
     const recentDup = data.notifications.find(n => 
+      n.companyId === notif.companyId &&
       (n.recipient_email === notif.recipient_email || n.recipient_role === notif.recipient_role) &&
       n.message === notif.message &&
       (Date.now() - new Date(n.created_at).getTime()) < 5000
@@ -692,10 +698,11 @@ export const db = {
     if (notif) { notif.is_read = true; saveDb(data); }
     return notif;
   },
-  markAllNotificationsRead: (recipientEmail, recipientRole) => {
+  markAllNotificationsRead: (companyId, recipientEmail, recipientRole) => {
     const data = getDb();
     (data.notifications || []).forEach(n => {
-      if (n.recipient_email === recipientEmail || (recipientRole && n.recipient_role === recipientRole) || n.recipient_email === 'all') {
+      if (n.companyId === companyId &&
+          (n.recipient_email === recipientEmail || (recipientRole && n.recipient_role === recipientRole) || n.recipient_email === 'all')) {
         n.is_read = true;
       }
     });
