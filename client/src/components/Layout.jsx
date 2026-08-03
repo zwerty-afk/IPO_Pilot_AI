@@ -26,8 +26,8 @@ function readinessColor(score) {
 
 const BASE_NAV = [
   { to: '/dashboard',  icon: LayoutDashboard, label: 'Dashboard' },
-  { to: '/intake',     icon: ClipboardList,   label: 'Intake Form' },
   { to: '/documents',  icon: FolderOpen,      label: 'Documents' },
+  { to: '/intake',     icon: ClipboardList,   label: 'Intake Form' },
   { to: '/draft',      icon: FileCheck2,      label: 'Draft & Heatmap' },
   { to: '/reviewer',   icon: UserCheck,       label: 'Reviewer Workspace', reviewerOnly: true },
   { to: '/export',     icon: Download,        label: 'Export' },
