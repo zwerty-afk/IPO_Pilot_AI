@@ -106,19 +106,48 @@ function retryDelayMs(err, attempt) {
  *
  * `onModel` is invoked with the model that actually produced the result, so a
  * caller can report the true model rather than assuming the primary was used.
+ *
+ * `budgetMs` caps the total wall-clock across every model and retry. Without it
+ * the worst case is attempts × models × timeoutMs, which can outlive a
+ * serverless function's maxDuration and get the whole request killed with no
+ * response. Defaults to null (unbounded) so existing callers are unaffected.
  */
-async function callGemini(run, { label = 'gemini', timeoutMs = GEMINI_TIMEOUT_MS, onModel } = {}) {
+async function callGemini(run, {
+  label = 'gemini',
+  timeoutMs = GEMINI_TIMEOUT_MS,
+  maxAttempts = GEMINI_MAX_ATTEMPTS,
+  budgetMs = null,
+  onModel
+} = {}) {
   let lastErr;
+  const startedAt = Date.now();
+  const elapsed = () => Date.now() - startedAt;
+  const outOfBudget = () => budgetMs !== null && elapsed() >= budgetMs;
+
   for (const modelName of GEMINI_MODEL_CHAIN) {
-    for (let attempt = 0; attempt < GEMINI_MAX_ATTEMPTS; attempt++) {
+    if (outOfBudget()) {
+      console.warn(`[${label}] budget ${budgetMs}ms spent after ${elapsed()}ms — skipping ${modelName}`);
+      break;
+    }
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      // Never start an attempt that cannot finish inside the remaining budget:
+      // clamp its deadline, and if there is no useful time left move on.
+      const perAttemptTimeout = budgetMs === null
+        ? timeoutMs
+        : Math.min(timeoutMs, budgetMs - elapsed());
+      if (perAttemptTimeout <= 1000) {
+        console.warn(`[${label}] budget ${budgetMs}ms nearly spent after ${elapsed()}ms — stopping`);
+        lastErr = lastErr || new Error(`Gemini budget of ${budgetMs}ms exhausted`);
+        return Promise.reject(lastErr);
+      }
       try {
         // Promise.race, not an abort signal: the SDK does not expose one on all
         // call shapes. The underlying request may keep running after we give up,
         // but it is unreferenced and the caller is no longer blocked on it.
         const value = await Promise.race([
           run(modelName),
-          sleep(timeoutMs).then(() => {
-            throw new Error(`Gemini call timed out after ${timeoutMs}ms`);
+          sleep(perAttemptTimeout).then(() => {
+            throw new Error(`Gemini call timed out after ${perAttemptTimeout}ms`);
           })
         ]);
         if (onModel) onModel(modelName);
@@ -129,13 +158,18 @@ async function callGemini(run, { label = 'gemini', timeoutMs = GEMINI_TIMEOUT_MS
           console.warn(`[${label}] ${modelName} failed permanently: ${err?.message}`);
           break; // Next model — retrying this one cannot help.
         }
-        const isLastAttempt = attempt === GEMINI_MAX_ATTEMPTS - 1;
+        const isLastAttempt = attempt === maxAttempts - 1;
         if (isLastAttempt) {
-          console.warn(`[${label}] ${modelName} exhausted ${GEMINI_MAX_ATTEMPTS} attempts: ${err?.message}`);
+          console.warn(`[${label}] ${modelName} exhausted ${maxAttempts} attempts: ${err?.message}`);
           break;
         }
         const wait = retryDelayMs(err, attempt);
-        console.warn(`[${label}] ${modelName} transient (${err?.message}) — retry ${attempt + 1}/${GEMINI_MAX_ATTEMPTS - 1} in ${wait}ms`);
+        // Don't sleep past the budget just to discover there's no time left.
+        if (budgetMs !== null && elapsed() + wait >= budgetMs) {
+          console.warn(`[${label}] ${modelName} backoff would exceed budget — moving on`);
+          break;
+        }
+        console.warn(`[${label}] ${modelName} transient (${err?.message}) — retry ${attempt + 1}/${maxAttempts - 1} in ${wait}ms`);
         await sleep(wait);
       }
     }
@@ -1077,6 +1111,216 @@ app.post('/api/intake/:companyId/prefill/apply', authenticateToken, (req, res) =
 
 // ─── DOCUMENTS ────────────────────────────────────────────────────────────────
 
+// On Vercel, work started after res.json() is not guaranteed to run: the
+// container may be frozen as soon as the response is flushed. OCR therefore has
+// to complete before responding there. Locally the process outlives the request,
+// so the background path is kept — it makes the upload feel instant.
+// OCR_INLINE=1 forces the serverless behaviour on a local listener, which is the
+// only way to exercise that path without deploying.
+const OCR_RUNS_INLINE = Boolean(process.env.VERCEL) || process.env.OCR_INLINE === '1';
+
+// The function's maxDuration is 60s (vercel.json). Leave headroom for the S3
+// read, the DynamoDB write, and the response itself, so a slow model cannot push
+// the whole request past the limit and get it killed with no response at all.
+const OCR_BUDGET_MS = Number(process.env.GEMINI_OCR_BUDGET_MS || (OCR_RUNS_INLINE ? 40000 : 120000));
+const OCR_ATTEMPT_TIMEOUT_MS = Number(process.env.GEMINI_OCR_TIMEOUT_MS || (OCR_RUNS_INLINE ? 20000 : 45000));
+
+const OCR_PROMPTS = {
+  audited_financials: `You are an expert financial document OCR system. Extract the following data from this document:
+- revenue_fy25: Total Revenue from Operations for FY 2024-25 (plain integer)
+- revenue_fy24: Total Revenue from Operations for FY 2023-24
+- revenue_fy23: Total Revenue from Operations for FY 2022-23
+- profit_fy25: Profit After Tax for FY 2024-25
+- profit_fy24: Profit After Tax for FY 2023-24
+- net_worth: Net Worth / Shareholders Equity
+- total_assets: Total Assets
+- total_debt: Total Borrowings / Debt
+Also return: ocr_text (readable text from the document).
+Return ONLY valid JSON: { revenue_fy25, revenue_fy24, revenue_fy23, profit_fy25, profit_fy24, net_worth, total_assets, total_debt, ocr_text }.`,
+  cap_table: `You are an expert corporate document OCR system. Extract from this cap table:
+- total_shares: Total shares (integer)
+- promoter_holding_pct: Promoter group holding percentage (number, no % symbol)
+- promoter_shares: Total promoter shares (integer)
+- public_shares: Total public shares
+Also return: ocr_text (readable text).
+Return ONLY valid JSON: { total_shares, promoter_holding_pct, promoter_shares, public_shares, ocr_text }.`,
+  litigation_records: `You are an expert legal document OCR system. Extract from this litigation document:
+- case_reference: Case number or reference ID
+- authority: Court or tribunal name
+- disputed_amount: Disputed amount in INR (integer)
+- assessment_year: Assessment year
+- nature_of_dispute: Brief dispute description
+Also return: ocr_text (readable text).
+Return ONLY valid JSON: { case_reference, authority, disputed_amount, assessment_year, nature_of_dispute, ocr_text }.`,
+  incorporation_certificate: `You are an expert corporate document OCR system. Extract from this certificate of incorporation:
+- cin: Corporate Identification Number (CIN)
+- legal_name: Full legal name
+- incorporation_date: Date of incorporation (YYYY-MM-DD)
+- registered_state: State of registration
+- type_of_company: Company type
+Also return: ocr_text (readable text).
+Return ONLY valid JSON: { cin, legal_name, incorporation_date, registered_state, type_of_company, ocr_text }.`
+};
+
+/** Reads the uploaded bytes back from wherever multer put them. */
+async function readDocumentBytes(source) {
+  // Use the resolved S3_BUCKET, not the raw CLOUD_STORAGE_BUCKET env var: a
+  // deployment configured with S3_BUCKET uploaded to S3 but then took the disk
+  // branch, found no file, and "failed" OCR with nothing to read.
+  if (source.s3Key && S3_BUCKET) {
+    const s3Response = await s3.send(new GetObjectCommand({ Bucket: S3_BUCKET, Key: source.s3Key }));
+    const chunks = [];
+    for await (const chunk of s3Response.Body) chunks.push(chunk);
+    return Buffer.concat(chunks);
+  }
+  if (source.localPath && fs.existsSync(source.localPath)) return fs.readFileSync(source.localPath);
+  if (source.buffer) return source.buffer;
+  return null;
+}
+
+/** Gemini needs a mime type it recognises; multer is not always specific. */
+function resolveOcrMimeType(source) {
+  let mimeType = source.mimetype || 'application/pdf';
+  if (mimeType === 'image/jpg') mimeType = 'image/jpeg';
+  if (mimeType === 'application/octet-stream') {
+    const ext = path.extname(source.originalname || '').toLowerCase();
+    if (['.png', '.jpg', '.jpeg', '.webp'].includes(ext)) mimeType = ext === '.png' ? 'image/png' : 'image/jpeg';
+    else mimeType = 'application/pdf';
+  }
+  return mimeType;
+}
+
+/**
+ * Turns an OCR exception into something an issuer can act on. The raw SDK error
+ * is a URL plus a stack, which is shown verbatim in the document panel and tells
+ * a non-technical user nothing about what to do next. The original is still
+ * logged in full for debugging.
+ */
+function describeOcrFailure(err) {
+  const raw = String(err?.message || err || '');
+  const status = err?.status ?? err?.response?.status;
+
+  if (/could not be read back from storage/i.test(raw)) {
+    return 'The uploaded file could not be read back from storage. Please upload it again.';
+  }
+  if (err instanceof SyntaxError || /JSON/i.test(raw)) {
+    return 'The document was read but the extracted data could not be interpreted. Please retry, or enter the values manually.';
+  }
+  if (/budget .* exhausted|timed out/i.test(raw)) {
+    return 'Extraction took too long and was stopped. This is usually temporary — please retry.';
+  }
+  if (status === 429 || /quota|rate limit/i.test(raw)) {
+    return 'The extraction service is rate-limited right now. Please wait a moment and retry.';
+  }
+  if (status === 503 || /overloaded|unavailable/i.test(raw)) {
+    return 'The extraction service is temporarily overloaded. Please retry in a minute.';
+  }
+  if (status === 400 || /invalid argument|unsupported|mime/i.test(raw)) {
+    return 'This file could not be read as a document. Check that it is a valid PDF or image and upload it again.';
+  }
+  if (status === 401 || status === 403 || /api key/i.test(raw)) {
+    return 'The extraction service rejected the request. Please contact your administrator.';
+  }
+  return 'The document could not be read automatically. Please retry, or enter the values manually.';
+}
+
+/**
+ * Extracts structured values from an uploaded document and writes them to the
+ * document record. Never throws: a failure is recorded on the document as
+ * ocr_status 'failed' plus a human-readable ocr_error, so the UI can offer a
+ * retry and manual entry instead of leaving the row stuck on "processing".
+ *
+ * Extracted separately from the upload route so both the inline (serverless)
+ * path and the retry endpoint run exactly the same extraction.
+ */
+async function runDocumentOcr({ docId, source, docType, companyId }) {
+  let extractedText = null;
+  let extractedValues = {};
+  let ocrFailure = null;
+
+  try {
+    const fileBuffer = await readDocumentBytes(source);
+    if (!fileBuffer || fileBuffer.length === 0) {
+      throw new Error('The uploaded file could not be read back from storage.');
+    }
+
+    const ocrPrompt = OCR_PROMPTS[docType] ||
+      `Extract text and key data from this document. Return JSON: { ocr_text: "...", extracted_data: {} }`;
+    const mimeType = resolveOcrMimeType(source);
+    const base64Data = fileBuffer.toString('base64');
+
+    // Retries transient overload/rate-limit failures and falls through to a
+    // sibling model before giving up, under an overall budget so an inline run
+    // cannot exceed the serverless function's maxDuration.
+    const result = await callGemini(
+      (modelName) => genAI.getGenerativeModel({ model: modelName }).generateContent([
+        ocrPrompt,
+        { inlineData: { mimeType, data: base64Data } }
+      ]),
+      { label: 'OCR', timeoutMs: OCR_ATTEMPT_TIMEOUT_MS, budgetMs: OCR_BUDGET_MS }
+    );
+
+    const rawText = result.response.text().trim();
+    const jsonText = rawText.replace(/^```(?:json)?\n?/i, '').replace(/\n?```$/i, '').trim();
+    const parsed = JSON.parse(jsonText);
+
+    extractedText = parsed.ocr_text || rawText.substring(0, 2000);
+    const { ocr_text, ...vals } = parsed;
+    // Drop keys the model returned empty: a null revenue is not an extraction,
+    // and counting it as one would earn document points for an unread field.
+    extractedValues = Object.fromEntries(
+      Object.entries(vals).filter(([, v]) => v !== null && v !== undefined && String(v).trim() !== '')
+    );
+  } catch (ocrErr) {
+    ocrFailure = describeOcrFailure(ocrErr);
+    console.warn(`[OCR] extraction failed for doc ${docId}: ${ocrErr?.message || ocrErr}`);
+  }
+
+  // No fabricated fallback. If the OCR engine could not read the document we
+  // must say so: inventing plausible financials for a SEBI filing would let
+  // unverified numbers flow into the DRHP looking like extracted evidence.
+  const gotValues = Object.keys(extractedValues).length > 0;
+
+  try {
+    const data = getDb();
+    const doc = data.documents.find(d => d.id === docId);
+    if (!doc) {
+      console.warn(`[OCR] document ${docId} disappeared before results could be saved`);
+      return { gotValues: false, extractedValues: {}, error: ocrFailure };
+    }
+
+    doc.ocr_status = gotValues ? 'completed' : 'failed';
+    doc.ocr_text = extractedText;
+    doc.extracted_values = gotValues ? extractedValues : {};
+    doc.ocr_error = gotValues
+      ? null
+      : (ocrFailure || 'The document could not be read automatically. Please enter these values manually.');
+    saveDb(data);
+
+    if (gotValues) {
+      generateDraftData(companyId);
+      console.log(`[OCR] completed for document ${docId} (${docType}) — ${Object.keys(extractedValues).length} fields`);
+    } else {
+      console.warn(`[OCR] FAILED for document ${docId} (${docType}) — ${doc.ocr_error}`);
+    }
+
+    db.addNotification({
+      companyId,
+      recipient_role: 'issuer',
+      recipient_email: doc.uploaded_by || 'aarav@example.com',
+      message: gotValues
+        ? `OCR completed for document: "${doc.name}". Extracted ${Object.keys(extractedValues).length} key fields.`
+        : `Could not auto-read "${doc.name}". Please retry extraction or enter its values manually.`,
+      related_section: 'documents',
+      type: gotValues ? 'ocr_completed' : 'ocr_failed'
+    });
+  } catch (dbErr) {
+    console.error('[OCR] DB save error:', dbErr.message);
+  }
+
+  return { gotValues, extractedValues, error: ocrFailure };
+}
+
 app.get('/api/documents/:companyId', authenticateToken, (req, res) => {
   res.json(db.getDocuments(req.params.companyId));
 });
@@ -1134,152 +1378,70 @@ app.post('/api/documents/:companyId/upload', authenticateToken, (req, res) => {
       type: 'document_uploaded'
     });
 
-    // Send immediate response — OCR runs async in background
-    res.json({ ...newDoc, message: duplicate ? 'Warning: A document with the same name already exists.' : undefined });
+    const uploadMessage = duplicate
+      ? 'Warning: A document with the same name already exists.'
+      : undefined;
 
-    // ── Gemini Vision OCR + Intelligent Domain Fallback ───────────────────
-    ;(async () => {
-      let extractedText = null;
-      let extractedValues = {};
-      let ocrFailure = null;
+    const source = {
+      s3Key: req.file.key || null,
+      localPath: req.file.path || null,
+      buffer: req.file.buffer || null,
+      mimetype: req.file.mimetype,
+      originalname: req.file.originalname
+    };
 
-      try {
-        let fileBuffer;
-        // Use the resolved S3_BUCKET, not the raw CLOUD_STORAGE_BUCKET env var.
-        // Reading the env var directly meant a deployment configured with
-        // S3_BUCKET uploaded to S3 but then took the disk branch below, found no
-        // file, and left fileBuffer undefined — OCR "failed" with nothing to read.
-        if (req.file.key && S3_BUCKET) {
-          const getObjCmd = new GetObjectCommand({
-            Bucket: S3_BUCKET,
-            Key: req.file.key
-          });
-          const s3Response = await s3.send(getObjCmd);
-          const chunks = [];
-          for await (const chunk of s3Response.Body) chunks.push(chunk);
-          fileBuffer = Buffer.concat(chunks);
-        } else if (req.file.path && fs.existsSync(req.file.path)) {
-          fileBuffer = fs.readFileSync(req.file.path);
-        } else if (req.file.buffer) {
-          fileBuffer = req.file.buffer;
-        }
+    if (OCR_RUNS_INLINE) {
+      // Serverless: the container can be frozen the instant we respond, so work
+      // started after res.json() may never run at all — that is what left every
+      // uploaded document stuck on "processing" forever in production. Run OCR
+      // before responding instead. Slower to return, but it actually finishes,
+      // and the flush middleware then persists the results with the response.
+      await runDocumentOcr({ docId: newDoc.id, source, docType: doc_type, companyId });
+      const finished = db.getDocuments(companyId).find(d => d.id === newDoc.id) || newDoc;
+      return res.json({ ...finished, message: uploadMessage });
+    }
 
-        if (fileBuffer) {
-          const base64Data = fileBuffer.toString('base64');
-          let mimeType = req.file.mimetype || 'application/pdf';
-          if (mimeType === 'image/jpg') mimeType = 'image/jpeg';
-          if (mimeType === 'application/octet-stream') {
-            const ext = path.extname(req.file.originalname).toLowerCase();
-            if (['.png', '.jpg', '.jpeg', '.webp'].includes(ext)) mimeType = ext === '.png' ? 'image/png' : 'image/jpeg';
-            else mimeType = 'application/pdf';
-          }
-
-          const docPrompts = {
-            audited_financials: `You are an expert financial document OCR system. Extract the following data from this document:
-- revenue_fy25: Total Revenue from Operations for FY 2024-25 (plain integer)
-- revenue_fy24: Total Revenue from Operations for FY 2023-24
-- revenue_fy23: Total Revenue from Operations for FY 2022-23
-- profit_fy25: Profit After Tax for FY 2024-25
-- profit_fy24: Profit After Tax for FY 2023-24
-- net_worth: Net Worth / Shareholders Equity
-- total_assets: Total Assets
-- total_debt: Total Borrowings / Debt
-Also return: ocr_text (readable text from the document).
-Return ONLY valid JSON: { revenue_fy25, revenue_fy24, revenue_fy23, profit_fy25, profit_fy24, net_worth, total_assets, total_debt, ocr_text }.`,
-            cap_table: `You are an expert corporate document OCR system. Extract from this cap table:
-- total_shares: Total shares (integer)
-- promoter_holding_pct: Promoter group holding percentage (number, no % symbol)
-- promoter_shares: Total promoter shares (integer)
-- public_shares: Total public shares
-Also return: ocr_text (readable text).
-Return ONLY valid JSON: { total_shares, promoter_holding_pct, promoter_shares, public_shares, ocr_text }.`,
-            litigation_records: `You are an expert legal document OCR system. Extract from this litigation document:
-- case_reference: Case number or reference ID
-- authority: Court or tribunal name
-- disputed_amount: Disputed amount in INR (integer)
-- assessment_year: Assessment year
-- nature_of_dispute: Brief dispute description
-Also return: ocr_text (readable text).
-Return ONLY valid JSON: { case_reference, authority, disputed_amount, assessment_year, nature_of_dispute, ocr_text }.`,
-            incorporation_certificate: `You are an expert corporate document OCR system. Extract from this certificate of incorporation:
-- cin: Corporate Identification Number (CIN)
-- legal_name: Full legal name
-- incorporation_date: Date of incorporation (YYYY-MM-DD)
-- registered_state: State of registration
-- type_of_company: Company type
-Also return: ocr_text (readable text).
-Return ONLY valid JSON: { cin, legal_name, incorporation_date, registered_state, type_of_company, ocr_text }.`
-          };
-
-          const ocrPrompt = docPrompts[doc_type] || `Extract text and key data from this document. Return JSON: { ocr_text: "...", extracted_data: {} }`;
-
-          // Retries transient overload/rate-limit failures and falls through to a
-          // sibling model before giving up, instead of failing the upload on the
-          // first 503 from a busy model.
-          const result = await callGemini(
-            (modelName) => genAI.getGenerativeModel({ model: modelName }).generateContent([
-              ocrPrompt,
-              { inlineData: { mimeType, data: base64Data } }
-            ]),
-            // Vision on a multi-page PDF is slower than a text turn, so it gets a
-            // longer deadline than the chatbot.
-            { label: 'OCR', timeoutMs: Number(process.env.GEMINI_OCR_TIMEOUT_MS || 45000) }
-          );
-
-          const rawText = result.response.text().trim();
-          const jsonText = rawText.replace(/^```(?:json)?\n?/i, '').replace(/\n?```$/i, '').trim();
-          const parsed = JSON.parse(jsonText);
-
-          extractedText = parsed.ocr_text || rawText.substring(0, 2000);
-          const { ocr_text, ...vals } = parsed;
-          extractedValues = vals;
-        }
-      } catch (ocrErr) {
-        ocrFailure = ocrErr.message || String(ocrErr);
-        console.warn(`[OCR] extraction failed for doc ${newDoc.id}: ${ocrFailure}`);
-      }
-
-      // No fabricated fallback. If the OCR engine could not read the document we
-      // must say so: inventing plausible financials for a SEBI filing would let
-      // unverified numbers flow into the DRHP looking like extracted evidence.
-      const gotValues = extractedValues && Object.keys(extractedValues).length > 0;
-
-      // Update document record in DB with OCR results
-      try {
-        const data = getDb();
-        const doc = data.documents.find(d => d.id === newDoc.id);
-        if (doc) {
-          doc.ocr_status = gotValues ? 'completed' : 'failed';
-          doc.ocr_text = extractedText;
-          doc.extracted_values = gotValues ? extractedValues : {};
-          doc.ocr_error = gotValues
-            ? null
-            : (ocrFailure || 'The document could not be read automatically. Please enter these values manually.');
-          saveDb(data);
-
-          if (gotValues) {
-            generateDraftData(companyId);
-            console.log(`[OCR] completed for document ${newDoc.id} (${doc_type}) — ${Object.keys(extractedValues).length} fields`);
-          } else {
-            console.warn(`[OCR] FAILED for document ${newDoc.id} (${doc_type}) — no values extracted`);
-          }
-
-          db.addNotification({
-            companyId,
-            recipient_role: 'issuer',
-            recipient_email: newDoc.uploaded_by || 'aarav@example.com',
-            message: gotValues
-              ? `OCR completed for document: "${newDoc.name}". Extracted ${Object.keys(extractedValues).length} key fields.`
-              : `Could not auto-read "${newDoc.name}". Please enter its values manually — nothing was extracted.`,
-            related_section: 'documents',
-            type: gotValues ? 'ocr_completed' : 'ocr_failed'
-          });
-        }
-      } catch (dbErr) {
-        console.error('[OCR] DB save error:', dbErr.message);
-      }
-    })();
+    // Long-lived local process: respond immediately and let OCR finish in the
+    // background, which keeps the upload feeling instant.
+    res.json({ ...newDoc, message: uploadMessage });
+    runDocumentOcr({ docId: newDoc.id, source, docType: doc_type, companyId });
   });
+});
+
+// Re-runs extraction for a document whose OCR failed or was interrupted. The
+// bytes are re-read from wherever they were stored, so this works for anything
+// already uploaded — including documents stranded on "processing" by an older
+// deploy that started OCR after the response.
+app.post('/api/documents/:id/retry-ocr', authenticateToken, async (req, res) => {
+  // getDocuments with no companyId returns every document.
+  const doc = db.getDocuments().find(d => d.id === req.params.id);
+  if (!doc) return res.status(404).json({ message: 'Document not found' });
+
+  if (req.user.role === 'issuer' && req.user.companyId !== doc.companyId) {
+    return res.status(403).json({ message: 'You do not have access to this document.' });
+  }
+
+  const source = {
+    s3Key: doc.s3_key || null,
+    localPath: doc.storage_type === 'local' ? doc.file_path : null,
+    buffer: null,
+    mimetype: doc.file_mime,
+    originalname: doc.name
+  };
+
+  try {
+    const data = getDb();
+    const live = data.documents.find(d => d.id === doc.id);
+    if (live) { live.ocr_status = 'processing'; live.ocr_error = null; saveDb(data); }
+  } catch (err) {
+    console.error('[OCR] could not mark document for retry:', err.message);
+  }
+
+  await runDocumentOcr({ docId: doc.id, source, docType: doc.doc_type, companyId: doc.companyId });
+  const finished = db.getDocuments(doc.companyId).find(d => d.id === doc.id);
+  logAudit(req, 'DOCUMENT_OCR_RETRIED', 'document', doc.id,
+    `${req.user.name} re-ran extraction on: ${doc.name}`, { companyId: doc.companyId });
+  res.json(finished || doc);
 });
 
 app.put('/api/documents/:id/confirm', authenticateToken, (req, res) => {

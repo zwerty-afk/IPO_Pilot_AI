@@ -112,6 +112,9 @@ export const uploadDocument = (companyId, file, docType) => {
 };
 
 export const confirmDocument = (id, data) => callApi('put', `/documents/${id}/confirm`, data);
+// Re-runs Gemini extraction on an already-uploaded file. Recovers documents whose
+// OCR failed, and those left stuck on "processing" by an interrupted run.
+export const retryDocumentOcr = (id) => callApi('post', `/documents/${id}/retry-ocr`);
 export const deleteDocument = (id) => callApi('delete', `/documents/${id}`);
 export const getDrafts = (companyId) => callApi('get', `/drafts/${companyId}`);
 

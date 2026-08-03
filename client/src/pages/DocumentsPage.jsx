@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { getDocuments, uploadDocument, confirmDocument, deleteDocument, verifyDocument } from '../services/api';
+import { getDocuments, uploadDocument, confirmDocument, deleteDocument, verifyDocument, retryDocumentOcr } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import StatusBadge from '../components/StatusBadge';
 import { 
@@ -15,7 +15,8 @@ import {
   CheckCircle2,
   XCircle,
   Clock,
-  Info
+  Info,
+  RefreshCw
 } from 'lucide-react';
 
 const docTypeLabels = {
@@ -60,6 +61,7 @@ export default function DocumentsPage() {
   const [verifying, setVerifying] = useState(false);
   const [verificationRemarks, setVerificationRemarks] = useState('');
   const [deleteError, setDeleteError] = useState(null);
+  const [retryingOcr, setRetryingOcr] = useState(false);
   const pollTimerRef = useRef(null);
 
   const companyId = localStorage.getItem('ipo_company_id') || 'aarav-precision';
@@ -201,6 +203,23 @@ export default function DocumentsPage() {
     }
   };
 
+  const handleRetryOcr = async (docId) => {
+    setRetryingOcr(true);
+    try {
+      await retryDocumentOcr(docId);
+      const fresh = await loadDocs();
+      const updated = fresh.find(d => d.id === docId);
+      if (updated) {
+        setSelectedDoc(updated);
+        setEditedValues(updated.extracted_values || {});
+      }
+    } catch (err) {
+      console.error('OCR retry failed:', err);
+    } finally {
+      setRetryingOcr(false);
+    }
+  };
+
   const handleDelete = async (docId) => {
     if (!window.confirm("Are you sure you want to permanently delete this document? This cannot be undone.")) return;
     setDeleteError(null);
@@ -238,6 +257,18 @@ export default function DocumentsPage() {
           <Loader2 className="w-8 h-8 text-amber-500 animate-spin" />
           <p className="text-sm font-semibold text-amber-800">Gemini OCR in progress…</p>
           <p className="text-xs text-amber-600 text-center max-w-xs">Extracting structured data from your document. This page refreshes automatically.</p>
+          {/* An extraction interrupted mid-run leaves the record on "processing"
+              with nothing left to finish it, which used to spin forever. */}
+          <button
+            type="button"
+            onClick={() => handleRetryOcr(doc.id)}
+            disabled={retryingOcr}
+            className="flex items-center gap-2 px-3 py-1.5 text-amber-700 rounded-lg text-[11px] font-semibold hover:bg-amber-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {retryingOcr
+              ? <><Loader2 className="w-3 h-3 animate-spin" />Restarting…</>
+              : <><RefreshCw className="w-3 h-3" />Taking too long? Restart extraction</>}
+          </button>
         </div>
       );
     }
@@ -249,7 +280,17 @@ export default function DocumentsPage() {
           <XCircle className="w-8 h-8 text-red-400" />
           <p className="text-sm font-semibold text-red-800">OCR Extraction Failed</p>
           {doc.ocr_error && <p className="text-[11px] text-red-600 text-center max-w-xs font-mono">{doc.ocr_error}</p>}
-          <p className="text-xs text-red-500 text-center max-w-xs">You can still manually enter values in the Extracted Values panel on the right.</p>
+          <button
+            type="button"
+            onClick={() => handleRetryOcr(doc.id)}
+            disabled={retryingOcr}
+            className="flex items-center gap-2 px-4 py-2 bg-white border border-red-300 text-red-700 rounded-lg text-xs font-semibold hover:bg-red-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {retryingOcr
+              ? <><Loader2 className="w-3.5 h-3.5 animate-spin" />Retrying extraction…</>
+              : <><RefreshCw className="w-3.5 h-3.5" />Retry Extraction</>}
+          </button>
+          <p className="text-xs text-red-500 text-center max-w-xs">Most failures are temporary. If it fails again, you can enter values manually in the Extracted Values panel.</p>
         </div>
       );
     }
