@@ -62,6 +62,10 @@ export default function DocumentsPage() {
   const [verificationRemarks, setVerificationRemarks] = useState('');
   const [deleteError, setDeleteError] = useState(null);
   const [retryingOcr, setRetryingOcr] = useState(false);
+  // Ids with a DELETE in flight. Without this, a double-click fired the request
+  // twice and the second one 404'd on a document the first had already removed,
+  // reporting "Document not found" for a delete that actually succeeded.
+  const [deletingIds, setDeletingIds] = useState([]);
   const pollTimerRef = useRef(null);
 
   const companyId = localStorage.getItem('ipo_company_id') || 'aarav-precision';
@@ -221,16 +225,32 @@ export default function DocumentsPage() {
   };
 
   const handleDelete = async (docId) => {
+    // Ignore repeat clicks on a row that is already being deleted.
+    if (deletingIds.includes(docId)) return;
     if (!window.confirm("Are you sure you want to permanently delete this document? This cannot be undone.")) return;
     setDeleteError(null);
+    setDeletingIds(prev => [...prev, docId]);
     try {
       await deleteDocument(docId);
-      if (selectedDoc?.id === docId) setSelectedDoc(null);
+      // Drop the row and close the detail panel immediately, so the document
+      // stops being shown without the user having to close the panel first.
+      setDocuments(prev => prev.filter(d => d.id !== docId));
+      setSelectedDoc(prev => (prev?.id === docId ? null : prev));
       await loadDocs();
     } catch (err) {
-      const msg = err.response?.data?.message || err.message || 'Deletion failed. Please try again.';
-      setDeleteError(msg);
-      console.error("Deletion failed:", err);
+      // A 404 means the document is already gone — that is the outcome the user
+      // asked for, so reconcile the list instead of reporting a failure.
+      if (err.response?.status === 404) {
+        setDocuments(prev => prev.filter(d => d.id !== docId));
+        setSelectedDoc(prev => (prev?.id === docId ? null : prev));
+        await loadDocs();
+      } else {
+        const msg = err.response?.data?.message || err.message || 'Deletion failed. Please try again.';
+        setDeleteError(msg);
+        console.error("Deletion failed:", err);
+      }
+    } finally {
+      setDeletingIds(prev => prev.filter(id => id !== docId));
     }
   };
 
@@ -486,10 +506,11 @@ export default function DocumentsPage() {
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
                       <StatusBadge status={doc.status} />
-                      <button 
+                      <button
                         onClick={(e) => { e.stopPropagation(); handleDelete(doc.id); }}
-                        className="p-1.5 text-slate-400 hover:text-red-500 transition-colors rounded hover:bg-slate-100"
-                        title="Delete document"
+                        disabled={deletingIds.includes(doc.id)}
+                        className="p-1.5 text-slate-400 hover:text-red-500 transition-colors rounded hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:text-slate-400 disabled:hover:bg-transparent"
+                        title={deletingIds.includes(doc.id) ? 'Deleting…' : 'Delete document'}
                       >
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>
