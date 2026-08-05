@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { getDrafts, updateDraftStatus, getComments, addComment, resolveComment, editComment, deleteComment, getInvitations } from '../services/api';
+import { parseCitation } from '../data/intakeSchema';
 import StatusBadge from '../components/StatusBadge';
 import ConfidenceBadge from '../components/ConfidenceBadge';
 import { 
@@ -15,7 +17,8 @@ import {
   Edit2,
   Trash2,
   Reply,
-  Building2
+  Building2,
+  Bookmark
 } from 'lucide-react';
 
 const sectionMapping = {
@@ -25,11 +28,24 @@ const sectionMapping = {
   capital_structure: "Capital Structure",
   related_party: "Related Party Transactions",
   litigation: "Litigation & Legal Proceedings",
-  promoter_details: "Promoter & Management Details"
+  promoter_details: "Promoter & Management Details",
+  legal_compliance: "Legal & Compliance",
+  risk_information: "Risk Information",
+  other_disclosures: "Other Disclosures"
 };
 
 export default function ReviewerWorkspace() {
+  const navigate = useNavigate();
   const [drafts, setDrafts] = useState({});
+
+  const handleCitationClick = (citation) => {
+    if (citation.startsWith("Document:")) {
+      navigate('/intake');
+      return;
+    }
+    const { stepKey, fieldName } = parseCitation(citation);
+    navigate(`/intake?step=${stepKey}&field=${fieldName}`);
+  };
   const [selectedSectionKey, setSelectedSectionKey] = useState('business_overview');
   const [comments, setComments] = useState([]);
   const [invitations, setInvitations] = useState([]);
@@ -248,10 +264,26 @@ export default function ReviewerWorkspace() {
               
               <div className="space-y-4">
                 {currentSection.blocks.map((block) => (
-                  <div key={block.id} className="p-4 bg-slate-50/50 border border-slate-200/80 rounded-xl space-y-2 relative">
-                    <p className="text-slate-700 text-xs leading-relaxed">{block.text}</p>
-                    <div className="flex justify-between items-center text-[10px] pt-1">
-                      <span className="text-slate-400 font-mono">ID: {block.id} | Citations: {block.citations.join(', ')}</span>
+                  <div key={block.id} className="p-4 bg-slate-50/50 border border-slate-200/80 rounded-xl space-y-3 relative">
+                    <p className="text-slate-700 text-xs leading-relaxed whitespace-pre-line">{block.text}</p>
+                    <div className="flex justify-between items-center text-[10px] pt-2 border-t border-slate-200/50">
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <span className="text-slate-400 font-semibold uppercase tracking-wider">Citations:</span>
+                        {block.citations.map((cite, cidx) => {
+                          const tagLabel = cite.includes(': ') ? cite.split(': ').pop() : cite;
+                          return (
+                            <button
+                              key={cidx}
+                              onClick={() => handleCitationClick(cite)}
+                              title={`Navigate to intake field: ${tagLabel}`}
+                              className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-medium transition-colors border border-indigo-200/40"
+                            >
+                              <Bookmark className="w-3 h-3 text-indigo-500 shrink-0" />
+                              <span className="max-w-[150px] truncate">{tagLabel}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
                       <ConfidenceBadge level={block.confidence} />
                     </div>
                   </div>

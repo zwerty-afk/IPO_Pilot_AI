@@ -4,7 +4,7 @@ import { Bell, X, RotateCcw, Loader2 } from 'lucide-react';
 import { getNotifications, markNotificationRead, markAllNotificationsRead } from '../services/api';
 
 const SECTION_ROUTES = {
-  documents: '/documents',
+  documents: '/intake',
   sebi_updates: '/sebi-updates',
   invitation: '/invitations',
   export: '/export',

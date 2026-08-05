@@ -1,5 +1,5 @@
 import React from 'react';
-import { Routes, Route } from 'react-router-dom';
+import { Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, ProtectedRoute } from './context/AuthContext';
 import Layout from './components/Layout';
 
@@ -8,12 +8,14 @@ import LandingPage from './pages/LandingPage';
 import LoginPage from './pages/LoginPage';
 import Dashboard from './pages/Dashboard';
 import IntakeForm from './pages/IntakeForm';
-import DocumentsPage from './pages/DocumentsPage';
 import DraftPreview from './pages/DraftPreview';
 import ReviewerWorkspace from './pages/ReviewerWorkspace';
 import ExportPage from './pages/ExportPage';
 import SebiUpdatesPage from './pages/SebiUpdatesPage';
 import InvitationsPage from './pages/InvitationsPage';
+import ComplianceChecklistPage from './pages/ComplianceChecklistPage';
+import GapAnalysisPage from './pages/GapAnalysisPage';
+import IpoReadinessPage from './pages/IpoReadinessPage';
 
 export default function App() {
   return (
@@ -32,8 +34,10 @@ export default function App() {
                 <Routes>
                   <Route path="/dashboard" element={<Dashboard />} />
                   <Route path="/intake" element={<IntakeForm />} />
-                  <Route path="/documents" element={<DocumentsPage />} />
                   <Route path="/draft" element={<DraftPreview />} />
+                  <Route path="/compliance-checklist" element={<ComplianceChecklistPage />} />
+                  <Route path="/gap-analysis" element={<GapAnalysisPage />} />
+                  <Route path="/readiness" element={<IpoReadinessPage />} />
                   <Route
                     path="/reviewer"
                     element={

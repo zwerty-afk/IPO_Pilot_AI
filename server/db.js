@@ -71,7 +71,24 @@ const INITIAL_SEED = {
         industry_desc: 'The precision engineering industry in India serves critical sectors like Aerospace, Defense, Automotive, and Medical Devices, requiring ultra-tight tolerances and high-grade materials.',
         products: 'High-precision CNC machined components, brass fittings, specialized fasteners, and custom assemblies for automotive Tier-1 suppliers and hydraulic pump manufacturers.',
         customers: 'Primary clients include Bharat Hydraulic Systems, Sterling Auto Components, and Royal Aerospace Parts India.',
-        operations: 'Operating from a 15,000 sq ft facility in Dombivli, Maharashtra, equipped with 14 CNC turning centers, 6 vertical machining centers (VMC), and a dedicated metrology lab for quality assurance.'
+        operations: 'Operating from a 15,000 sq ft facility in Dombivli, Maharashtra, equipped with 14 CNC turning centers, 6 vertical machining centers (VMC), and a dedicated metrology lab for quality assurance.',
+        revenue_model: 'B2B contractual manufacturing with fixed component pricing and annual rate contracts.',
+        business_verticals: 'Automotive Components (55%), Industrial Hydraulics (30%), Aerospace & Defense Sub-assemblies (15%).',
+        key_products: 'CNC machined shafts, valve bodies, precision brass fittings, and custom aerospace brackets.',
+        services: 'Custom precision machining, surface finishing, heat treatment coordination, and sub-assembly testing.',
+        manufacturing_capability: '14 CNC turning centers, 6 vertical machining centers (VMC), CMM inspection, and 500,000 unit monthly capacity.',
+        technology: 'CAD/CAM integrated tooling design, IoT-enabled machine monitoring, and automated tool presetting.',
+        target_market: 'Tier-1 automotive OEMs, industrial pump manufacturers, and defense contractors across India and South Asia.',
+        key_customers: 'Bharat Hydraulic Systems, Sterling Auto Components, and Royal Aerospace Parts India.',
+        key_suppliers: 'Apex Alloy Steels Ltd, Mahavir Brass Industries, and Precision Metals Corp.',
+        geographic_presence: 'Primary operations in Dombivli (Thane), serving clients across Maharashtra, Gujarat, Tamil Nadu, and exporting to UAE.',
+        competitive_advantage: 'AS9100D aerospace certification, 99.4% first-pass quality yield, and long-standing 10+ year client relationships.',
+        industry_analysis: 'The Indian precision engineering sector is projected to grow at 12.5% CAGR driven by Make in India initiatives and global supply chain diversification.',
+        growth_strategy: 'Expand 5-axis VMC capacity by 40%, acquire AS9100D defense supplier certification, and increase export revenues to 25% of total turnover by FY28.',
+        swot_strengths: 'High customer retention rate, specialized 5-axis machining capability, certified metrology lab.',
+        swot_weaknesses: 'Single facility concentration in Dombivli, dependency on top 3 clients for 60% revenue.',
+        swot_opportunities: 'Growing defense localization mandates in India, EV component manufacturing expansion.',
+        swot_threats: 'Fluctuations in raw material prices (alloy steel & brass), rising industrial power tariffs.'
       },
       promoters: {
         promoters_list: 'Aarav Mehta (Managing Director, 18 years experience in tool manufacturing) and Rohan Mehta (Director of Operations, 15 years experience in precision machining).',
@@ -103,6 +120,42 @@ const INITIAL_SEED = {
       litigation: {
         has_litigation: 'yes',
         litigation_details: 'An income tax appeal is pending before the Commissioner of Income Tax (Appeals), Mumbai, regarding disallowance of depreciation on tools for FY22, involving a tax demand of 1,200,000 INR. The company has deposited 20% of the demand as per standard stay conditions.'
+      },
+      legal_compliance: {
+        roc_compliance: 'All annual returns and financial statements filed up to FY25.',
+        gst_compliance: 'GSTR-3B and GSTR-1 filed up to date with zero tax defaults.',
+        pf_esi_compliance: 'EPFO Code MH/THN/104592; all monthly contributions deposited.',
+        factory_license: 'Factory License # 45920-THN valid through Dec 2028.',
+        pollution_noc: 'MPCB Consent to Operate (Orange Category) valid till March 2029.',
+        fire_noc: 'Thane Municipal Fire NOC # 112/2025 valid till Oct 2027.',
+        auditor_details: 'M/s Shah & Associates, Chartered Accountants (FRN: 104920W), Partner: CA Rajesh Shah (M.No: 045912).',
+        merchant_banker_details: 'Apex Capital Advisors Pvt Ltd (SEBI Reg: INM000012490)'
+      },
+      risk_information: {
+        top5_customers_pct: '60',
+        top_supplier_pct: '45',
+        single_factory: 'yes',
+        forex_exposure: 'yes',
+        forex_pct: '15',
+        pending_tax_demand: '1200000',
+        promoter_dependence: 'yes',
+        promoter_dependence_note: 'Promoters manage key OEM relationships and tooling designs.',
+        commodity_dependency: 'yes',
+        commodity_name: 'Alloy Steel, Brass, & Aluminum Ingot',
+        cybersecurity_risks: 'yes',
+        cybersecurity_note: 'CAD design vault protected with cloud backup & firewall controls.',
+        esg_risks: 'yes',
+        esg_note: 'Zero liquid discharge plant installed for coolant recycling.'
+      },
+      other_disclosures: {
+        dividend_policy: 'The Company has not declared dividends in the last 3 fiscal years to retain profits for capital expansion.',
+        csr_initiatives: 'CSR activities focused on local vocational skill training in Thane industrial belt.',
+        employee_benefits: 'Gratuity trust maintained with LIC of India; ESOP Scheme 2024 covering 50,000 pool shares.',
+        material_contracts: 'Long-term component supply agreement with Sterling Auto Components valid through 2029.',
+        insurance_coverage: 'Standard Fire & Special Perils policy # 459102 covering plant & machinery up to INR 80,000,000.',
+        property_details: 'Industrial plot W-45 leased from MIDC for 99 years commencing 2012.',
+        intellectual_property_summary: 'Registered Trademark "AARAV PRECISION" under Class 7 (# 3940192).',
+        government_approvals: 'All required licenses from MIDC, MPCB, DIC, and Inspector of Factories are active.'
       }
     }
   },
@@ -188,6 +241,36 @@ const INITIAL_SEED = {
             text: 'Key clientele of the Company includes reputable Tier-1 automotive and industrial pumps manufacturers, namely Bharat Hydraulic Systems, Sterling Auto Components, and Royal Aerospace Parts India.',
             confidence: 'high',
             citations: ['Intake: Business Overview: customers']
+          },
+          {
+            id: 'bo-4',
+            text: 'Revenue Model & Business Verticals: The Company generates revenue through B2B contractual manufacturing with fixed component pricing and annual rate contracts. Key business lines & verticals include Automotive Components (55%), Industrial Hydraulics (30%), Aerospace & Defense Sub-assemblies (15%).',
+            confidence: 'high',
+            citations: ['Intake: Business Overview: revenue_model', 'Intake: Business Overview: business_verticals']
+          },
+          {
+            id: 'bo-5',
+            text: 'Products & Services: Key products manufactured include CNC machined shafts, valve bodies, precision brass fittings, and custom aerospace brackets. Complementary services provided include Custom precision machining, surface finishing, heat treatment coordination, and sub-assembly testing. Manufacturing capability features 14 CNC turning centers, 6 vertical machining centers (VMC), CMM inspection, and 500,000 unit monthly capacity, supported by key technologies such as CAD/CAM integrated tooling design, IoT-enabled machine monitoring, and automated tool presetting.',
+            confidence: 'high',
+            citations: ['Intake: Business Overview: key_products', 'Intake: Business Overview: services', 'Intake: Business Overview: manufacturing_capability', 'Intake: Business Overview: technology']
+          },
+          {
+            id: 'bo-6',
+            text: 'Market, Customers & Suppliers: Target market encompasses Tier-1 automotive OEMs, industrial pump manufacturers, and defense contractors across India and South Asia. Key customers include Bharat Hydraulic Systems, Sterling Auto Components, and Royal Aerospace Parts India, while raw material requirements are supplied by Apex Alloy Steels Ltd, Mahavir Brass Industries, and Precision Metals Corp. Geographic presence spans Primary operations in Dombivli (Thane), serving clients across Maharashtra, Gujarat, Tamil Nadu, and exporting to UAE. Key competitive advantages include AS9100D aerospace certification, 99.4% first-pass quality yield, and long-standing 10+ year client relationships, supported by industry analysis: The Indian precision engineering sector is projected to grow at 12.5% CAGR driven by Make in India initiatives and global supply chain diversification.',
+            confidence: 'high',
+            citations: ['Intake: Business Overview: target_market', 'Intake: Business Overview: key_customers', 'Intake: Business Overview: key_suppliers', 'Intake: Business Overview: geographic_presence', 'Intake: Business Overview: competitive_advantage', 'Intake: Business Overview: industry_analysis']
+          },
+          {
+            id: 'bo-7',
+            text: 'Growth Strategy & Timeline: Originally incorporated in 2015-04-12, the Company has progressed through key milestones. Future growth strategy and expansion timeline: Expand 5-axis VMC capacity by 40%, acquire AS9100D defense supplier certification, and increase export revenues to 25% of total turnover by FY28.',
+            confidence: 'high',
+            citations: ['Intake: Company Details: incorporation_date', 'Intake: Business Overview: growth_strategy']
+          },
+          {
+            id: 'bo-8',
+            text: 'SWOT Analysis:\n• Strengths: High customer retention rate, specialized 5-axis machining capability, certified metrology lab.\n• Weaknesses: Single facility concentration in Dombivli, dependency on top 3 clients for 60% revenue.\n• Opportunities: Growing defense localization mandates in India, EV component manufacturing expansion.\n• Threats: Fluctuations in raw material prices (alloy steel & brass), rising industrial power tariffs.',
+            confidence: 'high',
+            citations: ['Intake: Business Overview: swot_strengths', 'Intake: Business Overview: swot_weaknesses', 'Intake: Business Overview: swot_opportunities', 'Intake: Business Overview: swot_threats']
           }
         ]
       },

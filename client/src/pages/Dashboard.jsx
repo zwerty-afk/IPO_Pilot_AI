@@ -31,7 +31,10 @@ const sectionMapping = {
   capital_structure: "Capital Structure",
   related_party: "Related Party Transactions",
   litigation: "Litigation & Legal Proceedings",
-  promoter_details: "Promoter & Management Details"
+  promoter_details: "Promoter & Management Details",
+  legal_compliance: "Legal & Compliance",
+  risk_information: "Risk Information",
+  other_disclosures: "Other Disclosures"
 };
 
 const sectionDescriptions = {
@@ -41,7 +44,10 @@ const sectionDescriptions = {
   capital_structure: "Pre-IPO share distribution and promoter holding stats.",
   related_party: "Financial agreements with promoter-owned enterprises.",
   litigation: "Pending tax assessments, legal cases, and promoter status.",
-  promoter_details: "Detailed experience and board structural profiles."
+  promoter_details: "Detailed experience and board structural profiles.",
+  legal_compliance: "ROC, GST, environmental, factory licenses, and auditor details.",
+  risk_information: "Structured customer/supplier concentration and operational risk parameters.",
+  other_disclosures: "Dividend policy, CSR, material contracts, insurance, and IP details."
 };
 
 export default function Dashboard() {
@@ -173,7 +179,7 @@ export default function Dashboard() {
       tone: 'amber',
       label: `${missingDocs.length} Required Document${missingDocs.length > 1 ? 's' : ''} Missing`,
       hint: missingDocs.map((d) => d.label).join(', '),
-      to: '/documents'
+      to: '/intake'
     },
     docsPendingReview > 0 && {
       key: 'docs-review',
@@ -181,7 +187,7 @@ export default function Dashboard() {
       tone: 'indigo',
       label: `${docsPendingReview} Document${docsPendingReview > 1 ? 's' : ''} Awaiting OCR Confirmation`,
       hint: 'Review extracted values and confirm.',
-      to: '/documents'
+      to: '/intake'
     },
     validationErrors > 0 && {
       key: 'validation',
@@ -499,7 +505,7 @@ export default function Dashboard() {
           {stats?.heatmap && Object.keys(stats.heatmap).map(secKey => (
             <div
               key={secKey}
-              onClick={() => navigate(user?.role === 'reviewer' ? '/reviewer' : '/draft')}
+              onClick={() => navigate(`/compliance-checklist?chapter=${secKey}`)}
               className={`p-5 rounded-2xl border transition-all cursor-pointer hover:shadow-md flex flex-col justify-between h-40 ${getHeatmapColor(stats.heatmap[secKey])}`}
             >
               <div>
@@ -513,7 +519,7 @@ export default function Dashboard() {
               </div>
 
               <div className="flex items-center justify-between text-xs font-semibold pt-3 border-t border-black/5">
-                <span className="opacity-80">View Draft &amp; Citations</span>
+                <span className="opacity-80">View Compliance Section</span>
                 <ArrowRight className="w-4 h-4 transform group-hover:translate-x-1 transition-transform" />
               </div>
             </div>

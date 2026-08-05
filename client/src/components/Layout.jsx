@@ -6,10 +6,10 @@ import {
   Shield, LayoutDashboard, ClipboardList,
   FileCheck2, UserCheck, Download, LogOut, Building2,
   ChevronRight, Newspaper, TrendingUp, FolderOpen, Mail,
-  Menu, X,
+  Menu, X, ListChecks, AlertTriangle
 } from 'lucide-react';
 import NotificationBell from './NotificationBell';
-import ChatbotWidget from './ChatbotWidget';
+import CopilotWidget from './CopilotWidget';
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
@@ -25,12 +25,14 @@ function readinessColor(score) {
 // ─── nav items (SEBI added at end) ────────────────────────────────────────────
 
 const BASE_NAV = [
-  { to: '/dashboard',  icon: LayoutDashboard, label: 'Dashboard' },
-  { to: '/documents',  icon: FolderOpen,      label: 'Documents' },
-  { to: '/intake',     icon: ClipboardList,   label: 'Intake Form' },
-  { to: '/draft',      icon: FileCheck2,      label: 'Draft & Heatmap' },
-  { to: '/reviewer',   icon: UserCheck,       label: 'Reviewer Workspace', reviewerOnly: true },
-  { to: '/export',     icon: Download,        label: 'Export' },
+  { to: '/dashboard',            icon: LayoutDashboard, label: 'Dashboard' },
+  { to: '/intake',               icon: ClipboardList,   label: 'Intake Form' },
+  { to: '/compliance-checklist', icon: ListChecks,      label: 'Compliance Checklist' },
+  { to: '/gap-analysis',         icon: AlertTriangle,   label: 'Gap Analysis' },
+  { to: '/readiness',            icon: TrendingUp,      label: 'IPO Readiness' },
+  { to: '/draft',                icon: FileCheck2,      label: 'Draft Prospectus' },
+  { to: '/reviewer',             icon: UserCheck,       label: 'Reviewer Workspace', reviewerOnly: true },
+  { to: '/export',               icon: Download,        label: 'Export' },
 ];
 
 // ─── component ────────────────────────────────────────────────────────────────
@@ -308,7 +310,7 @@ export default function Layout({ children }) {
 
         <main className="flex-1 overflow-y-auto">
           <div className="p-4 sm:p-6 lg:p-8">{children}</div>
-          <ChatbotWidget />
+          <CopilotWidget />
         </main>
       </div>
     </div>
