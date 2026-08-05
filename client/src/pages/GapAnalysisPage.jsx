@@ -3,6 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { getCompanyStatus, getIntake, getDocuments, getDrafts } from '../services/api';
 import { SECTION_KEYS, computeChapterHealth } from '../components/ChapterHealthSidebar';
 import { stepQuestions, checkFieldAgainstDocuments, parseCitation } from '../data/intakeSchema';
+import { classifyCompany, getIpoProfile } from '../data/companyClassifier';
 import { 
   AlertTriangle, 
   AlertCircle, 
@@ -37,7 +38,7 @@ export default function GapAnalysisPage() {
   const chapterRefs = useRef({});
   const companyId = localStorage.getItem('ipo_company_id') || 'aarav-precision';
 
-  // Read URL search param for direct chapter focusing (e.g. ?chapter=business_overview)
+  // Read URL search param for direct chapter focusing
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     const sec = params.get('chapter') || params.get('section');
@@ -84,10 +85,14 @@ export default function GapAnalysisPage() {
     );
   }
 
+  // 1. Run AI Company Classification & Dynamic Profile Engine
+  const classification = classifyCompany({ name: stats?.companyName }, intakeData, documents);
+  const ipoProfile = getIpoProfile(classification);
+
   // Combine server gap report with client cross-document & AI validation rules
   const serverGaps = stats?.gapReport || [];
-  const allGaps = [...serverGaps];
-  const existingIds = new Set(allGaps.map(g => g.id || g.fieldName));
+  const rawGaps = [...serverGaps];
+  const existingIds = new Set(rawGaps.map(g => g.id || g.fieldName));
 
   Object.entries(SECTION_KEYS).forEach(([secKey, secLabel]) => {
     const intakeKey = secKey === 'risk_factors' ? 'risk_information' : 
@@ -102,13 +107,13 @@ export default function GapAnalysisPage() {
       if (val !== undefined && val !== null && String(val).trim() !== '') {
         const issue = checkFieldAgainstDocuments(intakeKey, q.name, val, documents);
         if (issue && !existingIds.has(`${intakeKey}.${q.name}`)) {
-          allGaps.push({
+          rawGaps.push({
             id: `dyn-mismatch-${intakeKey}-${q.name}`,
             severity: 'high',
             category: 'consistency',
             fieldName: `${intakeKey}.${q.name}`,
             message: `Discrepancy in ${q.label}: Intake states "${issue.enteredDisplay}", but document (${issue.docName}) records "${issue.docDisplay}".`,
-            explanation: `Cross-document mismatch detected between promoter intake input and statutory PDF extraction. SEBI regulations require strict consistency before DRHP submission.`,
+            explanation: `Cross-document mismatch detected between promoter intake input and statutory PDF extraction for ${classification.businessCategory}. SEBI regulations require strict consistency before DRHP submission.`,
             recommendation: `Verify the true value with legal counsel and update either the intake field or replace the uploaded document.`,
             intakeValue: issue.enteredDisplay,
             docValue: issue.docDisplay,
@@ -122,8 +127,16 @@ export default function GapAnalysisPage() {
     });
   });
 
-  // Ensure every gap has rich AI explanation, recommendation, and confidence
-  const enrichedGaps = allGaps.map(g => {
+  // Filter out any gap items that are exempted for this company's industry profile
+  const validGaps = rawGaps.filter(g => {
+    const fn = g.fieldName || '';
+    const fieldShortName = fn.split('.')[1] || fn;
+    if (ipoProfile.exemptedFields?.[fieldShortName]) return false;
+    return true;
+  });
+
+  // Enrich remaining valid gaps with AI explanations and recommendations
+  const enrichedGaps = validGaps.map(g => {
     const fn = g.fieldName || '';
     const parts = fn.split('.');
     const intakeKey = parts[0] || 'general';
@@ -141,8 +154,8 @@ export default function GapAnalysisPage() {
       confidence: g.confidence || (g.severity === 'high' ? 'high' : 'medium'),
       explanation: g.explanation || (
         g.category === 'consistency' 
-          ? `Cross-document validation mismatch between intake data and verified source document.` 
-          : `Mandatory SEBI ICDR disclosure item is missing or incomplete.`
+          ? `Cross-document validation mismatch between promoter intake data and verified source document for ${classification.businessCategory}.` 
+          : `Mandatory SEBI ICDR disclosure item for ${classification.businessCategory} is missing or incomplete.`
       ),
       recommendation: g.recommendation || (
         g.category === 'consistency'
@@ -199,46 +212,53 @@ export default function GapAnalysisPage() {
   return (
     <div className="space-y-6 animate-fade-in">
       
-      {/* Top Banner Card */}
-      <div className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col lg:flex-row lg:items-center justify-between gap-6">
-        <div className="space-y-1.5">
-          <div className="flex items-center gap-2.5">
-            <div className="w-10 h-10 rounded-xl bg-amber-50 flex items-center justify-center text-amber-600 border border-amber-100">
-              <ShieldAlert className="w-5 h-5" />
+      {/* Top Banner Card with AI Classification */}
+      <div className="bg-gradient-to-br from-slate-900 via-navy-900 to-indigo-950 text-white p-6 rounded-2xl shadow-xl border border-slate-800 space-y-4">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+          <div className="space-y-1.5">
+            <div className="flex items-center gap-2.5">
+              <div className="w-10 h-10 rounded-xl bg-amber-500/20 border border-amber-400/30 flex items-center justify-center text-amber-300">
+                <ShieldAlert className="w-5 h-5" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-[10px] font-mono uppercase tracking-wider bg-amber-500/30 text-amber-200 px-2 py-0.5 rounded-full border border-amber-400/30 font-bold">
+                    AI Industry Gap Analysis
+                  </span>
+                  <h2 className="text-xl font-bold text-white">{classification.businessCategory}</h2>
+                </div>
+                <p className="text-slate-300 text-xs mt-0.5">
+                  AI Due Diligence tailored to <strong className="text-amber-300">{classification.operationalType}</strong> operations and <strong className="text-amber-300">{classification.businessModel}</strong> requirements
+                </p>
+              </div>
             </div>
-            <div>
-              <h2 className="text-2xl font-bold text-slate-900">Gap Analysis</h2>
-              <p className="text-slate-500 text-xs mt-0.5">
-                Global AI Due Diligence dashboard displaying cross-document mismatches, disclosure gaps, and validation flags across all 11 chapters
-              </p>
+          </div>
+
+          {/* Global Summary Pills & Next Action */}
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="bg-white/10 p-3 rounded-2xl border border-white/10 text-center min-w-[110px]">
+              <span className="text-[10px] text-red-300 font-mono font-bold uppercase block">High Severity</span>
+              <span className="text-2xl font-extrabold text-red-400">
+                {enrichedGaps.filter(g => g.severity === 'high').length}
+              </span>
             </div>
-          </div>
-        </div>
 
-        {/* Global Summary Pills & Next Action */}
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="bg-red-50 p-3 rounded-2xl border border-red-200/70 text-center min-w-[110px]">
-            <span className="text-[10px] text-red-800 font-mono font-bold uppercase block">High Severity</span>
-            <span className="text-xl font-extrabold text-red-700">
-              {enrichedGaps.filter(g => g.severity === 'high').length}
-            </span>
-          </div>
+            <div className="bg-white/10 p-3 rounded-2xl border border-white/10 text-center min-w-[110px]">
+              <span className="text-[10px] text-amber-300 font-mono font-bold uppercase block">Medium Severity</span>
+              <span className="text-2xl font-extrabold text-amber-300">
+                {enrichedGaps.filter(g => g.severity === 'medium').length}
+              </span>
+            </div>
 
-          <div className="bg-amber-50 p-3 rounded-2xl border border-amber-200/70 text-center min-w-[110px]">
-            <span className="text-[10px] text-amber-800 font-mono font-bold uppercase block">Medium Severity</span>
-            <span className="text-xl font-extrabold text-amber-700">
-              {enrichedGaps.filter(g => g.severity === 'medium').length}
-            </span>
+            <button
+              type="button"
+              onClick={() => navigate('/readiness')}
+              className="btn-primary text-xs font-bold py-3 px-4 rounded-xl shadow-indigo-600/10 flex items-center gap-1.5 shrink-0"
+            >
+              <span>Proceed to IPO Readiness</span>
+              <ArrowRight className="w-4 h-4" />
+            </button>
           </div>
-
-          <button
-            type="button"
-            onClick={() => navigate('/readiness')}
-            className="btn-primary text-xs font-bold py-3 px-4 rounded-xl shadow-indigo-600/10 flex items-center gap-1.5 shrink-0"
-          >
-            <span>Proceed to IPO Readiness</span>
-            <ArrowRight className="w-4 h-4" />
-          </button>
         </div>
       </div>
 
@@ -360,9 +380,9 @@ export default function GapAnalysisPage() {
             <div className="w-12 h-12 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center mx-auto">
               <CheckCircle2 className="w-6 h-6" />
             </div>
-            <h3 className="text-base font-bold text-slate-800">Zero Due Diligence Gaps Detected</h3>
+            <h3 className="text-base font-bold text-slate-800">Zero Industry Due Diligence Gaps</h3>
             <p className="text-xs text-slate-500 max-w-md mx-auto">
-              All entered intake values match source documents cleanly across the selected gap section.
+              All entered intake values match source documents cleanly for {classification.businessCategory}.
             </p>
           </div>
         ) : (
@@ -422,7 +442,11 @@ export default function GapAnalysisPage() {
                       {/* Description & AI Explanation */}
                       <div className="space-y-1.5">
                         <h4 className="text-sm font-bold text-slate-900 leading-snug">{item.message}</h4>
-                        <p className="text-xs text-slate-600 leading-relaxed font-sans">{item.explanation}</p>
+                        <div className="p-3 bg-slate-50 border border-slate-200/60 rounded-xl space-y-1">
+                          <p className="text-xs text-slate-700 leading-relaxed font-sans">
+                            <strong className="text-indigo-700">AI Explanation:</strong> {item.explanation}
+                          </p>
+                        </div>
                       </div>
 
                       {/* Source Evidence Grid */}
@@ -443,7 +467,7 @@ export default function GapAnalysisPage() {
                       <div className="pt-2 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                         <div className="flex items-center gap-1.5 text-xs text-slate-600">
                           <Sparkles className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
-                          <span className="italic text-[11px]"><strong className="text-slate-700 not-italic font-bold">Recommendation:</strong> {item.recommendation}</span>
+                          <span className="italic text-[11px]"><strong className="text-slate-700 not-italic font-bold">Industry Recommendation:</strong> {item.recommendation}</span>
                         </div>
 
                         <button

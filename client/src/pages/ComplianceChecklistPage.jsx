@@ -3,6 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { getIntake, getDocuments, getIpoReadiness, getDrafts } from '../services/api';
 import { SECTION_KEYS, computeChapterHealth, getIntakeForSection } from '../components/ChapterHealthSidebar';
 import { stepQuestions, requiredQuestions, SECTION_UPLOADS } from '../data/intakeSchema';
+import { classifyCompany, getIpoProfile } from '../data/companyClassifier';
 import StatusBadge from '../components/StatusBadge';
 import { 
   ListChecks, 
@@ -17,7 +18,12 @@ import {
   Check,
   FileCheck2,
   Layers,
-  ChevronRight
+  ChevronRight,
+  Sparkles,
+  ShieldCheck,
+  Building2,
+  Info,
+  MinusCircle
 } from 'lucide-react';
 
 export default function ComplianceChecklistPage() {
@@ -30,13 +36,13 @@ export default function ComplianceChecklistPage() {
   const [drafts, setDrafts] = useState({});
 
   // Interactive filters & chapter section selection
-  const [activeFilter, setActiveFilter] = useState('all'); // 'all', 'missing_only', 'docs_only', 'fields_only', 'critical_only'
+  const [activeFilter, setActiveFilter] = useState('all'); // 'all', 'missing_only', 'docs_only', 'fields_only', 'critical_only', 'not_applicable'
   const [selectedChapter, setSelectedChapter] = useState('all'); // 'all' or specific secKey
 
   const chapterRefs = useRef({});
   const companyId = localStorage.getItem('ipo_company_id') || 'aarav-precision';
 
-  // Read URL search param for direct chapter focusing (e.g. ?chapter=business_overview)
+  // Read URL search param for direct chapter focusing
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     const sec = params.get('chapter') || params.get('section');
@@ -82,9 +88,13 @@ export default function ComplianceChecklistPage() {
     );
   }
 
+  // 1. Run AI Company Classification & Dynamic IPO Profile Engine
+  const classification = classifyCompany({ name: readiness?.companyName }, intakeData, documents);
+  const ipoProfile = getIpoProfile(classification);
+
   const uploadedDocTypes = new Set((documents || []).map(d => d.doc_type));
 
-  // Build complete chapter-by-chapter compliance matrix for all 11 chapters
+  // Build complete chapter-by-chapter dynamic compliance matrix
   let grandTotalRequiredFields = 0;
   let grandTotalCompletedFields = 0;
   let grandTotalRequiredDocs = 0;
@@ -105,8 +115,21 @@ export default function ComplianceChecklistPage() {
     const reqQs = requiredQuestions(intakeKey, secIntake);
     const completedFields = [];
     const missingFields = [];
+    const exemptedFields = [];
 
     reqQs.forEach(q => {
+      // Check if field is exempted for this industry
+      const exemptionReason = ipoProfile.exemptedFields?.[q.name];
+      if (exemptionReason) {
+        exemptedFields.push({
+          id: `exempt-field-${q.name}`,
+          label: q.label,
+          reason: exemptionReason,
+          type: 'field'
+        });
+        return;
+      }
+
       const val = secIntake[q.name];
       const hasVal = val !== undefined && val !== null && String(val).trim() !== '';
       if (hasVal) {
@@ -133,8 +156,21 @@ export default function ComplianceChecklistPage() {
     // Required documents breakdown
     const uploadedDocsList = [];
     const missingDocsList = [];
+    const exemptedDocsList = [];
 
     requiredUploads.forEach(slot => {
+      // Check if doc upload is exempted for this industry
+      const exemptObj = ipoProfile.exemptedUploads?.find(e => e.docType === slot.docType);
+      if (exemptObj) {
+        exemptedDocsList.push({
+          id: `exempt-doc-${slot.key}`,
+          label: slot.label,
+          reason: exemptObj.reason,
+          type: 'document'
+        });
+        return;
+      }
+
       const doc = documents.find(d => d.doc_type === slot.docType);
       if (doc) {
         uploadedDocsList.push({
@@ -154,9 +190,9 @@ export default function ComplianceChecklistPage() {
       }
     });
 
-    grandTotalRequiredFields += reqQs.length;
+    grandTotalRequiredFields += (completedFields.length + missingFields.length);
     grandTotalCompletedFields += completedFields.length;
-    grandTotalRequiredDocs += requiredUploads.length;
+    grandTotalRequiredDocs += (uploadedDocsList.length + missingDocsList.length);
     grandTotalUploadedDocs += uploadedDocsList.length;
 
     return {
@@ -170,9 +206,11 @@ export default function ComplianceChecklistPage() {
       reqQs,
       completedFields,
       missingFields,
+      exemptedFields,
       requiredUploads,
       uploadedDocsList,
-      missingDocsList
+      missingDocsList,
+      exemptedDocsList
     };
   });
 
@@ -186,6 +224,9 @@ export default function ComplianceChecklistPage() {
     }
     if (activeFilter === 'critical_only') {
       return ch.health.criticalCount > 0 || ch.health.completionScore < 50;
+    }
+    if (activeFilter === 'not_applicable') {
+      return ch.exemptedFields.length > 0 || ch.exemptedDocsList.length > 0;
     }
     return true;
   });
@@ -205,47 +246,56 @@ export default function ComplianceChecklistPage() {
   return (
     <div className="space-y-6 animate-fade-in">
       
-      {/* Top Compliance Master Header Banner */}
-      <div className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col lg:flex-row lg:items-center justify-between gap-6">
-        <div className="space-y-1.5">
-          <div className="flex items-center gap-2.5">
-            <div className="w-10 h-10 rounded-xl bg-indigo-50 flex items-center justify-center text-indigo-600 border border-indigo-100">
-              <ListChecks className="w-5 h-5" />
+      {/* Top Banner: AI Company Classification & Dynamic IPO Profile Summary */}
+      <div className="bg-gradient-to-br from-slate-900 via-navy-900 to-indigo-950 text-white p-6 rounded-2xl shadow-xl border border-slate-800 space-y-4">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-white/10 pb-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-indigo-500/20 border border-indigo-400/30 flex items-center justify-center text-indigo-300">
+              <Sparkles className="w-5 h-5 animate-pulse-slow" />
             </div>
             <div>
-              <h2 className="text-2xl font-bold text-slate-900">Compliance Checklist</h2>
-              <p className="text-slate-500 text-xs mt-0.5">
-                Single source of truth for all 11 DRHP chapter compliance sections, required fields, statutory uploads, and AI verification status
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-[10px] font-mono uppercase tracking-wider bg-indigo-500/30 text-indigo-200 px-2 py-0.5 rounded-full border border-indigo-400/30 font-bold">
+                  AI Classified Profile
+                </span>
+                <h2 className="text-xl font-bold text-white">{classification.businessCategory}</h2>
+              </div>
+              <p className="text-slate-300 text-xs mt-0.5">
+                Model: <strong className="text-indigo-300">{classification.businessModel}</strong> • Type: <strong className="text-indigo-300">{classification.operationalType}</strong> • Asset: <strong className="text-indigo-300">{classification.assetType}</strong>
               </p>
             </div>
           </div>
+
+          <div className="flex items-center gap-3">
+            <div className="bg-white/10 p-3 rounded-xl border border-white/10 text-center min-w-[120px]">
+              <span className="text-[10px] text-slate-300 font-mono font-bold uppercase block">Compliance Score</span>
+              <span className="text-2xl font-extrabold text-emerald-400">{overallCompliancePct}%</span>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => navigate('/gap-analysis')}
+              className="btn-primary text-xs font-bold py-3 px-4 rounded-xl shadow-indigo-600/10 flex items-center gap-1.5 shrink-0"
+            >
+              <span>Proceed to Gap Analysis</span>
+              <ArrowRight className="w-4 h-4" />
+            </button>
+          </div>
         </div>
 
-        {/* Global Compliance KPI Summary Pills & Next Action */}
-        <div className="flex flex-wrap items-center gap-3 self-start lg:self-auto">
-          <div className="bg-slate-50 p-3 rounded-2xl border border-slate-200/70 text-center min-w-[110px]">
-            <span className="text-[10px] text-slate-400 font-mono font-bold uppercase block">Overall Score</span>
-            <span className="text-xl font-extrabold text-indigo-600">{overallCompliancePct}%</span>
+        {/* AI Classification Explanation Callout */}
+        <div className="bg-white/5 border border-white/10 p-3.5 rounded-xl text-xs space-y-1">
+          <p className="text-slate-300 leading-relaxed">
+            <strong className="text-indigo-300">AI Classification Explanation:</strong> {classification.aiExplanation}
+          </p>
+          <div className="flex flex-wrap items-center gap-2 pt-1">
+            <span className="text-[10px] text-slate-400 font-mono font-bold uppercase">Regulatory Authorities:</span>
+            {classification.regulatoryAuthorities.map((auth, idx) => (
+              <span key={idx} className="text-[10px] bg-white/10 text-white font-mono px-2 py-0.5 rounded border border-white/10">
+                {auth}
+              </span>
+            ))}
           </div>
-
-          <div className="bg-emerald-50/60 p-3 rounded-2xl border border-emerald-200/70 text-center min-w-[120px]">
-            <span className="text-[10px] text-emerald-800 font-mono font-bold uppercase block">Fields Verified</span>
-            <span className="text-base font-bold text-emerald-700">{grandTotalCompletedFields} / {grandTotalRequiredFields}</span>
-          </div>
-
-          <div className="bg-indigo-50/60 p-3 rounded-2xl border border-indigo-200/70 text-center min-w-[120px]">
-            <span className="text-[10px] text-indigo-800 font-mono font-bold uppercase block">Docs Uploaded</span>
-            <span className="text-base font-bold text-indigo-700">{grandTotalUploadedDocs} / {grandTotalRequiredDocs}</span>
-          </div>
-
-          <button
-            type="button"
-            onClick={() => navigate('/gap-analysis')}
-            className="btn-primary text-xs font-bold py-3 px-4 rounded-xl shadow-indigo-600/10 flex items-center gap-1.5 shrink-0"
-          >
-            <span>Proceed to Gap Analysis</span>
-            <ArrowRight className="w-4 h-4" />
-          </button>
         </div>
       </div>
 
@@ -254,7 +304,7 @@ export default function ComplianceChecklistPage() {
         <div className="flex items-center justify-between px-2">
           <span className="text-xs font-bold text-slate-400 uppercase tracking-wider font-mono flex items-center gap-1.5">
             <Layers className="w-3.5 h-3.5 text-indigo-600" />
-            Chapter Subsections (In-Page Navigation):
+            Dynamic Chapter Subsections (In-Page Navigation):
           </span>
           {selectedChapter !== 'all' && (
             <button
@@ -330,6 +380,16 @@ export default function ComplianceChecklistPage() {
 
           <button
             type="button"
+            onClick={() => setActiveFilter('not_applicable')}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
+              activeFilter === 'not_applicable' ? 'bg-slate-600 text-white shadow-sm' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+            }`}
+          >
+            Not Applicable (Exempted)
+          </button>
+
+          <button
+            type="button"
             onClick={() => setActiveFilter('docs_only')}
             className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
               activeFilter === 'docs_only' ? 'bg-indigo-600 text-white shadow-sm' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
@@ -347,16 +407,6 @@ export default function ComplianceChecklistPage() {
           >
             Fields Only
           </button>
-
-          <button
-            type="button"
-            onClick={() => setActiveFilter('critical_only')}
-            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
-              activeFilter === 'critical_only' ? 'bg-red-600 text-white shadow-sm' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-            }`}
-          >
-            Critical Only
-          </button>
         </div>
 
         <span className="text-xs font-mono font-bold text-slate-400">
@@ -364,7 +414,7 @@ export default function ComplianceChecklistPage() {
         </span>
       </div>
 
-      {/* Chapters Compliance Sections List */}
+      {/* Dynamic Chapters Compliance Sections List */}
       <div className="space-y-6">
         {filteredChapters.map((ch) => {
           const showDocs = activeFilter !== 'fields_only';
@@ -417,15 +467,17 @@ export default function ComplianceChecklistPage() {
                     <div className="flex items-center justify-between border-b border-slate-200/60 pb-2">
                       <span className="font-bold text-slate-800 text-xs uppercase tracking-wider font-mono flex items-center gap-1.5">
                         <FileText className="w-4 h-4 text-indigo-600" />
-                        Required Fields ({ch.completedFields.length} / {ch.reqQs.length})
+                        Required Fields ({ch.completedFields.length} / {ch.completedFields.length + ch.missingFields.length})
                       </span>
                       <span className="text-[11px] font-bold text-emerald-700">
-                        {ch.reqQs.length > 0 ? Math.round((ch.completedFields.length / ch.reqQs.length) * 100) : 100}%
+                        {ch.completedFields.length + ch.missingFields.length > 0 
+                          ? Math.round((ch.completedFields.length / (ch.completedFields.length + ch.missingFields.length)) * 100) 
+                          : 100}%
                       </span>
                     </div>
 
                     {/* Completed Fields */}
-                    {ch.completedFields.length > 0 && activeFilter !== 'missing_only' && (
+                    {ch.completedFields.length > 0 && activeFilter !== 'missing_only' && activeFilter !== 'not_applicable' && (
                       <div className="space-y-1.5">
                         <span className="text-[10px] font-bold text-emerald-800 uppercase block">Completed Fields ({ch.completedFields.length})</span>
                         <div className="space-y-1 max-h-40 overflow-y-auto pr-1">
@@ -442,7 +494,7 @@ export default function ComplianceChecklistPage() {
                     )}
 
                     {/* Missing Fields */}
-                    {ch.missingFields.length > 0 && (
+                    {ch.missingFields.length > 0 && activeFilter !== 'not_applicable' && (
                       <div className="space-y-1.5">
                         <span className="text-[10px] font-bold text-amber-800 uppercase block">Missing Fields ({ch.missingFields.length})</span>
                         <div className="space-y-1 max-h-40 overflow-y-auto pr-1">
@@ -463,7 +515,27 @@ export default function ComplianceChecklistPage() {
                       </div>
                     )}
 
-                    {ch.missingFields.length === 0 && (
+                    {/* Exempted / Not Applicable Fields */}
+                    {ch.exemptedFields.length > 0 && activeFilter !== 'missing_only' && (
+                      <div className="space-y-1.5 pt-1">
+                        <span className="text-[10px] font-bold text-slate-500 uppercase block">Not Applicable / Exempted ({ch.exemptedFields.length})</span>
+                        <div className="space-y-1.5 max-h-40 overflow-y-auto pr-1">
+                          {ch.exemptedFields.map(f => (
+                            <div key={f.id} className="p-2.5 bg-slate-100/70 border border-slate-200/80 rounded-lg space-y-1">
+                              <div className="flex items-center justify-between">
+                                <span className="font-bold text-slate-700 text-[11px]">{f.label}</span>
+                                <span className="text-[9px] font-bold uppercase px-2 py-0.5 rounded bg-slate-200 text-slate-700 font-mono">
+                                  Not Applicable
+                                </span>
+                              </div>
+                              <p className="text-[10px] text-slate-500 italic">{f.reason}</p>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {ch.missingFields.length === 0 && ch.exemptedFields.length === 0 && (
                       <p className="text-[11px] text-emerald-700 font-semibold flex items-center gap-1">
                         <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" /> All required intake fields completed.
                       </p>
@@ -477,15 +549,17 @@ export default function ComplianceChecklistPage() {
                     <div className="flex items-center justify-between border-b border-slate-200/60 pb-2">
                       <span className="font-bold text-slate-800 text-xs uppercase tracking-wider font-mono flex items-center gap-1.5">
                         <FileCheck2 className="w-4 h-4 text-indigo-600" />
-                        Statutory Documents ({ch.uploadedDocsList.length} / {ch.requiredUploads.length})
+                        Statutory Documents ({ch.uploadedDocsList.length} / {ch.uploadedDocsList.length + ch.missingDocsList.length})
                       </span>
                       <span className="text-[11px] font-bold text-indigo-700">
-                        {ch.requiredUploads.length > 0 ? Math.round((ch.uploadedDocsList.length / ch.requiredUploads.length) * 100) : 100}%
+                        {ch.uploadedDocsList.length + ch.missingDocsList.length > 0 
+                          ? Math.round((ch.uploadedDocsList.length / (ch.uploadedDocsList.length + ch.missingDocsList.length)) * 100) 
+                          : 100}%
                       </span>
                     </div>
 
                     {/* Uploaded Documents */}
-                    {ch.uploadedDocsList.length > 0 && activeFilter !== 'missing_only' && (
+                    {ch.uploadedDocsList.length > 0 && activeFilter !== 'missing_only' && activeFilter !== 'not_applicable' && (
                       <div className="space-y-1.5">
                         <span className="text-[10px] font-bold text-indigo-800 uppercase block">Uploaded & Verified ({ch.uploadedDocsList.length})</span>
                         <div className="space-y-1 max-h-40 overflow-y-auto pr-1">
@@ -500,7 +574,7 @@ export default function ComplianceChecklistPage() {
                     )}
 
                     {/* Missing Documents */}
-                    {ch.missingDocsList.length > 0 && (
+                    {ch.missingDocsList.length > 0 && activeFilter !== 'not_applicable' && (
                       <div className="space-y-1.5">
                         <span className="text-[10px] font-bold text-amber-800 uppercase block">Missing Documents ({ch.missingDocsList.length})</span>
                         <div className="space-y-1 max-h-40 overflow-y-auto pr-1">
@@ -521,7 +595,27 @@ export default function ComplianceChecklistPage() {
                       </div>
                     )}
 
-                    {ch.missingDocsList.length === 0 && ch.requiredUploads.length > 0 && (
+                    {/* Exempted / Not Applicable Documents */}
+                    {ch.exemptedDocsList.length > 0 && activeFilter !== 'missing_only' && (
+                      <div className="space-y-1.5 pt-1">
+                        <span className="text-[10px] font-bold text-slate-500 uppercase block">Not Applicable / Exempted ({ch.exemptedDocsList.length})</span>
+                        <div className="space-y-1.5 max-h-40 overflow-y-auto pr-1">
+                          {ch.exemptedDocsList.map(d => (
+                            <div key={d.id} className="p-2.5 bg-slate-100/70 border border-slate-200/80 rounded-lg space-y-1">
+                              <div className="flex items-center justify-between">
+                                <span className="font-bold text-slate-700 text-[11px]">{d.label}</span>
+                                <span className="text-[9px] font-bold uppercase px-2 py-0.5 rounded bg-slate-200 text-slate-700 font-mono">
+                                  Not Applicable
+                                </span>
+                              </div>
+                              <p className="text-[10px] text-slate-500 italic">{d.reason}</p>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {ch.missingDocsList.length === 0 && ch.exemptedDocsList.length === 0 && ch.requiredUploads.length > 0 && (
                       <p className="text-[11px] text-emerald-700 font-semibold flex items-center gap-1">
                         <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" /> All statutory document uploads verified.
                       </p>

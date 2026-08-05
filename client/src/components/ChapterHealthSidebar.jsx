@@ -155,7 +155,7 @@ export default function ChapterHealthSidebar({
   return (
     <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm space-y-3 relative">
       <div className="flex items-center justify-between px-2 mb-2 pb-2 border-b border-slate-100">
-        <h3 className="font-bold text-slate-800 text-xs uppercase tracking-wider flex items-center gap-1.5">
+        <h3 className="font-bold text-slate-800 text-xs uppercase tracking-wider flex items-center gap-1.5 font-mono">
           <Sparkles className="w-3.5 h-3.5 text-indigo-600" />
           <span>Chapters & Health</span>
         </h3>
@@ -232,7 +232,7 @@ export default function ChapterHealthSidebar({
 
       {/* Legend */}
       <div className="pt-3 border-t border-slate-100 text-[10px] text-slate-400 space-y-1.5">
-        <p className="font-bold uppercase text-slate-500 tracking-wider">Status Indicators</p>
+        <p className="font-bold uppercase text-slate-500 tracking-wider font-mono">Status Indicators</p>
         <div className="grid grid-cols-2 gap-x-2 gap-y-1 text-[10px] text-slate-600 font-medium">
           <div className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-emerald-500" /> Healthy</div>
           <div className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-yellow-500" /> Needs Review</div>

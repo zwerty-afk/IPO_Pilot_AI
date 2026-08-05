@@ -11,6 +11,7 @@ import {
   ShieldAlert,
   BookOpen
 } from 'lucide-react';
+import { getIndustryProfile } from './industryProfiles';
 
 export const steps = [
   { key: 'company_details', label: 'Company Details', icon: Building },
@@ -36,7 +37,14 @@ export const stepQuestions = {
     { name: 'website', label: 'Company Website', type: 'text', placeholder: 'https://...', why: 'Public information portal for prospective investors.', example: 'https://www.aaravprecision.com', optional: true },
     { name: 'email', label: 'Corporate Email', type: 'text', placeholder: 'contact@...', why: 'Official correspondence contact.', example: 'contact@aaravprecision.com', optional: true },
     { name: 'phone', label: 'Contact Phone Number', type: 'text', placeholder: '+91...', why: 'Investor relations and secretarial contact line.', example: '+91 22 2845 9900', optional: true },
-    { name: 'industry_type', label: 'Industry Sector', type: 'text', placeholder: 'e.g., Precision Engineering', why: 'Directs exchange board sector classification.', example: 'Precision Engineering & Manufacturing' },
+    { name: 'industry_type', label: 'Industry Sector (Company Profile Engine)', type: 'select', options: [
+      { value: 'Manufacturing', label: 'Manufacturing & Precision Engineering' },
+      { value: 'Software', label: 'Software / IT Services / SaaS' },
+      { value: 'Pharmaceutical', label: 'Pharmaceutical & Lifesciences' },
+      { value: 'Food & Beverage', label: 'Food & Beverage / FMCG' },
+      { value: 'NBFC', label: 'NBFC / Financial Services' },
+      { value: 'Construction', label: 'Construction & Infrastructure' }
+    ], why: 'Master configuration driving dynamic IPO profile requirements.', example: 'Manufacturing' },
     { name: 'sub_industry', label: 'Sub-Industry / Niche', type: 'text', placeholder: 'e.g., CNC Automotive Components', why: 'Refines competitive positioning.', example: 'Automotive & Industrial Machine Parts', optional: true },
     { name: 'nic_code', label: 'NIC Code', type: 'text', placeholder: '5-digit NIC classification code', why: 'National Industrial Classification identifier.', example: '28112', optional: true },
     { name: 'company_type', label: 'Company Structure', type: 'text', placeholder: 'Private Limited / Public Limited', why: 'Determines conversion requirements prior to IPO.', example: 'Private Limited Company', optional: true },
@@ -55,15 +63,35 @@ export const stepQuestions = {
     { name: 'company_history', label: 'Business History / Company History', type: 'textarea', placeholder: 'Describe the inception, background, and evolution of the company...', why: 'SEBI requires historical evolution and milestones of the enterprise.', example: 'Incorporated in 2015 as a private limited company, starting with a single workshop in Dombivli.' },
     { name: 'vision', label: 'Vision', type: 'textarea', placeholder: 'Company long-term vision statement...', why: 'Establishes strategic orientation for prospective investors.', example: 'To become a globally recognized precision engineering solutions provider.' },
     { name: 'mission', label: 'Mission', type: 'textarea', placeholder: 'Company mission statement...', why: 'Outlines core operational purpose and corporate values.', example: 'Delivering zero-defect precision components with maximum efficiency and customer trust.' },
+    
+    // Manufacturing specific fields
     { name: 'manufacturing_plants', label: 'Manufacturing Plants / Production Locations', type: 'textarea', placeholder: 'Details of manufacturing units, land area, and locations...', why: 'Details physical infrastructure and plant footprint.', example: 'Unit 1: 15,000 sq ft facility at MIDC Dombivli East, Thane, Maharashtra.' },
     { name: 'installed_capacity', label: 'Installed Production Capacity', type: 'text', placeholder: 'e.g., 500,000 units per annum', why: 'SEBI ICDR mandatory capacity disclosure.', example: '500,000 units per annum across 20 CNC/VMC lines.' },
     { name: 'capacity_utilization_pct', label: 'Capacity Utilization (%)', type: 'number', placeholder: 'e.g., 78.5', why: 'Measures operational efficiency and expansion headroom.', example: '78.5' },
-    { name: 'distribution_network', label: 'Distribution Network', type: 'textarea', placeholder: 'Sales channels, logistics hubs, and distribution network details...', why: 'Explains go-to-market reach and logistics channel.', example: 'Direct B2B supply network with 3 regional logistics hubs in Maharashtra and Gujarat.' },
+    
+    // Software / Tech specific fields
+    { name: 'tech_stack', label: 'Technology Stack & Software Architecture', type: 'textarea', placeholder: 'Languages, frameworks, cloud infrastructure, databases...', why: 'Essential technical architecture disclosure for IT investors.', example: 'React, Node.js, Python, PostgreSQL hosted on AWS Multi-AZ infrastructure.' },
+    { name: 'ip_ownership', label: 'Software IP & Source Code Ownership', type: 'textarea', placeholder: 'Patents, copyright grants, source code ownership agreements...', why: 'Verifies proprietary software assets.', example: '100% proprietary source code ownership under registered IP assignments.' },
+    { name: 'cybersecurity_protocol', label: 'Cybersecurity & Data Privacy Architecture', type: 'textarea', placeholder: 'SOC2, CERT-In compliance, encryption standards, data backup...', why: 'Mandatory cloud platform security disclosure.', example: 'AES-256 encryption at rest, TLS 1.3 in transit, ISO 27001 & CERT-In audited.' },
+
+    // Food & Beverage specific fields
+    { name: 'fssai_details', label: 'FSSAI License & Food Safety Standards', type: 'textarea', placeholder: 'Central FSSAI license details, food safety protocols...', why: 'Mandatory statutory compliance for food processing.', example: 'Central FSSAI License # 10019022009412 valid through FY28.' },
+    { name: 'cold_storage_capacity', label: 'Cold Storage & Logistics Infrastructure', type: 'textarea', placeholder: 'Cold chain capacity, refrigerated transport details...', why: 'Details perishable supply chain footprint.', example: '2,500 MT temperature-controlled cold storage warehouse in Nashik.' },
+
+    // Pharma specific fields
+    { name: 'cdsco_details', label: 'CDSCO Drug Manufacturing License & GMP Status', type: 'textarea', placeholder: 'CDSCO registration, WHO-GMP certification details...', why: 'Regulatory drug approval disclosure.', example: 'CDSCO Formulation License # KD-491; WHO-GMP certified manufacturing unit.' },
+
+    // NBFC specific fields
+    { name: 'rbi_registration_no', label: 'RBI NBFC Registration Certificate Details', type: 'text', placeholder: 'RBI Certificate of Registration (CoR) number', why: 'Mandatory financial sector license.', example: 'RBI CoR # B-13.02194' },
+    { name: 'aum_portfolio_details', label: 'Assets Under Management (AUM) & Credit Portfolio', type: 'textarea', placeholder: 'Total AUM, average yield, portfolio breakdown...', why: 'Core financial asset metric.', example: 'Total AUM INR 1,250 Million across MSME business loans.' },
+
+    // Construction specific fields
+    { name: 'rera_registration_details', label: 'RERA Registrations & Land Approvals', type: 'textarea', placeholder: 'RERA project numbers, environmental clearances...', why: 'Mandatory real estate project compliance.', example: 'MahaRERA Reg # P51700029104 for Phase 1 Commercial Complex.' },
+
+    { name: 'distribution_network', label: 'Distribution Network / Sales Channels', type: 'textarea', placeholder: 'Sales channels, logistics hubs, and distribution network details...', why: 'Explains go-to-market reach and logistics channel.', example: 'Direct B2B supply network with 3 regional logistics hubs in Maharashtra and Gujarat.' },
     { name: 'export_countries', label: 'Export Markets / Countries Served', type: 'text', placeholder: 'Countries exported to...', why: 'Identifies international revenue exposure.', example: 'UAE, Germany, Vietnam', optional: true },
-    { name: 'key_certifications', label: 'Key Certifications (ISO, IATF, etc.)', type: 'textarea', placeholder: 'List ISO, IATF, AS9100, and statutory quality certifications...', why: 'Verifies quality standards and regulatory compliance.', example: 'ISO 9001:2015, IATF 16949:2016, and AS9100D Aerospace Certification.' },
-    { name: 'patents_ip', label: 'Patents / Intellectual Property', type: 'textarea', placeholder: 'Registered trademarks, patents, designs, or proprietary IP...', why: 'Documents proprietary technology assets.', example: '2 registered process patents for high-speed CNC fixture alignment; Trademark #3940192.' },
-    { name: 'research_development', label: 'Research & Development (R&D)', type: 'textarea', placeholder: 'R&D facilities, team size, spend, and ongoing innovation initiatives...', why: 'Demonstrates innovation focus and technical differentiation.', example: 'In-house R&D team of 6 design engineers equipped with CAD/CAM simulation tools.' },
-    { name: 'business_timeline', label: 'Business Timeline / Key Milestones', type: 'textarea', placeholder: 'Key corporate milestones with years...', why: 'Discloses historical achievements and growth trajectory.', example: '2015: Inception; 2018: ISO certification; 2021: First direct export to UAE; 2024: Expanded 5-axis VMC line.' },
+    { name: 'key_certifications', label: 'Key Certifications (ISO, IATF, CMMI, etc.)', type: 'textarea', placeholder: 'List ISO, IATF, CMMI, or statutory quality certifications...', why: 'Verifies quality standards and regulatory compliance.', example: 'ISO 9001:2015, IATF 16949:2016, and CMMI Level 3 Certification.' },
+    { name: 'business_timeline', label: 'Business Timeline / Key Milestones', type: 'textarea', placeholder: 'Key corporate milestones with years...', why: 'Discloses historical achievements and growth trajectory.', example: '2015: Inception; 2018: ISO certification; 2021: First direct export to UAE; 2024: Expanded facility.' },
     { name: 'sustainability_esg', label: 'Sustainability / ESG Initiatives', type: 'textarea', placeholder: 'Environmental compliance, waste recycling, renewable energy, ESG initiatives...', why: 'Highlight environmental and social governance commitments.' }
   ],
 
@@ -153,12 +181,80 @@ export const stepQuestions = {
   ]
 };
 
+// Returns adaptive questions for a step based on the loaded Industry Profile configuration
+export function getAdaptiveStepQuestions(stepKey, data = {}) {
+  const compDetails = data.company_details || data || {};
+  const profileConfig = getIndustryProfile(compDetails.industry_type);
+  const rawQs = stepQuestions[stepKey] || [];
+
+  return rawQs.filter(q => {
+    // If the field is explicitly exempted in the Industry Profile configuration, filter it out
+    if (profileConfig.exemptedFields && profileConfig.exemptedFields[q.name]) {
+      return false;
+    }
+    return true;
+  });
+}
+
+// Section document upload slot definitions
+export const SECTION_UPLOADS = {
+  company_details: [
+    { key: 'coi', name: 'coi', label: 'COI (Certificate of Incorporation)', docType: 'incorporation_certificate' },
+    { key: 'moa', name: 'moa', label: 'MOA (Memorandum of Association)', docType: 'moa_document' },
+    { key: 'aoa', name: 'aoa', label: 'AOA (Articles of Association)', docType: 'aoa_document' },
+    { key: 'pan', name: 'pan', label: 'Company PAN Certificate', docType: 'pan_certificate' },
+    { key: 'gst', name: 'gst_certificate', label: 'GST Registration Certificate', docType: 'gst_certificate' }
+  ],
+  business_overview: [
+    { key: 'factory_images', name: 'factory_images', label: 'Factory Images & Photographs', docType: 'factory_images' },
+    { key: 'plant_layout', name: 'plant_layout', label: 'Plant Layout & Blueprint', docType: 'plant_layout' },
+    { key: 'ip_assignment', name: 'ip_assignment', label: 'Software IP & Source Code Ownership Agreement', docType: 'ip_assignment' },
+    { key: 'privacy_policy', name: 'privacy_policy', label: 'Privacy Policy & Cybersecurity Audit', docType: 'privacy_policy' },
+    { key: 'fssai_license', name: 'fssai_license', label: 'FSSAI License Certificate', docType: 'fssai_license' },
+    { key: 'cdsco_license', name: 'cdsco_license', label: 'CDSCO Drug Manufacturing License', docType: 'cdsco_license' },
+    { key: 'certifications', name: 'certifications', label: 'Quality Certifications (ISO / CMMI)', docType: 'certifications' },
+    { key: 'brochure', name: 'brochure', label: 'Company Product Brochure', docType: 'company_brochure' }
+  ],
+  promoters: [
+    { key: 'din_proof', name: 'din_proof', label: 'DIN Proof / Identification', docType: 'din_proof' },
+    { key: 'promoter_pan', name: 'promoter_pan', label: 'Promoter & Director PAN Cards', docType: 'promoter_pan' },
+    { key: 'appointment_letters', name: 'appointment_letters', label: 'Appointment Letters', docType: 'appointment_letters' }
+  ],
+  capital_structure: [
+    { key: 'cap_table', name: 'cap_table', label: 'Certified Cap Table & Shareholding Register', docType: 'cap_table' }
+  ],
+  financials: [
+    { key: 'audited_financials', name: 'audited_financials', label: 'Audited Financial Statements (3 Years)', docType: 'audited_financials' },
+    { key: 'tax_audit', name: 'tax_audit', label: 'Tax Audit Report', docType: 'tax_audit_report' },
+    { key: 'annual_reports', name: 'annual_reports', label: 'Annual Reports', docType: 'annual_reports' }
+  ],
+  litigation: [
+    { key: 'court_orders', name: 'court_orders', label: 'Court Orders & Judicial Filings', docType: 'court_orders' },
+    { key: 'legal_opinions', name: 'legal_opinions', label: 'Legal Counsel Opinions & Advices', docType: 'legal_opinions' }
+  ]
+};
+
+// Returns adaptive document upload slots for a section based on the loaded Industry Profile configuration
+export function getAdaptiveSectionUploads(secKey, data = {}) {
+  const compDetails = data.company_details || data || {};
+  const profileConfig = getIndustryProfile(compDetails.industry_type);
+  const uploads = SECTION_UPLOADS[secKey] || [];
+
+  return uploads.filter(slot => {
+    // If the document type is explicitly exempted in the Industry Profile configuration, filter it out
+    if (profileConfig.exemptedDocs && profileConfig.exemptedDocs.some(e => e.docType === slot.docType)) {
+      return false;
+    }
+    return true;
+  });
+}
+
 // Fields that are optional (do not count against required completeness).
 const OPTIONAL_FIELDS = new Set([]);
 
-// Returns the required questions for a module given its current data (respects dependsOn).
+// Returns the required questions for a module given its current data (respects profile adaptability & dependsOn).
 export function requiredQuestions(stepKey, data = {}) {
-  const qs = stepQuestions[stepKey] || [];
+  const qs = getAdaptiveStepQuestions(stepKey, data);
   return qs.filter(
     (q) => !q.optional && !OPTIONAL_FIELDS.has(q.name) && (!q.dependsOn || data[q.dependsOn] === 'yes')
   );
@@ -297,38 +393,3 @@ export function parseCitation(citation) {
 
   return { stepKey: 'business_overview', fieldName };
 }
-
-// Section document upload slot definitions
-export const SECTION_UPLOADS = {
-  company_details: [
-    { key: 'coi', name: 'coi', label: 'COI (Certificate of Incorporation)', docType: 'incorporation_certificate' },
-    { key: 'moa', name: 'moa', label: 'MOA (Memorandum of Association)', docType: 'moa_document' },
-    { key: 'aoa', name: 'aoa', label: 'AOA (Articles of Association)', docType: 'aoa_document' },
-    { key: 'pan', name: 'pan', label: 'Company PAN Certificate', docType: 'pan_certificate' },
-    { key: 'gst', name: 'gst_certificate', label: 'GST Registration Certificate', docType: 'gst_certificate' }
-  ],
-  business_overview: [
-    { key: 'factory_images', name: 'factory_images', label: 'Factory Images & Photographs', docType: 'factory_images' },
-    { key: 'plant_layout', name: 'plant_layout', label: 'Plant Layout & Blueprint', docType: 'plant_layout' },
-    { key: 'certifications', name: 'certifications', label: 'Certifications (ISO / AS9100)', docType: 'certifications' },
-    { key: 'brochure', name: 'brochure', label: 'Company Product Brochure', docType: 'company_brochure' }
-  ],
-  promoters: [
-    { key: 'din_proof', name: 'din_proof', label: 'DIN Proof / Identification', docType: 'din_proof' },
-    { key: 'promoter_pan', name: 'promoter_pan', label: 'Promoter & Director PAN Cards', docType: 'promoter_pan' },
-    { key: 'appointment_letters', name: 'appointment_letters', label: 'Appointment Letters', docType: 'appointment_letters' }
-  ],
-  capital_structure: [
-    { key: 'cap_table', name: 'cap_table', label: 'Certified Cap Table & Shareholding Register', docType: 'cap_table' }
-  ],
-  financials: [
-    { key: 'audited_financials', name: 'audited_financials', label: 'Audited Financial Statements (3 Years)', docType: 'audited_financials' },
-    { key: 'tax_audit', name: 'tax_audit', label: 'Tax Audit Report', docType: 'tax_audit_report' },
-    { key: 'annual_reports', name: 'annual_reports', label: 'Annual Reports', docType: 'annual_reports' }
-  ],
-  litigation: [
-    { key: 'court_orders', name: 'court_orders', label: 'Court Orders & Judicial Filings', docType: 'court_orders' },
-    { key: 'legal_opinions', name: 'legal_opinions', label: 'Legal Counsel Opinions & Advices', docType: 'legal_opinions' }
-  ]
-};
-

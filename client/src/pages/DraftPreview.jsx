@@ -6,11 +6,11 @@ import { useAuth } from '../context/AuthContext';
 import ConfidenceBadge from '../components/ConfidenceBadge';
 import StatusBadge from '../components/StatusBadge';
 import ChapterHealthSidebar, { SECTION_KEYS } from '../components/ChapterHealthSidebar';
-import { 
-  FileText, 
-  RefreshCw, 
-  MessageSquare, 
-  Bookmark, 
+import {
+  FileText,
+  RefreshCw,
+  MessageSquare,
+  Bookmark,
   Send,
   CheckCircle,
   Loader2,
@@ -48,7 +48,7 @@ export default function DraftPreview() {
   const loadDraftData = async (refreshCommentsOnly = false) => {
     try {
       if (!refreshCommentsOnly) setLoading(true);
-      
+
       const draftRes = await getDrafts(companyId);
       setDrafts(draftRes.data || draftRes || {});
 
@@ -126,7 +126,7 @@ export default function DraftPreview() {
 
   return (
     <div className="grid grid-cols-1 xl:grid-cols-4 gap-6 animate-fade-in relative">
-      
+
       {/* Citation Details Modal Popup */}
       {citationModal && (
         <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
@@ -149,7 +149,7 @@ export default function DraftPreview() {
                 </div>
               </div>
             </div>
-            <button 
+            <button
               onClick={() => setCitationModal(null)}
               className="mt-6 w-full btn-secondary text-xs py-2 rounded-xl"
             >
@@ -172,7 +172,7 @@ export default function DraftPreview() {
 
       {/* Main Workspace (Center - Direct Synthesized DRHP Text Content) */}
       <div className="xl:col-span-2 space-y-4">
-        
+
         {/* Workspace Top Header Bar */}
         <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm flex items-center justify-between gap-3 flex-wrap">
           <div>
@@ -184,8 +184,8 @@ export default function DraftPreview() {
 
           <div className="flex items-center gap-2">
             <StatusBadge status={currentSection.status} />
-            <button 
-              onClick={handleRegenerate} 
+            <button
+              onClick={handleRegenerate}
               disabled={generating}
               className="p-2 text-slate-600 hover:text-indigo-600 bg-slate-50 hover:bg-slate-100 transition-all rounded-xl border border-slate-200 shadow-sm flex items-center gap-1 text-xs font-semibold"
               title="Re-run AI Synthesis"
@@ -206,7 +206,7 @@ export default function DraftPreview() {
 
         {/* Synthesized DRHP Text Content */}
         <div className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm min-h-[500px] flex flex-col justify-between relative overflow-hidden space-y-6">
-          
+
           {/* Watermark Overlay for Uncertified chapters */}
           {currentSection.status !== 'certified' && (
             <div className="absolute inset-0 pointer-events-none select-none flex items-center justify-center overflow-hidden opacity-[0.03] z-0">
@@ -224,16 +224,15 @@ export default function DraftPreview() {
                   const isLow = block.confidence === 'low';
                   const isMed = block.confidence === 'medium';
                   return (
-                    <div 
-                      key={block.id} 
-                      className={`p-4 rounded-xl border flex flex-col justify-between gap-3 transition-all ${
-                        isLow ? 'bg-red-50/30 border-l-4 border-l-red-500 border-red-200' : 
-                        isMed ? 'bg-amber-50/30 border-l-4 border-l-amber-500 border-amber-200' : 
-                        'bg-slate-50/50 border-l-4 border-l-indigo-500 border-slate-200/80'
-                      }`}
+                    <div
+                      key={block.id}
+                      className={`p-4 rounded-xl border flex flex-col justify-between gap-3 transition-all ${isLow ? 'bg-red-50/30 border-l-4 border-l-red-500 border-red-200' :
+                          isMed ? 'bg-amber-50/30 border-l-4 border-l-amber-500 border-amber-200' :
+                            'bg-slate-50/50 border-l-4 border-l-indigo-500 border-slate-200/80'
+                        }`}
                     >
                       <p className="text-slate-800 text-sm leading-relaxed whitespace-pre-line font-sans">{block.text}</p>
-                      
+
                       <div className="flex items-center justify-between pt-2 border-t border-black/5 text-[11px]">
                         <div className="flex flex-wrap items-center gap-1.5">
                           <span className="text-slate-400 font-semibold uppercase tracking-wider">Citations:</span>
@@ -292,15 +291,14 @@ export default function DraftPreview() {
             <div className="text-center py-8 text-slate-400 text-xs">No comments on this chapter.</div>
           ) : (
             comments.map((comm) => (
-              <div 
-                key={comm.id} 
-                className={`p-3 rounded-xl border space-y-2 text-xs ${
-                  comm.status === 'resolved' 
-                    ? 'bg-slate-50/50 border-slate-200 opacity-60' 
-                    : comm.type === 'clarification_requested' 
-                    ? 'bg-amber-50 border-amber-200' 
-                    : 'bg-indigo-50/50 border-indigo-100'
-                }`}
+              <div
+                key={comm.id}
+                className={`p-3 rounded-xl border space-y-2 text-xs ${comm.status === 'resolved'
+                    ? 'bg-slate-50/50 border-slate-200 opacity-60'
+                    : comm.type === 'clarification_requested'
+                      ? 'bg-amber-50 border-amber-200'
+                      : 'bg-indigo-50/50 border-indigo-100'
+                  }`}
               >
                 <div className="flex justify-between items-start">
                   <div>
@@ -308,7 +306,7 @@ export default function DraftPreview() {
                     <span className="text-[10px] text-slate-400 capitalize">{comm.role}</span>
                   </div>
                   {comm.status === 'active' ? (
-                    <button 
+                    <button
                       onClick={() => handleResolve(comm.id)}
                       className="text-[10px] font-bold text-emerald-600 hover:text-emerald-800 flex items-center gap-0.5 border border-emerald-200 hover:border-emerald-300 px-1.5 py-0.5 rounded bg-emerald-50/20 transition-all shrink-0"
                     >

@@ -14,7 +14,8 @@ import {
   getPrefillSuggestions,
   applyPrefill
 } from '../services/api';
-import { steps, stepQuestions, checkFieldAgainstDocuments, SECTION_UPLOADS, DOC_FIELD_MAP } from '../data/intakeSchema';
+import { steps, stepQuestions, checkFieldAgainstDocuments, SECTION_UPLOADS, DOC_FIELD_MAP, getAdaptiveStepQuestions, getAdaptiveSectionUploads } from '../data/intakeSchema';
+import { classifyCompany, getIpoProfile } from '../data/companyClassifier';
 import {
   HelpCircle,
   ArrowLeft,
@@ -920,7 +921,7 @@ export default function IntakeForm() {
     return '';
   };
 
-  const questions = stepQuestions[currentStep.key] || [];
+  const questions = getAdaptiveStepQuestions(currentStep.key, allIntake);
 
   const validateStep = () => {
     const nextErrors = {};
@@ -1071,6 +1072,32 @@ export default function IntakeForm() {
 
       {/* Questionnaire Body */}
       <div className="lg:col-span-3 space-y-6">
+        
+        {/* AI Company Intelligence Profile Banner */}
+        {(() => {
+          const classification = classifyCompany({ name: companyId }, allIntake, documents);
+          return (
+            <div className="p-4 bg-gradient-to-r from-slate-900 via-navy-900 to-indigo-950 text-white rounded-2xl shadow-md border border-slate-800 flex items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-indigo-500/20 border border-indigo-400/30 flex items-center justify-center text-indigo-300">
+                  <Sparkles className="w-4.5 h-4.5 animate-pulse-slow" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[9px] font-mono uppercase tracking-wider bg-indigo-500/30 text-indigo-200 px-2 py-0.5 rounded-full border border-indigo-400/30 font-bold">
+                      AI Adaptive Profile
+                    </span>
+                    <h4 className="text-sm font-bold text-white">{classification.businessCategory}</h4>
+                  </div>
+                  <p className="text-slate-300 text-[11px] mt-0.5">
+                    {classification.aiExplanation}
+                  </p>
+                </div>
+              </div>
+            </div>
+          );
+        })()}
+
         <div className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm">
           <div className="border-b border-slate-100 pb-4 mb-6">
             <div className="flex items-center justify-between">
@@ -1201,42 +1228,46 @@ export default function IntakeForm() {
           ) : (
             <form onSubmit={(e) => e.preventDefault()} className="space-y-6">
               {/* Section Uploads & Supporting Documents (Placed at the top of the intake section) */}
-              {SECTION_UPLOADS[currentStep.key] && (
-                <div className="mb-8 border-b border-slate-200/80 pb-6 space-y-4">
-                  <div>
-                    <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-2">
-                      <UploadCloud className="w-4 h-4 text-indigo-600" /> Section Uploads & Supporting Documents ({currentStep.label})
-                    </h3>
-                    <p className="text-[11px] text-slate-500 mt-0.5">
-                      Upload required documents for this section. Uploaded files are automatically processed via AI understanding and OCR.
-                    </p>
+              {(() => {
+                const sectionUploads = getAdaptiveSectionUploads(currentStep.key, allIntake);
+                if (!sectionUploads.length) return null;
+                return (
+                  <div className="mb-8 border-b border-slate-200/80 pb-6 space-y-4">
+                    <div>
+                      <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-2">
+                        <UploadCloud className="w-4 h-4 text-indigo-600" /> Section Uploads & Supporting Documents ({currentStep.label})
+                      </h3>
+                      <p className="text-[11px] text-slate-500 mt-0.5">
+                        Upload required documents for this section. Uploaded files are automatically processed via AI understanding and OCR.
+                      </p>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {sectionUploads.map((slot) => (
+                        <DocumentUploadSlot
+                          key={slot.docType}
+                          slot={slot}
+                          companyId={companyId}
+                          documents={documents}
+                          setDocuments={setDocuments}
+                          formData={formData}
+                          currentStepKey={currentStep.key}
+                          allIntake={allIntake}
+                          onUploadSuccess={async () => {
+                            try {
+                              const res = await getDocuments(companyId);
+                              setDocuments(res.data || res || []);
+                              await loadPrefill();
+                              await loadAllIntake();
+                            } catch (e) {
+                              console.error(e);
+                            }
+                          }}
+                        />
+                      ))}
+                    </div>
                   </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {SECTION_UPLOADS[currentStep.key].map((slot) => (
-                      <DocumentUploadSlot
-                        key={slot.docType}
-                        slot={slot}
-                        companyId={companyId}
-                        documents={documents}
-                        setDocuments={setDocuments}
-                        formData={formData}
-                        currentStepKey={currentStep.key}
-                        allIntake={allIntake}
-                        onUploadSuccess={async () => {
-                          try {
-                            const res = await getDocuments(companyId);
-                            setDocuments(res.data || res || []);
-                            await loadPrefill();
-                            await loadAllIntake();
-                          } catch (e) {
-                            console.error(e);
-                          }
-                        }}
-                      />
-                    ))}
-                  </div>
-                </div>
-              )}
+                );
+              })()}
 
               {questions.map((q) => {
                 const isRequired = !q.optional && (!q.dependsOn || formData[q.dependsOn] === 'yes');
