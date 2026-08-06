@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { BookOpen, ChevronDown, ChevronRight, AlertCircle } from 'lucide-react';
+import React from 'react';
+import { ChevronDown, ChevronRight, Check } from 'lucide-react';
 import { DRHP_HIERARCHY } from '../data/sebiDrhpSchema';
 
 export const SECTION_KEYS = {
@@ -42,6 +42,20 @@ export function computeChapterHealth(key, drafts = {}, intakeData = {}, document
     return { statusKey: 'not_started', statusLabel: 'Not Started', score: 0, confidenceScore: 0, evidenceScore: 0, criticalCount: 0, warningCount: 0, missingDocs: [] };
   }
   return { statusKey: 'healthy', statusLabel: 'Healthy', score: 85, confidenceScore: 90, evidenceScore: 80, criticalCount: 0, warningCount: 0, missingDocs: [] };
+}
+
+function toTitleCase(str) {
+  if (!str) return '';
+  return str
+    .toLowerCase()
+    .split(' ')
+    .map((word, idx) => {
+      if (idx > 0 && ['and', 'or', 'the', 'of', 'in', 'for', 'on', 'with', 'a', 'an'].includes(word)) {
+        return word;
+      }
+      return word.charAt(0).toUpperCase() + word.slice(1);
+    })
+    .join(' ');
 }
 
 export default function ChapterHealthSidebar({
@@ -111,86 +125,78 @@ export default function ChapterHealthSidebar({
   };
 
   return (
-    <div className="bg-white p-3 rounded-2xl border border-slate-200 shadow-sm space-y-2 sticky top-6 max-h-[90vh] overflow-y-auto">
-      <div className="flex items-center justify-between px-1.5 pb-2 border-b border-slate-100">
-        <h3 className="font-bold text-slate-800 text-xs uppercase tracking-wider flex items-center gap-1.5 font-mono">
-          <BookOpen className="w-3.5 h-3.5 text-indigo-600" />
-          <span>DRHP Table of Contents</span>
-        </h3>
-        <span className="text-[9px] bg-indigo-50 font-mono text-indigo-700 font-bold px-2 py-0.5 rounded-full border border-indigo-100">
-          Legal Outline
-        </span>
-      </div>
+    <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm h-fit space-y-2 sticky top-6 max-h-[90vh] overflow-y-auto font-sans">
+      <h3 className="font-bold text-slate-800 text-sm px-3 mb-4">DRHP Table of Contents</h3>
 
-      <div className="space-y-0.5 text-xs font-sans">
+      <div className="space-y-1">
         {DRHP_HIERARCHY.map((sec, secIdx) => {
           const secNum = secIdx + 1;
           const isExpanded = expandedSectionId === sec.id;
           const isSecActive = activeId === sec.id;
           const hasSub = sec.subsections && sec.subsections.length > 0;
+          const secDraft = drafts[sec.key];
+          const isCertified = secDraft && secDraft.status === 'certified';
           const secGap = hasUnresolvedGap(sec.key);
+          const titleText = `${secNum}. ${toTitleCase(sec.title)}`;
 
           return (
-            <div key={sec.id} className="space-y-0.5">
-              {/* Parent Section Row */}
-              <div
+            <div key={sec.id} className="space-y-1">
+              {/* Parent Section Item */}
+              <button
+                type="button"
                 onClick={() => handleParentClick(sec, sec.key)}
-                className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-left font-bold cursor-pointer transition-all duration-150 ${
+                className={`w-full flex items-center justify-between gap-3 px-3 py-2.5 rounded-xl text-left text-xs font-semibold transition-all duration-200 ${
                   isSecActive
-                    ? 'bg-indigo-600 text-white shadow-sm shadow-indigo-600/20'
-                    : 'text-slate-800 hover:bg-slate-100/80 hover:text-indigo-600'
+                    ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/10'
+                    : 'text-slate-500 hover:bg-slate-50 hover:text-slate-800'
                 }`}
               >
-                <div className="flex items-center gap-1.5 truncate pr-2">
-                  <span className={`font-mono text-xs shrink-0 ${isSecActive ? 'text-indigo-200' : 'text-slate-400'}`}>
-                    {secNum}.
-                  </span>
-                  <span className="truncate text-xs tracking-tight uppercase">{sec.title}</span>
-                </div>
+                <span className="truncate flex-1">{titleText}</span>
 
                 <div className="flex items-center gap-1.5 shrink-0">
-                  {secGap && (
-                    <AlertCircle
-                      className={`w-3.5 h-3.5 shrink-0 ${isSecActive ? 'text-amber-300' : 'text-amber-500'}`}
-                      title="Contains unresolved issues from Gap Analysis"
-                    />
-                  )}
+                  {isCertified ? (
+                    <Check className={`w-3.5 h-3.5 shrink-0 ${isSecActive ? 'text-white' : 'text-emerald-500'}`} title="Section certified" />
+                  ) : secGap ? (
+                    <span className={`w-2 h-2 rounded-full shrink-0 ${isSecActive ? 'bg-white/70' : 'bg-amber-400'}`} title="Contains unresolved gap" />
+                  ) : null}
+
                   {hasSub && (
-                    <span className={`p-0.5 ${isSecActive ? 'text-white' : 'text-slate-400'}`}>
+                    <span className={isSecActive ? 'text-white' : 'text-slate-400'}>
                       {isExpanded ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
                     </span>
                   )}
                 </div>
-              </div>
+              </button>
 
-              {/* Subsections Accordion Drawer */}
+              {/* Subsections Accordion List */}
               {hasSub && isExpanded && (
-                <div className="ml-3 pl-2 border-l border-slate-200 space-y-0.5 py-0.5">
+                <div className="ml-4 pl-2 border-l border-slate-200/80 space-y-1 my-1">
                   {sec.subsections.map((sub, subIdx) => {
                     const subNum = `${secNum}.${subIdx + 1}`;
                     const isSubActive = activeId === sub.id;
                     const subGap = hasUnresolvedGap(sub.key);
+                    const subDraft = drafts[sub.key];
+                    const isSubCertified = subDraft && subDraft.status === 'certified';
+                    const subTitleText = `${subNum} ${toTitleCase(sub.title)}`;
 
                     return (
-                      <div
+                      <button
                         key={sub.id}
+                        type="button"
                         onClick={(e) => handleSubClick(sub.id, sub.key, e)}
-                        className={`w-full flex items-center justify-between px-2 py-1 rounded-md text-left text-[11px] font-medium cursor-pointer transition-all ${
+                        className={`w-full flex items-center justify-between gap-2 px-3 py-2 rounded-lg text-left text-xs font-medium transition-all duration-200 ${
                           isSubActive
-                            ? 'bg-indigo-50 text-indigo-700 font-bold border border-indigo-200/60'
-                            : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                            ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/10 font-semibold'
+                            : 'text-slate-500 hover:bg-slate-50 hover:text-slate-800'
                         }`}
                       >
-                        <div className="flex items-start gap-1.5 truncate pr-1">
-                          <span className={`font-mono text-[10px] shrink-0 ${isSubActive ? 'text-indigo-500' : 'text-slate-400'}`}>
-                            {subNum}
-                          </span>
-                          <span className="truncate leading-tight">{sub.title}</span>
-                        </div>
-                        {subGap && (
-                          <AlertCircle className="w-3 h-3 text-amber-500 shrink-0" />
-                        )}
-                      </div>
+                        <span className="truncate flex-1">{subTitleText}</span>
+                        {isSubCertified ? (
+                          <Check className={`w-3.5 h-3.5 shrink-0 ${isSubActive ? 'text-white' : 'text-emerald-500'}`} title="Subsection certified" />
+                        ) : subGap ? (
+                          <span className={`w-2 h-2 rounded-full shrink-0 ${isSubActive ? 'bg-white/70' : 'bg-amber-400'}`} title="Contains unresolved gap" />
+                        ) : null}
+                      </button>
                     );
                   })}
                 </div>
@@ -199,10 +205,7 @@ export default function ChapterHealthSidebar({
           );
         })}
       </div>
-
-      <div className="pt-2 border-t border-slate-100 text-[10px] text-slate-400 font-mono text-center">
-        Fixed SEBI DRHP Master Outline
-      </div>
     </div>
   );
 }
+
