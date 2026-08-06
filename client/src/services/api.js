@@ -126,6 +126,9 @@ export const generateDrafts = (companyId, sectionKey) => {
 export const updateDraftStatus = (companyId, sectionKey, statusData) =>
   callApi('put', `/drafts/${companyId}/${sectionKey}/status`, statusData);
 
+export const updateDraftContent = (companyId, sectionKey, blocks) =>
+  callApi('put', `/drafts/${companyId}/${sectionKey}/content`, { blocks });
+
 export const getGapReport = (companyId) => callApi('get', `/drafts/${companyId}/gap-report`);
 export const getComments = (sectionId) => callApi('get', `/comments/${sectionId}`);
 export const addComment = (sectionId, content, type, blockId = null, parentId = null) => 

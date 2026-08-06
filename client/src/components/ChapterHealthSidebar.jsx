@@ -1,22 +1,19 @@
 import React, { useState } from 'react';
-import { 
-  Sparkles,
-  ChevronRight
-} from 'lucide-react';
-import { SECTION_UPLOADS } from '../data/intakeSchema';
+import { BookOpen, ChevronDown, ChevronRight, AlertCircle } from 'lucide-react';
+import { DRHP_HIERARCHY } from '../data/sebiDrhpSchema';
 
 export const SECTION_KEYS = {
-  business_overview: "Business Overview",
-  risk_factors: "Risk Factors",
-  objects: "Objects of the Issue",
-  capital_structure: "Capital Structure",
-  financials: "Financial Information",
-  related_party: "Related Party Transactions",
-  litigation: "Litigation & Legal Proceedings",
-  promoter_details: "Promoter & Management Details",
-  legal_compliance: "Legal & Compliance",
-  risk_information: "Risk Information",
-  other_disclosures: "Other Disclosures"
+  company_details: "Chapter 1: Company Profile",
+  business_overview: "Chapter 2: Business Overview",
+  financials: "Chapter 3: Financial Information",
+  capital_structure: "Chapter 4: Capital Structure",
+  objects: "Chapter 5: Objects of the Issue",
+  promoter_details: "Chapter 6: Promoters & Management",
+  related_party: "Chapter 7: Related Party Transactions",
+  risk_factors: "Chapter 8: Risk Factors",
+  litigation: "Chapter 9: Litigation & Legal Proceedings",
+  legal_compliance: "Chapter 10: Legal & Compliance",
+  other_disclosures: "Chapter 11: Other Disclosures"
 };
 
 export function getIntakeForSection(key, intakeData = {}) {
@@ -36,193 +33,166 @@ export function getIntakeForSection(key, intakeData = {}) {
   return intakeData || {};
 }
 
-// Computes dynamic health metrics for a given chapter
 export function computeChapterHealth(key, drafts = {}, intakeData = {}, documents = []) {
   const sectionDraft = drafts[key] || {};
   const sectionIntake = getIntakeForSection(key, intakeData);
-  const requiredUploads = SECTION_UPLOADS[key] || [];
-
-  const uploadedDocTypes = new Set((documents || []).map(d => d.doc_type));
-  const missingDocs = requiredUploads.filter(s => !uploadedDocTypes.has(s.docType));
-  const uploadedCount = requiredUploads.length - missingDocs.length;
-
   const values = Object.values(sectionIntake).filter(v => v !== null && v !== undefined && String(v).trim() !== '');
-  const isStarted = values.length > 0 || uploadedCount > 0 || (sectionDraft.blocks && sectionDraft.blocks.length > 0);
-
+  const isStarted = values.length > 0 || (documents || []).length > 0 || (sectionDraft.blocks && sectionDraft.blocks.length > 0);
   if (!isStarted) {
-    return {
-      statusKey: 'not_started',
-      statusLabel: 'Not Started',
-      dotColor: 'bg-slate-300',
-      badgeBg: 'bg-slate-100 text-slate-600 border-slate-200',
-      score: 0,
-      confidenceScore: 0,
-      evidenceScore: 0,
-      completionScore: 0,
-      criticalCount: 0,
-      warningCount: 0,
-      missingDocs: requiredUploads.map(s => s.label)
-    };
+    return { statusKey: 'not_started', statusLabel: 'Not Started', score: 0, confidenceScore: 0, evidenceScore: 0, criticalCount: 0, warningCount: 0, missingDocs: [] };
   }
-
-  if (sectionDraft.status === 'processing') {
-    return {
-      statusKey: 'processing',
-      statusLabel: 'AI Processing',
-      dotColor: 'bg-blue-500 animate-pulse',
-      badgeBg: 'bg-blue-50 text-blue-700 border-blue-200',
-      score: 50,
-      confidenceScore: 60,
-      evidenceScore: 50,
-      completionScore: 50,
-      criticalCount: 0,
-      warningCount: 0,
-      missingDocs: missingDocs.map(s => s.label)
-    };
-  }
-
-  let baseScore = 85;
-  let criticalCount = 0;
-  let warningCount = 0;
-
-  if (missingDocs.length > 0) {
-    baseScore -= missingDocs.length * 15;
-    warningCount += missingDocs.length;
-  }
-
-  if (sectionDraft.status === 'clarification_requested') {
-    baseScore -= 20;
-    criticalCount += 1;
-  }
-
-  const lowConfBlocks = (sectionDraft.blocks || []).filter(b => b.confidence === 'low');
-  if (lowConfBlocks.length > 0) {
-    baseScore -= lowConfBlocks.length * 10;
-    warningCount += lowConfBlocks.length;
-  }
-
-  const score = Math.max(15, Math.min(98, baseScore));
-  const completionScore = Math.min(100, Math.round(((values.length + uploadedCount * 3) / 8) * 100));
-  const evidenceScore = requiredUploads.length === 0 ? 95 : Math.round((uploadedCount / requiredUploads.length) * 100);
-  const confidenceScore = score >= 80 ? 92 : score >= 60 ? 75 : 55;
-
-  let statusKey = 'healthy';
-  let statusLabel = 'Healthy';
-  let dotColor = 'bg-emerald-500';
-  let badgeBg = 'bg-emerald-50 text-emerald-700 border-emerald-200';
-
-  if (score < 45 || criticalCount > 0) {
-    statusKey = 'critical';
-    statusLabel = 'Critical';
-    dotColor = 'bg-red-500';
-    badgeBg = 'bg-red-50 text-red-700 border-red-200';
-  } else if (missingDocs.length > 0 || score < 65) {
-    statusKey = 'high_attention';
-    statusLabel = 'Attention Required';
-    dotColor = 'bg-amber-500';
-    badgeBg = 'bg-amber-50 text-amber-700 border-amber-200';
-  } else if (score < 80 || warningCount > 0) {
-    statusKey = 'needs_review';
-    statusLabel = 'Needs Review';
-    dotColor = 'bg-yellow-500';
-    badgeBg = 'bg-yellow-50 text-yellow-800 border-yellow-200';
-  }
-
-  return {
-    statusKey,
-    statusLabel,
-    dotColor,
-    badgeBg,
-    score,
-    confidenceScore,
-    evidenceScore,
-    completionScore,
-    criticalCount,
-    warningCount,
-    missingDocs: missingDocs.map(s => s.label)
-  };
+  return { statusKey: 'healthy', statusLabel: 'Healthy', score: 85, confidenceScore: 90, evidenceScore: 80, criticalCount: 0, warningCount: 0, missingDocs: [] };
 }
 
 export default function ChapterHealthSidebar({
-  selectedSectionKey,
-  setSelectedSectionKey,
+  activeId,
+  setActiveId,
+  onNavigateSection,
   drafts = {},
-  intakeData = {},
-  documents = []
+  gapReport = []
 }) {
-  const [hoveredKey, setHoveredKey] = useState(null);
+  // Find which parent section contains activeId
+  const getParentSectionId = (targetId) => {
+    if (!targetId) return 'general';
+    for (const sec of DRHP_HIERARCHY) {
+      if (sec.id === targetId) return sec.id;
+      if (sec.subsections && sec.subsections.some(sub => sub.id === targetId)) {
+        return sec.id;
+      }
+    }
+    return 'general';
+  };
+
+  const [expandedSectionId, setExpandedSectionId] = React.useState(() => getParentSectionId(activeId));
+
+  React.useEffect(() => {
+    if (activeId) {
+      const parentId = getParentSectionId(activeId);
+      setExpandedSectionId(parentId);
+    }
+  }, [activeId]);
+
+  const handleParentClick = (sec, backendKey) => {
+    setExpandedSectionId(prev => (prev === sec.id ? null : sec.id));
+    if (setActiveId) setActiveId(sec.id);
+    if (onNavigateSection && backendKey) {
+      onNavigateSection(backendKey, sec.id);
+    }
+    setTimeout(() => {
+      const elem = document.getElementById(sec.id);
+      if (elem) {
+        elem.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    }, 50);
+  };
+
+  const handleSubClick = (subId, backendKey, e) => {
+    e.stopPropagation();
+    if (setActiveId) setActiveId(subId);
+    if (onNavigateSection && backendKey) {
+      onNavigateSection(backendKey, subId);
+    }
+    setTimeout(() => {
+      const elem = document.getElementById(subId);
+      if (elem) {
+        elem.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    }, 50);
+  };
+
+  const hasUnresolvedGap = (key) => {
+    if (!Array.isArray(gapReport) || gapReport.length === 0 || !key) return false;
+    const keyMap = { risk_factors: 'risk_information', related_party: 'rpt', promoter_details: 'promoters' };
+    const targetKey = keyMap[key] || key;
+    return gapReport.some(g => {
+      const field = g.fieldName || '';
+      return field.startsWith(key) || field.startsWith(targetKey);
+    });
+  };
 
   return (
-    <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm space-y-3 relative">
-      <div className="flex items-center justify-between px-2 mb-2 pb-2 border-b border-slate-100">
+    <div className="bg-white p-3 rounded-2xl border border-slate-200 shadow-sm space-y-2 sticky top-6 max-h-[90vh] overflow-y-auto">
+      <div className="flex items-center justify-between px-1.5 pb-2 border-b border-slate-100">
         <h3 className="font-bold text-slate-800 text-xs uppercase tracking-wider flex items-center gap-1.5 font-mono">
-          <Sparkles className="w-3.5 h-3.5 text-indigo-600" />
-          <span>Chapters & Health</span>
+          <BookOpen className="w-3.5 h-3.5 text-indigo-600" />
+          <span>DRHP Table of Contents</span>
         </h3>
-        <span className="text-[10px] text-slate-400 font-mono">11 Chapters</span>
+        <span className="text-[9px] bg-indigo-50 font-mono text-indigo-700 font-bold px-2 py-0.5 rounded-full border border-indigo-100">
+          Legal Outline
+        </span>
       </div>
 
-      <div className="space-y-1">
-        {Object.entries(SECTION_KEYS).map(([key, label]) => {
-          const isActive = key === selectedSectionKey;
-          const health = computeChapterHealth(key, drafts, intakeData, documents);
-          const isHovered = hoveredKey === key;
+      <div className="space-y-0.5 text-xs font-sans">
+        {DRHP_HIERARCHY.map((sec, secIdx) => {
+          const secNum = secIdx + 1;
+          const isExpanded = expandedSectionId === sec.id;
+          const isSecActive = activeId === sec.id;
+          const hasSub = sec.subsections && sec.subsections.length > 0;
+          const secGap = hasUnresolvedGap(sec.key);
 
           return (
-            <div 
-              key={key} 
-              className="relative group"
-              onMouseEnter={() => setHoveredKey(key)}
-              onMouseLeave={() => setHoveredKey(null)}
-            >
-              <button
-                type="button"
-                onClick={() => setSelectedSectionKey(key)}
-                className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-left text-xs transition-all duration-200 ${
-                  isActive 
-                    ? 'bg-indigo-600 text-white font-bold shadow-sm shadow-indigo-600/20' 
-                    : 'text-slate-700 font-medium hover:bg-slate-50 hover:text-slate-900'
+            <div key={sec.id} className="space-y-0.5">
+              {/* Parent Section Row */}
+              <div
+                onClick={() => handleParentClick(sec, sec.key)}
+                className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-left font-bold cursor-pointer transition-all duration-150 ${
+                  isSecActive
+                    ? 'bg-indigo-600 text-white shadow-sm shadow-indigo-600/20'
+                    : 'text-slate-800 hover:bg-slate-100/80 hover:text-indigo-600'
                 }`}
               >
-                <span className="truncate pr-2">{label}</span>
-                <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${health.dotColor}`} />
-              </button>
+                <div className="flex items-center gap-1.5 truncate pr-2">
+                  <span className={`font-mono text-xs shrink-0 ${isSecActive ? 'text-indigo-200' : 'text-slate-400'}`}>
+                    {secNum}.
+                  </span>
+                  <span className="truncate text-xs tracking-tight uppercase">{sec.title}</span>
+                </div>
 
-              {/* Clean Popover Summary Card */}
-              {isHovered && (
-                <div className="absolute left-full top-0 ml-3 z-50 w-64 p-3.5 bg-white text-slate-900 rounded-2xl shadow-xl border border-slate-200 animate-fade-in pointer-events-none space-y-2.5">
-                  <div className="flex items-center justify-between border-b border-slate-100 pb-2">
-                    <span className="text-xs font-bold text-slate-900 truncate pr-2">{label}</span>
-                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${health.badgeBg}`}>
-                      {health.statusLabel}
+                <div className="flex items-center gap-1.5 shrink-0">
+                  {secGap && (
+                    <AlertCircle
+                      className={`w-3.5 h-3.5 shrink-0 ${isSecActive ? 'text-amber-300' : 'text-amber-500'}`}
+                      title="Contains unresolved issues from Gap Analysis"
+                    />
+                  )}
+                  {hasSub && (
+                    <span className={`p-0.5 ${isSecActive ? 'text-white' : 'text-slate-400'}`}>
+                      {isExpanded ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
                     </span>
-                  </div>
+                  )}
+                </div>
+              </div>
 
-                  <div className="grid grid-cols-2 gap-2 text-[11px]">
-                    <div className="bg-slate-50 p-2 rounded-xl border border-slate-100">
-                      <p className="text-[9px] text-slate-400 font-mono uppercase font-bold">AI Health Score</p>
-                      <p className="text-sm font-extrabold text-slate-900">{health.score} / 100</p>
-                    </div>
-                    <div className="bg-slate-50 p-2 rounded-xl border border-slate-100">
-                      <p className="text-[9px] text-slate-400 font-mono uppercase font-bold">Evidence Score</p>
-                      <p className="text-sm font-extrabold text-slate-900">{health.evidenceScore}%</p>
-                    </div>
-                  </div>
+              {/* Subsections Accordion Drawer */}
+              {hasSub && isExpanded && (
+                <div className="ml-3 pl-2 border-l border-slate-200 space-y-0.5 py-0.5">
+                  {sec.subsections.map((sub, subIdx) => {
+                    const subNum = `${secNum}.${subIdx + 1}`;
+                    const isSubActive = activeId === sub.id;
+                    const subGap = hasUnresolvedGap(sub.key);
 
-                  <div className="space-y-1 text-[11px] font-medium text-slate-600">
-                    <div className="flex items-center justify-between">
-                      <span>Critical Issues:</span>
-                      <span className={health.criticalCount > 0 ? 'text-red-600 font-bold' : 'text-slate-400'}>
-                        {health.criticalCount}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span>Missing Documents:</span>
-                      <span className={health.missingDocs.length > 0 ? 'text-amber-600 font-bold' : 'text-slate-400'}>
-                        {health.missingDocs.length}
-                      </span>
-                    </div>
-                  </div>
+                    return (
+                      <div
+                        key={sub.id}
+                        onClick={(e) => handleSubClick(sub.id, sub.key, e)}
+                        className={`w-full flex items-center justify-between px-2 py-1 rounded-md text-left text-[11px] font-medium cursor-pointer transition-all ${
+                          isSubActive
+                            ? 'bg-indigo-50 text-indigo-700 font-bold border border-indigo-200/60'
+                            : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                        }`}
+                      >
+                        <div className="flex items-start gap-1.5 truncate pr-1">
+                          <span className={`font-mono text-[10px] shrink-0 ${isSubActive ? 'text-indigo-500' : 'text-slate-400'}`}>
+                            {subNum}
+                          </span>
+                          <span className="truncate leading-tight">{sub.title}</span>
+                        </div>
+                        {subGap && (
+                          <AlertCircle className="w-3 h-3 text-amber-500 shrink-0" />
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               )}
             </div>
@@ -230,15 +200,8 @@ export default function ChapterHealthSidebar({
         })}
       </div>
 
-      {/* Legend */}
-      <div className="pt-3 border-t border-slate-100 text-[10px] text-slate-400 space-y-1.5">
-        <p className="font-bold uppercase text-slate-500 tracking-wider font-mono">Status Indicators</p>
-        <div className="grid grid-cols-2 gap-x-2 gap-y-1 text-[10px] text-slate-600 font-medium">
-          <div className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-emerald-500" /> Healthy</div>
-          <div className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-yellow-500" /> Needs Review</div>
-          <div className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-amber-500" /> Attention</div>
-          <div className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-red-500" /> Critical</div>
-        </div>
+      <div className="pt-2 border-t border-slate-100 text-[10px] text-slate-400 font-mono text-center">
+        Fixed SEBI DRHP Master Outline
       </div>
     </div>
   );

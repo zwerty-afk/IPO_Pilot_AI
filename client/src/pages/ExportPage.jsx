@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { getCompanyStatus, downloadDocx, downloadPdf, getAuditLogs } from '../services/api';
+import FrontMatterTemplate from '../components/FrontMatterTemplate';
 import { 
   Download, 
   History, 
@@ -13,7 +14,9 @@ import {
   File,
   Search,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  Eye,
+  Layers
 } from 'lucide-react';
 
 const ACTION_LABELS = {
@@ -37,6 +40,7 @@ export default function ExportPage() {
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [search, setSearch] = useState('');
+  const [activeTab, setActiveTab] = useState('front_matter'); // 'front_matter' | 'outline'
   const companyId = localStorage.getItem('ipo_company_id') || 'aarav-precision';
 
   const loadStats = async () => {
@@ -146,12 +150,34 @@ export default function ExportPage() {
   const isFullyCertified = stats?.certifiedCount === stats?.totalSections;
 
   return (
-    <div className="max-w-4xl mx-auto space-y-8 animate-fade-in">
-      <div className="border-b border-slate-200 pb-5">
-        <h2 className="text-2xl font-bold text-slate-900">Compile &amp; Export Draft</h2>
-        <p className="text-slate-500 text-sm mt-1">
-          Generate a publication-ready formatted document containing all disclosure chapters.
-        </p>
+    <div className="max-w-5xl mx-auto space-y-8 animate-fade-in">
+      <div className="border-b border-slate-200 pb-5 flex items-center justify-between flex-wrap gap-4">
+        <div>
+          <h2 className="text-2xl font-bold text-slate-900">Compile &amp; Export DRHP Package</h2>
+          <p className="text-slate-500 text-sm mt-1">
+            Generate a publication-ready SEBI SME DRHP document containing fixed Front Matter (Pages 1–3) followed by AI-synthesized chapters.
+          </p>
+        </div>
+
+        {/* View Toggle Tabs */}
+        <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200 text-xs font-bold">
+          <button
+            onClick={() => setActiveTab('front_matter')}
+            className={`px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition-all ${
+              activeTab === 'front_matter' ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            <Eye className="w-3.5 h-3.5" /> Fixed Front Matter Preview
+          </button>
+          <button
+            onClick={() => setActiveTab('outline')}
+            className={`px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition-all ${
+              activeTab === 'outline' ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            <Layers className="w-3.5 h-3.5" /> 19 SEBI Sections Outline
+          </button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
@@ -176,7 +202,7 @@ export default function ExportPage() {
               <div>
                 <h4 className="font-bold text-red-950 text-sm">Draft Watermark Active</h4>
                 <p className="text-xs text-red-800 mt-1 leading-relaxed">
-                  This prospectus contains uncertified chapters ({stats?.certifiedCount} of {stats?.totalSections} certified). The compiled Word export will carry a red regulatory banner warning: <strong className="text-red-900">"DRAFT — PENDING PROFESSIONAL REVIEW"</strong>.
+                  This prospectus contains uncertified chapters ({stats?.certifiedCount} of {stats?.totalSections} certified). The compiled export will carry a red regulatory banner warning: <strong className="text-red-900">"DRAFT — PENDING PROFESSIONAL REVIEW"</strong>.
                 </p>
               </div>
             </div>
@@ -194,9 +220,9 @@ export default function ExportPage() {
             </div>
             
             <div className="space-y-2">
-              <h3 className="text-lg font-bold text-slate-800">Export Draft Prospectus</h3>
+              <h3 className="text-lg font-bold text-slate-800">Export Final SEBI DRHP Package</h3>
               <p className="text-slate-500 text-xs max-w-md mx-auto leading-relaxed">
-                Compiles all {stats?.totalSections} synthesized SEBI ICDR chapters, source citations, and verification confidence metrics.
+                Includes Fixed Front Matter (Pages 1–3: Cover Page, Offer Snapshot, Important Info) + Table of Contents + All Synthesized SEBI Chapters.
               </p>
             </div>
 
@@ -225,62 +251,85 @@ export default function ExportPage() {
             </p>
           </div>
 
-          {/* 19 DRHP Sections Structure Card */}
-          <div className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm space-y-4">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-              <div>
-                <h3 className="font-bold text-slate-900 text-sm flex items-center gap-2">
-                  <Bookmark className="w-4 h-4 text-indigo-600" />
-                  <span>19 SEBI SME DRHP Prospectus Sections</span>
+          {/* FRONT MATTER PREVIEW VS OUTLINE TAB */}
+          {activeTab === 'front_matter' ? (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="font-bold text-slate-900 text-sm flex items-center gap-2 font-mono uppercase tracking-wider">
+                  <Eye className="w-4 h-4 text-indigo-600" />
+                  <span>Fixed Front Matter Template Preview (Pages 1–4)</span>
                 </h3>
-                <p className="text-slate-500 text-xs mt-0.5">
-                  Mapped to SEBI (ICDR) Regulations, Schedule VI. Total length scales with company data (~35–65 pages).
-                </p>
+                <span className="px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 font-bold border border-emerald-200 text-[10px] uppercase font-mono">
+                  Fixed Template Engine Active
+                </span>
               </div>
-              <span className="text-xs font-bold font-mono px-2.5 py-1 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-100">
-                19 Sections
-              </span>
+              <p className="text-xs text-slate-500 italic">
+                These first 3 pages and Table of Contents use strict, non-AI document templates. Verified company and intake data are automatically injected into standard SEBI filing layouts.
+              </p>
+              
+              <FrontMatterTemplate 
+                company={{ name: stats?.companyName }} 
+                issueDetails={{}} 
+                stats={stats} 
+              />
             </div>
-
-            <div className="space-y-2 max-h-[420px] overflow-y-auto pr-1">
-              {[
-                { num: 1, title: 'Cover Page', pages: '1 Page', src: 'Company Details & Merchant Banker', note: 'Logo, Exchange, Date, Disclaimer' },
-                { num: 2, title: 'Table of Contents', pages: '1 Page', src: 'Auto-generated', note: 'Complete 19-section page list' },
-                { num: 3, title: 'Definitions & Abbreviations', pages: '1–2 Pages', src: 'Static Legal + Company Data', note: 'SEBI, ICDR, CIN, DIN terms' },
-                { num: 4, title: 'Risk Factors', pages: '3–6 Pages', src: 'Risk Factors Chapter', note: 'Internal, External & Issue risks' },
-                { num: 5, title: 'Summary of the Offer Document', pages: '2–3 Pages', src: 'Synthesized Cross-Chapter', note: 'Business, Issue & Risk summary' },
-                { num: 6, title: 'General Information', pages: '2–3 Pages', src: 'Company Details & Legal', note: 'CIN, Registered Office, Auditor' },
-                { num: 7, title: 'Capital Structure', pages: '2–4 Pages', src: 'Capital Structure Chapter', note: 'Share capital, holding, lock-in' },
-                { num: 8, title: 'Objects of the Issue', pages: '2–4 Pages', src: 'Objects of Issue Chapter', note: 'Fund usage, timeline, benefits' },
-                { num: 9, title: 'Business Overview', pages: '4–8 Pages', src: 'Business Overview Chapter', note: 'Operations, products, strategy' },
-                { num: 10, title: 'Industry Overview', pages: '2–3 Pages', src: 'Business Overview (Industry)', note: 'Sector landscape & market size' },
-                { num: 11, title: 'Financial Information', pages: '4–8 Pages', src: 'Financial Summary Chapter', note: '3-Year Balance Sheet, P&L, Ratios' },
-                { num: 12, title: "Management's Discussion & Analysis (MD&A)", pages: '2–4 Pages', src: 'Synthesized Financial + Strategy', note: 'Revenue trends & expansion notes' },
-                { num: 13, title: 'Promoters & Management', pages: '2–4 Pages', src: 'Promoters & Directors Chapter', note: 'Promoter profiles, Board, KMP' },
-                { num: 14, title: 'Related Party Transactions', pages: '1–3 Pages', src: 'Related Party Chapter', note: 'Disclosed related-party contracts' },
-                { num: 15, title: 'Litigation & Legal Proceedings', pages: '1–4 Pages', src: 'Litigation & Disputes Chapter', note: 'Civil, tax, GST & labor cases' },
-                { num: 16, title: 'Legal & Compliance / Government Approvals', pages: '1–2 Pages', src: 'Legal & Compliance Chapter', note: 'Licenses, Factory NOC, Approvals' },
-                { num: 17, title: 'Other Disclosures', pages: '1–3 Pages', src: 'Other Disclosures Chapter', note: 'Dividend policy, CSR, ESOP' },
-                { num: 18, title: 'Main Provisions of Articles of Association', pages: '1–2 Pages', src: 'Standard Legal Boilerplate', note: 'AOA governance & share rights' },
-                { num: 19, title: 'Declaration', pages: '1 Page', src: 'Promoters & Directors Chapter', note: 'Statutory compliance sign-off' }
-              ].map((s) => (
-                <div key={s.num} className="p-2.5 bg-slate-50 border border-slate-200/80 rounded-xl flex items-center justify-between gap-3 text-xs">
-                  <div className="flex items-center gap-2.5 min-w-0">
-                    <span className="w-5 h-5 rounded-md bg-indigo-600 text-white font-mono font-bold text-[10px] flex items-center justify-center shrink-0">
-                      {s.num}
-                    </span>
-                    <div className="min-w-0">
-                      <h4 className="font-bold text-slate-800 truncate text-xs">{s.title}</h4>
-                      <p className="text-[10px] text-slate-400 truncate">{s.src} · {s.note}</p>
-                    </div>
-                  </div>
-                  <span className="text-[10px] font-mono font-bold text-slate-500 bg-white px-2 py-0.5 rounded border border-slate-200 shrink-0">
-                    {s.pages}
-                  </span>
+          ) : (
+            <div className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm space-y-4">
+              <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                <div>
+                  <h3 className="font-bold text-slate-900 text-sm flex items-center gap-2">
+                    <Bookmark className="w-4 h-4 text-indigo-600" />
+                    <span>19 SEBI SME DRHP Prospectus Sections</span>
+                  </h3>
+                  <p className="text-slate-500 text-xs mt-0.5">
+                    Mapped to SEBI (ICDR) Regulations, Schedule VI. Preceded by 3 Fixed Front Matter pages.
+                  </p>
                 </div>
-              ))}
+                <span className="text-xs font-bold font-mono px-2.5 py-1 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-100">
+                  19 Sections
+                </span>
+              </div>
+
+              <div className="space-y-2 max-h-[500px] overflow-y-auto pr-1">
+                {[
+                  { num: 1, title: 'Cover Page (Fixed Template)', pages: 'Page 1', src: 'Verified Company Profile & BRLM', note: 'Logo, Exchange, Date, SEBI Warning' },
+                  { num: 2, title: 'Offer Snapshot (Fixed Template)', pages: 'Page 2', src: 'Issue Structure & Objects', note: 'QIB, NII, RII Share Allocation Table' },
+                  { num: 3, title: 'Important Information (Fixed Template)', pages: 'Page 3', src: 'SEBI & Exchange Disclaimers', note: 'Investor Grievances & Disclaimers' },
+                  { num: 4, title: 'Table of Contents (Auto-Generated)', pages: 'Page 4', src: 'Auto-generated Outline', note: 'Complete section page index' },
+                  { num: 5, title: 'Definitions & Abbreviations', pages: 'Pages 5–6', src: 'Static Legal + Company Data', note: 'SEBI, ICDR, CIN, DIN terms' },
+                  { num: 6, title: 'Risk Factors', pages: 'Pages 7–12', src: 'Risk Factors Chapter', note: 'Internal, External & Issue risks' },
+                  { num: 7, title: 'Summary of the Offer Document', pages: 'Pages 13–15', src: 'Synthesized Cross-Chapter', note: 'Business, Issue & Risk summary' },
+                  { num: 8, title: 'General Information', pages: 'Pages 16–18', src: 'Company Details & Legal', note: 'CIN, Registered Office, Auditor' },
+                  { num: 9, title: 'Capital Structure', pages: 'Pages 19–22', src: 'Capital Structure Chapter', note: 'Share capital, holding, lock-in' },
+                  { num: 10, title: 'Objects of the Issue', pages: 'Pages 23–26', src: 'Objects of Issue Chapter', note: 'Fund usage, timeline, benefits' },
+                  { num: 11, title: 'Business Overview', pages: 'Pages 27–34', src: 'Business Overview Chapter', note: 'Operations, products, strategy' },
+                  { num: 12, title: 'Industry Overview', pages: 'Pages 35–38', src: 'Business Overview (Industry)', note: 'Sector landscape & market size' },
+                  { num: 13, title: 'Financial Information', pages: 'Pages 39–46', src: 'Financial Summary Chapter', note: '3-Year Balance Sheet, P&L, Ratios' },
+                  { num: 14, title: "Management's Discussion & Analysis (MD&A)", pages: 'Pages 47–50', src: 'Synthesized Financial + Strategy', note: 'Revenue trends & expansion notes' },
+                  { num: 15, title: 'Promoters & Management', pages: 'Pages 51–54', src: 'Promoters & Directors Chapter', note: 'Promoter profiles, Board, KMP' },
+                  { num: 16, title: 'Related Party Transactions', pages: 'Pages 55–57', src: 'Related Party Chapter', note: 'Disclosed related-party contracts' },
+                  { num: 17, title: 'Litigation & Legal Proceedings', pages: 'Pages 58–61', src: 'Litigation & Disputes Chapter', note: 'Civil, tax, GST & labor cases' },
+                  { num: 18, title: 'Legal & Compliance / Government Approvals', pages: 'Pages 62–63', src: 'Legal & Compliance Chapter', note: 'Licenses, Factory NOC, Approvals' },
+                  { num: 19, title: 'Other Disclosures & Declaration', pages: 'Pages 64–65', src: 'Other Disclosures Chapter', note: 'Dividend policy & Promoter Sign-off' }
+                ].map((s) => (
+                  <div key={s.num} className="p-2.5 bg-slate-50 border border-slate-200/80 rounded-xl flex items-center justify-between gap-3 text-xs">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <span className="w-5 h-5 rounded-md bg-indigo-600 text-white font-mono font-bold text-[10px] flex items-center justify-center shrink-0">
+                        {s.num}
+                      </span>
+                      <div className="min-w-0">
+                        <h4 className="font-bold text-slate-800 truncate text-xs">{s.title}</h4>
+                        <p className="text-[10px] text-slate-400 truncate">{s.src} · {s.note}</p>
+                      </div>
+                    </div>
+                    <span className="text-[10px] font-mono font-bold text-slate-500 bg-white px-2 py-0.5 rounded border border-slate-200 shrink-0">
+                      {s.pages}
+                    </span>
+                  </div>
+                ))}
+              </div>
             </div>
-          </div>
+          )}
         </div>
 
         {/* Version Audit Log (Right/Bottom) */}

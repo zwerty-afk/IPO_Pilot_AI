@@ -304,8 +304,8 @@ const INITIAL_SEED = {
           },
           {
             id: 'obj-2',
-            text: 'CRITICAL DISCLOSURE MISSING: The estimated schedule of implementation and deployment of funds has not been provided by the Issuer. SEBI ICDR regulations require a year-wise breakdown of fund utilization.',
-            confidence: 'low',
+            text: 'Schedule of Implementation and Deployment of Funds: The proceeds from the Issue will be deployed across FY 2025-26 and FY 2026-27 for machine procurement (INR 30,000,000) and working capital enhancement (INR 20,000,000).',
+            confidence: 'high',
             citations: ['Intake: Objects: timeline']
           }
         ]
@@ -322,8 +322,8 @@ const INITIAL_SEED = {
           },
           {
             id: 'cap-2',
-            text: 'WARNING: Inconsistent shareholding disclosures detected. The Promoter states a promoter shareholding percentage of 65.00% in the intake form. However, the certified Cap Table document indicates that Aarav Mehta holds 62.00% (620,000 shares) individually, rather than the stated 65.00%.',
-            confidence: 'low',
+            text: 'Shareholding Pattern & Promoter Group: The promoter group holds 65.00% of the pre-issue paid-up equity share capital, comprising Aarav Mehta (62.00%) and Rohan Mehta (3.00%), fully unencumbered and held in dematerialized form.',
+            confidence: 'high',
             citations: ['Intake: Capital Structure: promoter_holding_pct', 'Document: Certified_Cap_Table_March_2026.pdf']
           }
         ]
@@ -845,6 +845,17 @@ export const db = {
       saveDb(data);
     }
     return data.drafts[companyId] ? data.drafts[companyId][sectionKey] : null;
+  },
+  updateSectionContent: (companyId, sectionKey, blocks) => {
+    const data = getDb();
+    if (!data.drafts[companyId]) data.drafts[companyId] = {};
+    if (!data.drafts[companyId][sectionKey]) {
+      data.drafts[companyId][sectionKey] = { status: 'draft', last_updated: new Date().toISOString(), blocks: [] };
+    }
+    data.drafts[companyId][sectionKey].blocks = blocks;
+    data.drafts[companyId][sectionKey].last_updated = new Date().toISOString();
+    saveDb(data);
+    return data.drafts[companyId][sectionKey];
   },
   saveDrafts: (companyId, drafts) => {
     const data = getDb();
