@@ -68,6 +68,20 @@ const GEMINI_MAX_ATTEMPTS = Number(process.env.GEMINI_MAX_ATTEMPTS || 3);
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+const CHAPTER_ORDER = [
+  { key: 'company_details',   title: 'Chapter 1: General Information & Company Profile' },
+  { key: 'business_overview', title: 'Chapter 2: Business Overview' },
+  { key: 'financials',        title: 'Chapter 3: Financial Information' },
+  { key: 'capital_structure', title: 'Chapter 4: Capital Structure' },
+  { key: 'objects',           title: 'Chapter 5: Objects of the Issue' },
+  { key: 'promoter_details',  title: 'Chapter 6: Promoters & Management' },
+  { key: 'related_party',     title: 'Chapter 7: Related Party Transactions' },
+  { key: 'risk_factors',      title: 'Chapter 8: Risk Factors' },
+  { key: 'litigation',        title: 'Chapter 9: Litigation & Legal Proceedings' },
+  { key: 'legal_compliance',  title: 'Chapter 10: Legal & Compliance' },
+  { key: 'other_disclosures', title: 'Chapter 11: Other Disclosures' }
+];
+
 /** True for errors that a retry or a different model can plausibly fix. */
 function isTransientGeminiError(err) {
   const status = err?.status ?? err?.response?.status;
@@ -726,10 +740,54 @@ function computeGapReport(companyId, intake, docs) {
 
 function generateDraftData(companyId, sectionKey = null) {
   const currentDb = db;
-  const intake = currentDb.getIntake(companyId);
-  const docs = currentDb.getDocuments(companyId);
+  const company = currentDb.getCompany(companyId) || {};
+  const intake = currentDb.getIntake(companyId) || {};
+  const docs = currentDb.getDocuments(companyId) || [];
   const gapReport = computeGapReport(companyId, intake, docs);
   const currentDrafts = currentDb.getDrafts(companyId) || {};
+
+  const generateCompanyProfile = () => {
+    const cd = intake.company_details || {};
+    const incDoc = docs.find(d => d.doc_type === 'incorporation_certificate');
+    const legal_name = cd.legal_name || company.legal_name || company.name || 'Aarav Precision Engineering Pvt Ltd';
+    const cin = cd.cin || company.cin || 'U29220MH2015PTC263456';
+    const pan = cd.pan || 'AABCA1234F';
+    const gstin = cd.gstin || '27AABCA1234F1Z5';
+    const inc_date = cd.incorporation_date || company.incorporation_date || '2015-04-12';
+    const reg_office = cd.registered_office || 'W-45, MIDC Industrial Area, Phase II, Dombivli East, Thane, Maharashtra - 421204';
+    const industry = cd.industry_type || 'Precision Engineering & Manufacturing';
+    const sub_industry = cd.sub_industry || 'CNC Machine Components & Precision Assemblies';
+    const company_type = cd.company_type || 'Private Limited Company';
+    const auth_cap = cd.authorized_capital || company.authorized_capital || '20,000,000 INR (2,000,000 Equity Shares of Rs 10 each)';
+    const paid_cap = cd.paid_up_capital || company.paid_up_capital || '10,000,000 INR (1,000,000 Equity Shares of Rs 10 each)';
+    const issue_size = cd.proposed_issue_size || intake.objects?.amount_to_raise || '50,000,000 INR';
+    const exchange = cd.proposed_exchange || 'NSE Emerge / BSE SME';
+    const branches = cd.branches || 'Primary manufacturing facility in Dombivli (Thane); regional office in Pune';
+    const warehouses = cd.warehouses || 'Central raw material vault & finished goods warehouse at Dombivli site';
+
+    const blocks = [
+      {
+        id: 'cd-1',
+        text: `Corporate Identity & Registration: ${legal_name} was incorporated on ${inc_date} as a ${company_type} under the Companies Act. Corporate Identification Number (CIN): ${cin}, Permanent Account Number (PAN): ${pan}, GSTIN: ${gstin}. Industry Classification: ${industry} (${sub_industry}).`,
+        confidence: 'high',
+        citations: incDoc ? ['Intake: Company Details: legal_name', `Document: ${incDoc.name}`] : ['Intake: Company Details: legal_name']
+      },
+      {
+        id: 'cd-2',
+        text: `Registered Office & Operating Locations: Registered Office: ${reg_office}. Operating Branches & Facilities: ${branches}. Storage & Logistics Warehouses: ${warehouses}.`,
+        confidence: 'high',
+        citations: ['Intake: Company Details: registered_office']
+      },
+      {
+        id: 'cd-3',
+        text: `Share Capital & Proposed Issue: Authorized Capital: ${auth_cap}. Pre-IPO Paid-up Capital: ${paid_cap}. Proposed Issue Size: ${issue_size} on ${exchange}.`,
+        confidence: 'high',
+        citations: ['Intake: Company Details: authorized_capital', 'Intake: Company Details: proposed_exchange']
+      }
+    ];
+
+    return { status: currentDrafts.company_details?.status || 'draft', last_updated: new Date().toISOString(), blocks };
+  };
 
   const generateBusinessOverview = () => {
     const name = intake.company_details?.legal_name || 'Aarav Precision Engineering Pvt Ltd';
@@ -770,110 +828,43 @@ function generateDraftData(companyId, sectionKey = null) {
     ]};
   };
 
-  const generateRiskFactors = () => {
-    const riskInfo = intake.risk_information || {};
-    const litigation = intake.litigation || {};
-    const litDoc = docs.find(d => d.doc_type === 'litigation_records');
-    const blocks = [];
+  const generateFinancialInformation = () => {
+    const fin = intake.financials || {};
+    const finDoc = docs.find(d => d.doc_type === 'audited_financials');
+    const rev25 = fin.revenue_fy25 ? Number(fin.revenue_fy25).toLocaleString('en-IN') : '125,000,000';
+    const rev24 = fin.revenue_fy24 ? Number(fin.revenue_fy24).toLocaleString('en-IN') : '95,000,000';
+    const rev23 = fin.revenue_fy23 ? Number(fin.revenue_fy23).toLocaleString('en-IN') : '72,000,000';
+    const pat25 = fin.profit_fy25 ? Number(fin.profit_fy25).toLocaleString('en-IN') : '11,000,000';
+    const pat24 = fin.profit_fy24 ? Number(fin.profit_fy24).toLocaleString('en-IN') : '7,500,000';
+    const debt = fin.total_debt ? Number(fin.total_debt).toLocaleString('en-IN') : '25,000,000';
+    const ebitda = fin.ebitda_margin || '18.5%';
+    const pat_margin = fin.pat_margin || '9.3%';
+    const working_cap = fin.working_capital || 'Secured cash credit and bank overdraft facilities against inventory and receivables.';
+    const capex = fin.capex || 'INR 15,000,000 invested in 2 VMC machines in FY25.';
+    const revenue_breakup = fin.revenue_breakup || 'Automotive Tier-1 components (55%), Industrial Hydraulics (30%), Aerospace & Defense Sub-assemblies (15%).';
 
-    // 1. Single Facility Risk
-    if (riskInfo.single_factory === 'yes' || intake.business_overview?.operations) {
-      blocks.push({
-        id: 'rf-1',
-        text: 'Single Facility Dependency Risk: Our manufacturing operations are heavily concentrated at a single facility in Dombivli, Thane. Any physical shut-down, utility failure, or natural calamity could suspend manufacturing and hurt operational yield.',
+    const blocks = [
+      {
+        id: 'fin-1',
+        text: `Financial Performance (3-Year Summary): Total Operating Revenue was INR ${rev25} in FY25, INR ${rev24} in FY24, and INR ${rev23} in FY23. Revenue Breakup: ${revenue_breakup}`,
         confidence: 'high',
-        citations: riskInfo.single_factory ? ['Intake: Risk Information: single_factory'] : ['Intake: Business Overview: operations']
-      });
-    }
-
-    // 2. Customer Concentration Risk
-    const top5Pct = riskInfo.top5_customers_pct || '60';
-    blocks.push({
-      id: 'rf-2',
-      text: `Customer Concentration Risk: Our top 5 customers account for approximately ${top5Pct}% of total revenue. Loss of any major customer account or reduction in order volumes could adversely affect our financial results.`,
-      confidence: 'high',
-      citations: ['Intake: Risk Information: top5_customers_pct']
-    });
-
-    // 3. Supplier Concentration Risk
-    if (riskInfo.top_supplier_pct) {
-      blocks.push({
-        id: 'rf-3',
-        text: `Supplier Dependency Risk: Our top raw material supplier accounts for ${riskInfo.top_supplier_pct}% of total material purchases. Supply chain bottlenecks or price increases could impact manufacturing costs.`,
+        citations: finDoc ? ['Intake: Financials: revenue_fy25', `Document: ${finDoc.name}`] : ['Intake: Financials: revenue_fy25']
+      },
+      {
+        id: 'fin-2',
+        text: `Profitability & Ratios: Net Profit After Tax (PAT) stood at INR ${pat25} in FY25 and INR ${pat24} in FY24. EBITDA Margin: ${ebitda}, PAT Margin: ${pat_margin}.`,
         confidence: 'high',
-        citations: ['Intake: Risk Information: top_supplier_pct']
-      });
-    }
-
-    // 4. Tax Dispute & Litigation Risk
-    const taxDemand = riskInfo.pending_tax_demand || (litigation.litigation_details?.includes('1,200,000') ? '1200000' : null);
-    if (taxDemand || litigation.has_litigation === 'yes') {
-      const cite = ['Intake: Risk Information: pending_tax_demand'];
-      if (litigation.litigation_details) cite.push('Intake: Litigation: litigation_details');
-      if (litDoc) cite.push(`Document: ${litDoc.name}`);
-      blocks.push({
-        id: 'rf-4',
-        text: `Pending Legal & Tax Demand Risk: We are subject to pending tax demands of INR ${taxDemand ? Number(taxDemand).toLocaleString('en-IN') : '1,200,000'}. ${litigation.litigation_details || 'An adverse outcome in tax proceedings could require cash outflow.'}`,
+        citations: ['Intake: Financials: profit_fy25']
+      },
+      {
+        id: 'fin-3',
+        text: `Borrowings, Working Capital & CAPEX: Outstanding Debt: INR ${debt}. Working Capital Facilities: ${working_cap}. Capital Expenditure (CAPEX): ${capex}`,
         confidence: 'high',
-        citations: cite
-      });
-    }
+        citations: ['Intake: Financials: total_debt']
+      }
+    ];
 
-    // 5. Forex Exposure Risk
-    if (riskInfo.forex_exposure === 'yes') {
-      blocks.push({
-        id: 'rf-5',
-        text: `Foreign Exchange Exposure Risk: The Company has foreign currency exposure (${riskInfo.forex_pct || '15'}% of revenues derived from exports). Currency exchange rate fluctuations could impact net profit margins.`,
-        confidence: 'high',
-        citations: ['Intake: Risk Information: forex_exposure', 'Intake: Risk Information: forex_pct']
-      });
-    }
-
-    // 6. Key Personnel Dependence Risk
-    if (riskInfo.promoter_dependence === 'yes') {
-      blocks.push({
-        id: 'rf-6',
-        text: `Key Management Personnel Risk: Our success depends heavily on key promoters and executive directors. ${riskInfo.promoter_dependence_note || 'Promoters manage key OEM client relationships and precision manufacturing strategies.'}`,
-        confidence: 'high',
-        citations: ['Intake: Risk Information: promoter_dependence']
-      });
-    }
-
-    // 7. Raw Material Volatility Risk
-    if (riskInfo.commodity_dependency === 'yes') {
-      blocks.push({
-        id: 'rf-7',
-        text: `Commodity Price Volatility Risk: Input raw materials (${riskInfo.commodity_name || 'Alloy Steel & Brass'}) are subject to market price volatility. Fluctuations in raw material costs could impact gross profit margins.`,
-        confidence: 'high',
-        citations: ['Intake: Risk Information: commodity_dependency']
-      });
-    }
-
-    // 8. Cybersecurity Risk
-    if (riskInfo.cybersecurity_risks === 'yes') {
-      blocks.push({
-        id: 'rf-8',
-        text: `Cybersecurity & System Infrastructure Risk: Operations depend on digital CAD/CAM design databases. IT disruption or security incidents could cause operational delays. ${riskInfo.cybersecurity_note || ''}`,
-        confidence: 'high',
-        citations: ['Intake: Risk Information: cybersecurity_risks']
-      });
-    }
-
-    return { status: currentDrafts.risk_factors?.status || 'draft', last_updated: new Date().toISOString(), blocks };
-  };
-
-  const generateObjects = () => {
-    const amount = intake.objects?.amount_to_raise || '50000000';
-    const purpose = intake.objects?.purpose || '';
-    const timeline = intake.objects?.timeline || '';
-    const blocks = [{ id: 'obj-1', text: `The Company proposes to raise capital amounting to INR ${Number(amount).toLocaleString('en-IN')} through the public issue. The primary objects of the issue are: ${purpose}.`, confidence: 'high', citations: ['Intake: Objects: amount_to_raise', 'Intake: Objects: purpose'] }];
-    const hasTimelineGap = gapReport.some(g => g.fieldName === 'objects.timeline');
-    if (hasTimelineGap) {
-      blocks.push({ id: 'obj-2', text: 'CRITICAL GAP WARNING: The estimated timeline and schedule of funds deployment has not been specified by the Issuer. SEBI compliance requires a detailed year-by-year deployment timeline.', confidence: 'low', citations: ['Intake: Objects: timeline'] });
-    } else {
-      blocks.push({ id: 'obj-2', text: `The funds raised through this Issue are proposed to be deployed as follows: ${timeline}.`, confidence: 'high', citations: ['Intake: Objects: timeline'] });
-    }
-    return { status: currentDrafts.objects?.status || 'draft', last_updated: new Date().toISOString(), blocks };
+    return { status: currentDrafts.financials?.status || 'draft', last_updated: new Date().toISOString(), blocks };
   };
 
   const generateCapitalStructure = () => {
@@ -895,9 +886,116 @@ function generateDraftData(companyId, sectionKey = null) {
     return { status: currentDrafts.capital_structure?.status || 'draft', last_updated: new Date().toISOString(), blocks };
   };
 
+  const generateObjects = () => {
+    const amount = intake.objects?.amount_to_raise || '50000000';
+    const purpose = intake.objects?.purpose || '';
+    const timeline = intake.objects?.timeline || '';
+    const blocks = [{ id: 'obj-1', text: `The Company proposes to raise capital amounting to INR ${Number(amount).toLocaleString('en-IN')} through the public issue. The primary objects of the issue are: ${purpose}.`, confidence: 'high', citations: ['Intake: Objects: amount_to_raise', 'Intake: Objects: purpose'] }];
+    const hasTimelineGap = gapReport.some(g => g.fieldName === 'objects.timeline');
+    if (hasTimelineGap) {
+      blocks.push({ id: 'obj-2', text: 'CRITICAL GAP WARNING: The estimated timeline and schedule of funds deployment has not been specified by the Issuer. SEBI compliance requires a detailed year-by-year deployment timeline.', confidence: 'low', citations: ['Intake: Objects: timeline'] });
+    } else {
+      blocks.push({ id: 'obj-2', text: `The funds raised through this Issue are proposed to be deployed as follows: ${timeline}.`, confidence: 'high', citations: ['Intake: Objects: timeline'] });
+    }
+    return { status: currentDrafts.objects?.status || 'draft', last_updated: new Date().toISOString(), blocks };
+  };
+
+  const generatePromoters = () => {
+    const list = intake.promoters?.promoters_list || '';
+    const board = intake.promoters?.directors || '';
+    return { status: currentDrafts.promoter_details?.status || 'draft', last_updated: new Date().toISOString(), blocks: [
+      { id: 'prom-1', text: `The profile and details of our promoters are as follows: ${list}`, confidence: 'high', citations: ['Intake: Promoters: promoters_list'] },
+      { id: 'prom-2', text: `The current Board of Directors is structured with the following directors: ${board}`, confidence: 'high', citations: ['Intake: Promoters: directors'] }
+    ]};
+  };
+
   const generateRelatedParty = () => {
     const rptDetails = intake.rpt?.rpt_details || '';
     return { status: currentDrafts.related_party?.status || 'draft', last_updated: new Date().toISOString(), blocks: [{ id: 'rp-1', text: `The company has entered into transaction agreements with related parties, specifically: ${rptDetails}`, confidence: 'high', citations: ['Intake: Related Party Transactions: rpt_details'] }] };
+  };
+
+  const generateRiskFactors = () => {
+    const riskInfo = intake.risk_information || {};
+    const litigation = intake.litigation || {};
+    const litDoc = docs.find(d => d.doc_type === 'litigation_records');
+    const blocks = [];
+
+    if (riskInfo.single_factory === 'yes' || intake.business_overview?.operations) {
+      blocks.push({
+        id: 'rf-1',
+        text: 'Single Facility Dependency Risk: Our manufacturing operations are heavily concentrated at a single facility in Dombivli, Thane. Any physical shut-down, utility failure, or natural calamity could suspend manufacturing and hurt operational yield.',
+        confidence: 'high',
+        citations: riskInfo.single_factory ? ['Intake: Risk Information: single_factory'] : ['Intake: Business Overview: operations']
+      });
+    }
+
+    const top5Pct = riskInfo.top5_customers_pct || '60';
+    blocks.push({
+      id: 'rf-2',
+      text: `Customer Concentration Risk: Our top 5 customers account for approximately ${top5Pct}% of total revenue. Loss of any major customer account or reduction in order volumes could adversely affect our financial results.`,
+      confidence: 'high',
+      citations: ['Intake: Risk Information: top5_customers_pct']
+    });
+
+    if (riskInfo.top_supplier_pct) {
+      blocks.push({
+        id: 'rf-3',
+        text: `Supplier Dependency Risk: Our top raw material supplier accounts for ${riskInfo.top_supplier_pct}% of total material purchases. Supply chain bottlenecks or price increases could impact manufacturing costs.`,
+        confidence: 'high',
+        citations: ['Intake: Risk Information: top_supplier_pct']
+      });
+    }
+
+    const taxDemand = riskInfo.pending_tax_demand || (litigation.litigation_details?.includes('1,200,000') ? '1200000' : null);
+    if (taxDemand || litigation.has_litigation === 'yes') {
+      const cite = ['Intake: Risk Information: pending_tax_demand'];
+      if (litigation.litigation_details) cite.push('Intake: Litigation: litigation_details');
+      if (litDoc) cite.push(`Document: ${litDoc.name}`);
+      blocks.push({
+        id: 'rf-4',
+        text: `Pending Legal & Tax Demand Risk: We are subject to pending tax demands of INR ${taxDemand ? Number(taxDemand).toLocaleString('en-IN') : '1,200,000'}. ${litigation.litigation_details || 'An adverse outcome in tax proceedings could require cash outflow.'}`,
+        confidence: 'high',
+        citations: cite
+      });
+    }
+
+    if (riskInfo.forex_exposure === 'yes') {
+      blocks.push({
+        id: 'rf-5',
+        text: `Foreign Exchange Exposure Risk: The Company has foreign currency exposure (${riskInfo.forex_pct || '15'}% of revenues derived from exports). Currency exchange rate fluctuations could impact net profit margins.`,
+        confidence: 'high',
+        citations: ['Intake: Risk Information: forex_exposure', 'Intake: Risk Information: forex_pct']
+      });
+    }
+
+    if (riskInfo.promoter_dependence === 'yes') {
+      blocks.push({
+        id: 'rf-6',
+        text: `Key Management Personnel Risk: Our success depends heavily on key promoters and executive directors. ${riskInfo.promoter_dependence_note || 'Promoters manage key OEM client relationships and precision manufacturing strategies.'}`,
+        confidence: 'high',
+        citations: ['Intake: Risk Information: promoter_dependence']
+      });
+    }
+
+    if (riskInfo.commodity_dependency === 'yes') {
+      blocks.push({
+        id: 'rf-7',
+        text: `Commodity Price Volatility Risk: Input raw materials (${riskInfo.commodity_name || 'Alloy Steel & Brass'}) are subject to market price volatility. Fluctuations in raw material costs could impact gross profit margins.`,
+        confidence: 'high',
+        citations: ['Intake: Risk Information: commodity_dependency']
+      });
+    }
+
+    if (riskInfo.cybersecurity_risks === 'yes') {
+      blocks.push({
+        id: 'rf-8',
+        text: `Cybersecurity & System Infrastructure Risk: Operations depend on digital CAD/CAM design databases. IT disruption or security incidents could cause operational delays. ${riskInfo.cybersecurity_note || ''}`,
+        confidence: 'high',
+        citations: ['Intake: Risk Information: cybersecurity_risks']
+      });
+    }
+
+    return { status: currentDrafts.risk_factors?.status || 'draft', last_updated: new Date().toISOString(), blocks };
   };
 
   const generateLitigation = () => {
@@ -912,22 +1010,90 @@ function generateDraftData(companyId, sectionKey = null) {
     return { status: currentDrafts.litigation?.status || 'draft', last_updated: new Date().toISOString(), blocks };
   };
 
-  const generatePromoters = () => {
-    const list = intake.promoters?.promoters_list || '';
-    const board = intake.promoters?.directors || '';
-    return { status: currentDrafts.promoter_details?.status || 'draft', last_updated: new Date().toISOString(), blocks: [
-      { id: 'prom-1', text: `The profile and details of our promoters are as follows: ${list}`, confidence: 'high', citations: ['Intake: Promoters: promoters_list'] },
-      { id: 'prom-2', text: `The current Board of Directors is structured with the following directors: ${board}`, confidence: 'high', citations: ['Intake: Promoters: directors'] }
-    ]};
+  const generateLegalCompliance = () => {
+    const lc = intake.legal_compliance || {};
+    const roc = lc.roc_compliance || 'All annual returns and financial statements filed up to FY25 with zero delay fees.';
+    const gst = lc.gst_compliance || 'GSTR-3B and GSTR-1 filed up to date with zero tax defaults.';
+    const pf_esi = lc.pf_esi_compliance || 'EPFO Code MH/THN/104592; all monthly statutory employee contributions deposited on time.';
+    const inc_tax = lc.income_tax_compliance || 'Income Tax Return (ITR-6) filed up to Assessment Year 2025-26.';
+    const factory = lc.factory_license || 'Factory License # 45920-THN valid through Dec 2028.';
+    const pollution = lc.pollution_noc || 'MPCB Consent to Operate (Orange Category) valid till March 2029.';
+    const fire = lc.fire_noc || 'Thane Municipal Fire NOC # 112/2025 valid till Oct 2027.';
+    const auditor = lc.auditor_details || 'M/s Shah & Associates, Chartered Accountants (FRN: 104920W), Partner: CA Rajesh Shah.';
+    const cs = lc.company_secretary || 'M/s K. V. & Associates, Practicing Company Secretaries, Mumbai.';
+    const registrar = lc.registrar_details || 'Bigshare Services Pvt Ltd (SEBI Reg: INR000001385).';
+    const mb = lc.merchant_banker_details || 'Apex Capital Advisors Pvt Ltd (SEBI Reg: INM000012490).';
+
+    const blocks = [
+      {
+        id: 'lc-1',
+        text: `Statutory & Tax Compliances: ROC Compliance: ${roc}. GST Compliance: ${gst}. PF/ESI Compliance: ${pf_esi}. Income Tax Compliance: ${inc_tax}.`,
+        confidence: 'high',
+        citations: ['Intake: Legal Compliance: roc_compliance', 'Intake: Legal Compliance: gst_compliance']
+      },
+      {
+        id: 'lc-2',
+        text: `Licenses & Clearances: Factory License: ${factory}. Pollution Consent: ${pollution}. Fire NOC: ${fire}.`,
+        confidence: 'high',
+        citations: ['Intake: Legal Compliance: factory_license', 'Intake: Legal Compliance: pollution_noc']
+      },
+      {
+        id: 'lc-3',
+        text: `Key Intermediaries & Advisors: Statutory Auditor: ${auditor}. Company Secretary: ${cs}. Registrar to the Issue: ${registrar}. Lead Merchant Banker: ${mb}.`,
+        confidence: 'high',
+        citations: ['Intake: Legal Compliance: auditor_details', 'Intake: Legal Compliance: merchant_banker_details']
+      }
+    ];
+
+    return { status: currentDrafts.legal_compliance?.status || 'draft', last_updated: new Date().toISOString(), blocks };
   };
 
+  const generateOtherDisclosures = () => {
+    const oth = intake.other_disclosures || {};
+    const div = oth.dividend_policy || 'The Company has not declared dividends in the last 3 fiscal years to retain profits for capital expansion.';
+    const csr = oth.csr_initiatives || 'CSR activities focused on local vocational skill training in Thane industrial belt.';
+    const esop = oth.employee_benefits || 'Gratuity trust maintained with LIC of India; ESOP Scheme 2024 covering 50,000 pool shares.';
+    const contracts = oth.material_contracts || 'Long-term component supply agreement with Sterling Auto Components valid through 2029.';
+    const insurance = oth.insurance_coverage || 'Standard Fire & Special Perils policy # 459102 covering plant & machinery up to INR 80,000,000.';
+    const ip = oth.intellectual_property_summary || 'Registered Trademark "AARAV PRECISION" under Class 7 (# 3940192).';
+    const gov = oth.government_approvals || 'All required operating licenses from MIDC, MPCB, DIC, and Inspector of Factories are active.';
+    const defaults = oth.defaults || 'No financial defaults, statutory non-compliances, or listing penalties reported.';
+
+    const blocks = [
+      {
+        id: 'od-1',
+        text: `Dividend Policy, CSR & Employee Benefits: Dividend Policy: ${div}. CSR Initiatives: ${csr}. ESOP & Benefits: ${esop}.`,
+        confidence: 'high',
+        citations: ['Intake: Other Disclosures: dividend_policy', 'Intake: Other Disclosures: employee_benefits']
+      },
+      {
+        id: 'od-2',
+        text: `Material Contracts, Insurance & IP: Material Contracts: ${contracts}. Asset Risk & Insurance: ${insurance}. Intellectual Property: ${ip}.`,
+        confidence: 'high',
+        citations: ['Intake: Other Disclosures: material_contracts', 'Intake: Other Disclosures: insurance_coverage']
+      },
+      {
+        id: 'od-3',
+        text: `Government Approvals & Compliance Defaults: Government Approvals: ${gov}. Statutory Defaults: ${defaults}.`,
+        confidence: 'high',
+        citations: ['Intake: Other Disclosures: government_approvals']
+      }
+    ];
+
+    return { status: currentDrafts.other_disclosures?.status || 'draft', last_updated: new Date().toISOString(), blocks };
+  };
+
+  if (!sectionKey || sectionKey === 'company_details') currentDrafts.company_details = generateCompanyProfile();
   if (!sectionKey || sectionKey === 'business_overview') currentDrafts.business_overview = generateBusinessOverview();
-  if (!sectionKey || sectionKey === 'risk_factors') currentDrafts.risk_factors = generateRiskFactors();
-  if (!sectionKey || sectionKey === 'objects') currentDrafts.objects = generateObjects();
+  if (!sectionKey || sectionKey === 'financials') currentDrafts.financials = generateFinancialInformation();
   if (!sectionKey || sectionKey === 'capital_structure') currentDrafts.capital_structure = generateCapitalStructure();
-  if (!sectionKey || sectionKey === 'related_party') currentDrafts.related_party = generateRelatedParty();
+  if (!sectionKey || sectionKey === 'objects') currentDrafts.objects = generateObjects();
+  if (!sectionKey || sectionKey === 'promoter_details' || sectionKey === 'promoters') currentDrafts.promoter_details = generatePromoters();
+  if (!sectionKey || sectionKey === 'related_party' || sectionKey === 'rpt') currentDrafts.related_party = generateRelatedParty();
+  if (!sectionKey || sectionKey === 'risk_factors' || sectionKey === 'risk_information') currentDrafts.risk_factors = generateRiskFactors();
   if (!sectionKey || sectionKey === 'litigation') currentDrafts.litigation = generateLitigation();
-  if (!sectionKey || sectionKey === 'promoter_details') currentDrafts.promoter_details = generatePromoters();
+  if (!sectionKey || sectionKey === 'legal_compliance') currentDrafts.legal_compliance = generateLegalCompliance();
+  if (!sectionKey || sectionKey === 'other_disclosures') currentDrafts.other_disclosures = generateOtherDisclosures();
 
   db.saveDrafts(companyId, currentDrafts);
   return currentDrafts;
@@ -2400,72 +2566,102 @@ IMPORTANT DISCLAIMER: Informational and due diligence assistance only. Does not 
 
 // ─── EXPORT (Real DOCX) ───────────────────────────────────────────────────────
 
+function assembleDrhpSections(companyId) {
+  const company = db.getCompany(companyId) || {};
+  const drafts = db.getDrafts(companyId) || {};
+
+  const allCertified = CHAPTER_ORDER.length > 0 && CHAPTER_ORDER.every(({ key }) => drafts[key] && drafts[key].status === 'certified');
+  const watermarkText = allCertified ? 'CERTIFIED COPY - CONFIDENTIAL' : 'DRAFT — PENDING PROFESSIONAL REVIEW (AI-ASSISTED)';
+
+  const drhpSections = CHAPTER_ORDER.map(({ key, title }, index) => {
+    const sec = drafts[key];
+    let content = `[Incomplete — pending additional disclosure]`;
+    if (sec && sec.blocks && sec.blocks.length > 0) {
+      content = sec.blocks.map(b => b.text).join('\n\n');
+    }
+    return {
+      num: index + 1,
+      key,
+      title,
+      status: sec?.status || 'draft',
+      content
+    };
+  });
+
+  return { drhpSections, watermarkText, allCertified };
+}
+
+// ─── EXPORT PREVIEW ──────────────────────────────────────────────────────────
+
+app.get('/api/export/:companyId/preview', authenticateToken, (req, res) => {
+  const { companyId } = req.params;
+  const company = db.getCompany(companyId);
+  if (!company) return res.status(404).json({ message: 'Company not found' });
+  
+  const { drhpSections, watermarkText, allCertified } = assembleDrhpSections(companyId);
+  res.json({ companyId, companyName: company.name, drhpSections, watermarkText, allCertified, totalSections: drhpSections.length });
+});
+
+// ─── EXPORT (Real DOCX) ───────────────────────────────────────────────────────
+
 app.get('/api/export/:companyId/docx', authenticateToken, async (req, res) => {
   const { companyId } = req.params;
   const company = db.getCompany(companyId);
   if (!company) return res.status(404).json({ message: 'Company not found' });
-  const drafts = db.getDrafts(companyId);
-  const sections = Object.keys(drafts);
-  const allCertified = sections.every(sec => drafts[sec].status === 'certified');
+  
+  const drafts = db.getDrafts(companyId) || {};
+  const allCertified = CHAPTER_ORDER.every(({ key }) => drafts[key] && drafts[key].status === 'certified');
   const watermarkText = allCertified ? 'CERTIFIED COPY - CONFIDENTIAL' : 'DRAFT — PENDING PROFESSIONAL REVIEW (AI-ASSISTED)';
 
   const docElements = [
-    new Paragraph({ alignment: AlignmentType.CENTER, spacing: { before: 1000, after: 300 }, children: [new TextRun({ text: 'DRAFT OFFER DOCUMENT', bold: true, size: 32, color: '1e293b' })] }),
+    new Paragraph({ alignment: AlignmentType.CENTER, spacing: { before: 1000, after: 300 }, children: [new TextRun({ text: 'DRAFT RED HERRING PROSPECTUS', bold: true, size: 32, color: '1e293b' })] }),
     new Paragraph({ alignment: AlignmentType.CENTER, spacing: { after: 800 }, children: [new TextRun({ text: company.name.toUpperCase(), bold: true, size: 40, color: '4f46e5' })] }),
     new Paragraph({ alignment: AlignmentType.CENTER, spacing: { after: 1200 }, children: [new TextRun({ text: 'Prepared Aligned with SEBI (ICDR) Regulations for Listing on SME Exchange', italic: true, size: 24, color: '64748b' })] }),
     new Paragraph({ spacing: { before: 400, after: 400 }, children: [
       new TextRun({ text: 'IMPORTANT REGULATORY DISCLAIMER\n', bold: true, color: 'dc2626', size: 22 }),
       new TextRun({ text: `Status: ${watermarkText}\n\n`, bold: true, color: allCertified ? '10b981' : 'dc2626', size: 20 }),
-      new TextRun({ text: 'This document is an AI-assisted draft generated by IPO Pilot AI based on promoter intake disclosures. It does NOT constitute a final legal prospectus, and must be reviewed, finalized, and certified by a registered Merchant Banker and legal counsel prior to filing with SEBI, BSE SME, or NSE Emerge. AI outputs are informational only and do not constitute legal, compliance, financial, or merchant-banking advice.', italic: true, size: 18, color: '334155' })
+      new TextRun({ text: 'This document is an AI-assisted draft prospectus generated by IPO Pilot AI based on promoter disclosures. It does NOT constitute a final legal prospectus, and must be reviewed, finalized, and certified by a registered Merchant Banker and legal counsel prior to filing with SEBI, BSE SME, or NSE Emerge.', italic: true, size: 18, color: '334155' })
     ]}),
-    new Paragraph({ children: [new TextRun({ text: '', pageBreakBefore: true })] }),
-    new Paragraph({ heading: HeadingLevel.HEADING_1, spacing: { before: 200, after: 200 }, children: [new TextRun({ text: 'Table of Chapters', bold: true, size: 28, color: '1e293b' })] })
+    new Paragraph({ children: [new TextRun({ text: '', pageBreakBefore: true })] })
   ];
 
-  const sectionMapping = {
-    business_overview: 'Chapter 1: Business Overview',
-    risk_factors: 'Chapter 2: Risk Factors',
-    objects: 'Chapter 3: Objects of the Issue',
-    capital_structure: 'Chapter 4: Capital Structure',
-    related_party: 'Chapter 5: Related Party Transactions',
-    litigation: 'Chapter 6: Litigation & Legal Proceedings',
-    promoter_details: 'Chapter 7: Promoter & Management Details'
-  };
+  let exportedChaptersCount = 0;
+  CHAPTER_ORDER.forEach(({ key, title }) => {
+    const section = drafts[key];
+    if (!section) return; // chapter not yet drafted — skip cleanly, don't break export
 
-  sections.forEach(secKey => {
-    const chapterTitle = sectionMapping[secKey] || secKey.toUpperCase();
-    const section = drafts[secKey];
+    exportedChaptersCount++;
     docElements.push(new Paragraph({ heading: HeadingLevel.HEADING_2, spacing: { before: 400, after: 150 }, children: [
-      new TextRun({ text: chapterTitle, bold: true, size: 24, color: '1e293b' }),
-      new TextRun({ text: ` (${section.status.toUpperCase()})`, size: 16, color: section.status === 'certified' ? '10b981' : 'e11d48' })
+      new TextRun({ text: title, bold: true, size: 24, color: '1e293b' }),
+      new TextRun({ text: ` (${section.status === 'certified' ? 'Certified' : 'Draft'})`, size: 16, color: section.status === 'certified' ? '10b981' : '64748b' })
     ]}));
-    section.blocks.forEach(b => {
-      docElements.push(new Paragraph({ spacing: { before: 100, after: 100 }, children: [
-        new TextRun({ text: b.text, size: 22 }),
-        new TextRun({ text: ` [Citations: ${b.citations.join(', ')}]`, italic: true, size: 16, color: '6366f1' }),
-        new TextRun({ text: ` (${b.confidence.toUpperCase()} CONFIDENCE)`, bold: true, size: 14, color: b.confidence === 'high' ? '10b981' : b.confidence === 'medium' ? 'f59e0b' : 'ef4444' })
-      ]}));
-    });
+
+    if (section.blocks && section.blocks.length > 0) {
+      section.blocks.forEach(b => {
+        const isHeader = b.text === b.text.toUpperCase() && b.text.length < 80;
+        docElements.push(new Paragraph({ spacing: { before: 100, after: 100 }, children: [
+          new TextRun({ text: b.text, size: isHeader ? 22 : 20, bold: isHeader, color: b.text.includes('[Incomplete') ? 'dc2626' : '1e293b' })
+        ]}));
+        if (b.citations && b.citations.length > 0) {
+          docElements.push(new Paragraph({ spacing: { before: 50, after: 150 }, children: [
+            new TextRun({ text: `Citations: ${b.citations.join(' | ')}`, size: 16, italic: true, color: '64748b' })
+          ]}));
+        }
+      });
+    }
   });
 
-  // Add generated-at footer
   docElements.push(new Paragraph({ spacing: { before: 400 }, children: [
-    new TextRun({ text: `\nGenerated by IPO Pilot AI — ${new Date().toLocaleString('en-IN')} — For professional review only`, italic: true, size: 16, color: '94a3b8' })
+    new TextRun({ text: `\nGenerated by IPO Pilot AI — ${new Date().toLocaleString('en-IN')} — 11 SEBI DRHP Chapters`, italic: true, size: 16, color: '94a3b8' })
   ]}));
 
   const wordDoc = new Document({ sections: [{ properties: {}, children: docElements }] });
   const buffer = await Packer.toBuffer(wordDoc);
 
-  logAudit(req, 'EXPORT_DOWNLOADED', 'export', companyId, `${req.user.name} downloaded DOCX export. Status: ${allCertified ? 'certified' : 'draft'}.`, { certified: allCertified, sections: sections.length });
-  // Add notification for the other party
-  const notifRole = req.user.role === 'reviewer' ? 'issuer' : 'reviewer';
-  const notifUser = db.getUsers().find(u => u.role === notifRole && u.companyId === companyId);
-  if (notifUser) {
-    db.addNotification({ companyId, recipient_role: notifRole, recipient_email: notifUser.email, message: `${req.user.name} exported the draft prospectus document.`, related_section: 'export', type: 'export' });
-  }
+  logAudit(req, 'EXPORT_DOWNLOADED', 'export', companyId, `${req.user.name} downloaded 11-Chapter DRHP DOCX export. Status: ${allCertified ? 'certified' : 'draft'}.`, { certified: allCertified, sections: exportedChaptersCount });
 
   res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
-  res.setHeader('Content-Disposition', `attachment; filename=IPO_Draft_${companyId}_${Date.now()}.docx`);
+  res.setHeader('Content-Disposition', `attachment; filename=SEBI_SME_DRHP_${companyId}_${Date.now()}.docx`);
   res.send(buffer);
 });
 
@@ -2473,13 +2669,13 @@ app.get('/api/export/:companyId/pdf', authenticateToken, async (req, res) => {
   const { companyId } = req.params;
   const company = db.getCompany(companyId);
   if (!company) return res.status(404).json({ message: 'Company not found' });
-  const drafts = db.getDrafts(companyId);
-  const sections = Object.keys(drafts);
-  const allCertified = sections.every(sec => drafts[sec].status === 'certified');
+  
+  const drafts = db.getDrafts(companyId) || {};
+  const allCertified = CHAPTER_ORDER.every(({ key }) => drafts[key] && drafts[key].status === 'certified');
   const watermarkText = allCertified ? 'CERTIFIED COPY - CONFIDENTIAL' : 'DRAFT — PENDING PROFESSIONAL REVIEW (AI-ASSISTED)';
 
   const doc = new PDFDocument({ margin: 50 });
-  const filename = `IPO_Draft_${companyId}_${Date.now()}.pdf`;
+  const filename = `SEBI_SME_DRHP_${companyId}_${Date.now()}.pdf`;
   
   res.setHeader('Content-disposition', `attachment; filename="${filename}"`);
   res.setHeader('Content-type', 'application/pdf');
@@ -2487,53 +2683,46 @@ app.get('/api/export/:companyId/pdf', authenticateToken, async (req, res) => {
   doc.pipe(res);
   
   // Title Page
-  doc.fontSize(24).font('Helvetica-Bold').text('DRAFT OFFER DOCUMENT', { align: 'center' }).moveDown(1);
-  doc.fontSize(30).fillColor('#4f46e5').text(company.name.toUpperCase(), { align: 'center' }).moveDown(2);
-  doc.fontSize(16).fillColor('#64748b').font('Helvetica-Oblique').text('Prepared Aligned with SEBI (ICDR) Regulations for Listing on SME Exchange', { align: 'center' }).moveDown(3);
+  doc.fontSize(24).font('Helvetica-Bold').text('DRAFT RED HERRING PROSPECTUS', { align: 'center' }).moveDown(1);
+  doc.fontSize(28).fillColor('#4f46e5').text(company.name.toUpperCase(), { align: 'center' }).moveDown(2);
+  doc.fontSize(14).fillColor('#64748b').font('Helvetica-Oblique').text('Prepared Aligned with SEBI (ICDR) Regulations for Listing on SME Exchange', { align: 'center' }).moveDown(3);
   
   // Disclaimer
   doc.fontSize(14).fillColor('#dc2626').font('Helvetica-Bold').text('IMPORTANT REGULATORY DISCLAIMER').moveDown(0.5);
   doc.fontSize(12).fillColor(allCertified ? '#10b981' : '#dc2626').text(`Status: ${watermarkText}`).moveDown(0.5);
-  doc.fontSize(10).fillColor('#334155').font('Helvetica-Oblique').text('This document is an AI-assisted draft generated by IPO Pilot AI based on promoter intake disclosures. It does NOT constitute a final legal prospectus, and must be reviewed, finalized, and certified by a registered Merchant Banker and legal counsel prior to filing with SEBI, BSE SME, or NSE Emerge. AI outputs are informational only and do not constitute legal, compliance, financial, or merchant-banking advice.').moveDown(2);
+  doc.fontSize(10).fillColor('#334155').font('Helvetica-Oblique').text('This document is an AI-assisted working draft prospectus generated by IPO Pilot AI based on promoter disclosures. It must be reviewed, finalized, and certified by a registered Merchant Banker prior to filing with SEBI, BSE SME, or NSE Emerge.').moveDown(2);
   
   doc.addPage();
   
-  // Chapters
-  const sectionMapping = {
-    business_overview: 'Chapter 1: Business Overview',
-    risk_factors: 'Chapter 2: Risk Factors',
-    objects: 'Chapter 3: Objects of the Issue',
-    capital_structure: 'Chapter 4: Capital Structure',
-    related_party: 'Chapter 5: Related Party Transactions',
-    litigation: 'Chapter 6: Litigation & Legal Proceedings',
-    promoter_details: 'Chapter 7: Promoter & Management Details'
-  };
+  let exportedChaptersCount = 0;
+  // Render 11 DRHP Chapters in CHAPTER_ORDER
+  CHAPTER_ORDER.forEach(({ key, title }) => {
+    const section = drafts[key];
+    if (!section) return; // chapter not yet drafted — skip cleanly, don't break export
 
-  sections.forEach(secKey => {
-    const chapterTitle = sectionMapping[secKey] || secKey.toUpperCase();
-    const section = drafts[secKey];
-    
-    doc.fontSize(18).fillColor('#1e293b').font('Helvetica-Bold').text(chapterTitle, { continued: true });
-    doc.fontSize(12).fillColor(section.status === 'certified' ? '#10b981' : '#e11d48').text(` (${section.status.toUpperCase()})`).moveDown(1);
-    
-    section.blocks.forEach(b => {
-      doc.fontSize(12).fillColor('#000000').font('Helvetica').text(b.text, { align: 'justify' }).moveDown(0.5);
-      doc.fontSize(10).fillColor('#6366f1').font('Helvetica-Oblique').text(`[Citations: ${b.citations.join(', ')}]`, { continued: true });
-      doc.fontSize(8).fillColor(b.confidence === 'high' ? '#10b981' : b.confidence === 'medium' ? '#f59e0b' : '#ef4444').font('Helvetica-Bold').text(` (${b.confidence.toUpperCase()} CONFIDENCE)`).moveDown(1);
-    });
+    exportedChaptersCount++;
+    doc.fontSize(16).fillColor('#1e293b').font('Helvetica-Bold').text(title, { continued: true });
+    doc.fontSize(10).fillColor(section.status === 'certified' ? '#10b981' : '#64748b').text(` (${section.status === 'certified' ? 'Certified' : 'Draft'})`).moveDown(0.8);
+
+    if (section.blocks && section.blocks.length > 0) {
+      section.blocks.forEach(b => {
+        const isIncomplete = b.text && b.text.includes('[Incomplete');
+        doc.fontSize(10).fillColor(isIncomplete ? '#dc2626' : '#1e293b').font(isIncomplete ? 'Helvetica-Bold' : 'Helvetica').text(b.text, { align: 'justify' }).moveDown(0.4);
+        if (b.citations && b.citations.length > 0) {
+          doc.fontSize(8).fillColor('#64748b').font('Helvetica-Oblique').text(`Citations: ${b.citations.join(' | ')}`).moveDown(0.6);
+        } else {
+          doc.moveDown(0.4);
+        }
+      });
+    }
     doc.moveDown(1);
   });
   
-  doc.moveDown(2).fontSize(10).fillColor('#94a3b8').font('Helvetica-Oblique').text(`Generated by IPO Pilot AI — ${new Date().toLocaleString('en-IN')} — For professional review only`, { align: 'center' });
+  doc.moveDown(2).fontSize(10).fillColor('#94a3b8').font('Helvetica-Oblique').text(`Generated by IPO Pilot AI — ${new Date().toLocaleString('en-IN')} — 11 SEBI DRHP Chapters`, { align: 'center' });
   
   doc.end();
 
-  logAudit(req, 'EXPORT_DOWNLOADED', 'export', companyId, `${req.user.name} downloaded PDF export. Status: ${allCertified ? 'certified' : 'draft'}.`, { certified: allCertified, sections: sections.length });
-  const notifRole = req.user.role === 'reviewer' ? 'issuer' : 'reviewer';
-  const notifUser = db.getUsers().find(u => u.role === notifRole && u.companyId === companyId);
-  if (notifUser) {
-    db.addNotification({ companyId, recipient_role: notifRole, recipient_email: notifUser.email, message: `${req.user.name} exported the draft prospectus document as PDF.`, related_section: 'export', type: 'export' });
-  }
+  logAudit(req, 'EXPORT_DOWNLOADED', 'export', companyId, `${req.user.name} downloaded 11-Chapter DRHP PDF export. Status: ${allCertified ? 'certified' : 'draft'}.`, { certified: allCertified, sections: exportedChaptersCount });
 });
 
 // ─── MERCHANT BANKERS ─────────────────────────────────────────────────────────
@@ -2814,6 +3003,7 @@ if (!isServerless) {
   // never races an empty in-memory store.
   ensureHydrated()
     .then((usingDynamo) => {
+      try { generateDraftData('aarav-precision'); } catch (e) {}
       app.listen(PORT, () => {
         console.log(`IPO Pilot AI backend running on http://localhost:${PORT}`);
         console.log(`Storage: ${usingDynamo ? 'DynamoDB (live)' : 'local db.json'}`);
@@ -2832,6 +3022,7 @@ if (!isServerless) {
 export default async function handler(req, res) {
   try {
     await ensureHydrated();
+    try { generateDraftData('aarav-precision'); } catch (e) {}
   } catch (err) {
     console.error('Storage init failed:', err);
     res.statusCode = 503;
@@ -2849,3 +3040,6 @@ export default async function handler(req, res) {
   }
   return app(req, res);
 }
+
+export { assembleDrhpSections, generateDraftData, CHAPTER_ORDER };
+

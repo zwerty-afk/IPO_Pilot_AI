@@ -4,6 +4,7 @@ import { getIntake, getDocuments, getIpoReadiness, getDrafts } from '../services
 import { SECTION_KEYS, computeChapterHealth, getIntakeForSection } from '../components/ChapterHealthSidebar';
 import { stepQuestions, requiredQuestions, SECTION_UPLOADS } from '../data/intakeSchema';
 import { classifyCompany, getIpoProfile } from '../data/companyClassifier';
+import { evaluateSebiEligibilityRules } from '../data/sebiEligibilityRules';
 import StatusBadge from '../components/StatusBadge';
 import { 
   ListChecks, 
@@ -91,6 +92,7 @@ export default function ComplianceChecklistPage() {
   // 1. Run AI Company Classification & Dynamic IPO Profile Engine
   const classification = classifyCompany({ name: readiness?.companyName }, intakeData, documents);
   const ipoProfile = getIpoProfile(classification);
+  const sebiRules = evaluateSebiEligibilityRules(intakeData, documents);
 
   const uploadedDocTypes = new Set((documents || []).map(d => d.doc_type));
 
@@ -296,6 +298,87 @@ export default function ComplianceChecklistPage() {
               </span>
             ))}
           </div>
+        </div>
+      </div>
+
+      {/* PART 1 — SEBI SME Eligibility & Regulatory Framework Rules (March 2025 Norms) */}
+      <div className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-3">
+          <div>
+            <h3 className="font-bold text-slate-900 text-base flex items-center gap-2">
+              <ShieldCheck className="w-5 h-5 text-indigo-600" />
+              <span>SEBI SME Eligibility & Regulatory Framework (March 2025 Rules)</span>
+            </h3>
+            <p className="text-slate-500 text-xs mt-0.5">
+              Automated validation against notified SEBI ICDR & LODR SME Amendment Regulations.
+            </p>
+          </div>
+
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-[10px] font-bold font-mono px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+              {sebiRules.filter(r => r.status === 'pass').length} Passed
+            </span>
+            <span className="text-[10px] font-bold font-mono px-2.5 py-1 rounded-full bg-red-50 text-red-700 border border-red-200">
+              {sebiRules.filter(r => r.status === 'fail').length} Failed
+            </span>
+            <span className="text-[10px] font-bold font-mono px-2.5 py-1 rounded-full bg-purple-50 text-purple-700 border border-purple-200">
+              {sebiRules.filter(r => r.status === 'needs_verification').length} Needs Verification
+            </span>
+            <span className="text-[10px] font-bold font-mono px-2.5 py-1 rounded-full bg-slate-100 text-slate-700 border border-slate-200">
+              {sebiRules.filter(r => r.status === 'informational').length} Informational
+            </span>
+          </div>
+        </div>
+
+        {/* Rules Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          {sebiRules.map((rule) => {
+            const isPass = rule.status === 'pass';
+            const isFail = rule.status === 'fail';
+            const isNeedsData = rule.status === 'needs_data';
+            const isVerification = rule.status === 'needs_verification';
+
+            const badgeBg = isPass ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
+                            isFail ? 'bg-red-50 text-red-700 border-red-200' :
+                            isNeedsData ? 'bg-amber-50 text-amber-800 border-amber-200' :
+                            isVerification ? 'bg-purple-50 text-purple-700 border-purple-200' :
+                            'bg-slate-100 text-slate-700 border-slate-200';
+
+            return (
+              <div key={rule.id} className="p-3.5 bg-slate-50/70 border border-slate-200/80 rounded-xl space-y-2 flex flex-col justify-between">
+                <div className="space-y-1">
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <h4 className="font-bold text-slate-900 text-xs">{rule.title}</h4>
+                      <span className="text-[9px] font-mono text-slate-400 font-bold uppercase">{rule.regRef}</span>
+                    </div>
+                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border shrink-0 font-mono ${badgeBg}`}>
+                      {rule.statusLabel}
+                    </span>
+                  </div>
+                  <p className="text-slate-600 text-[11px] leading-relaxed">{rule.description}</p>
+                </div>
+
+                <div className="pt-2 border-t border-slate-200/60 space-y-1.5">
+                  <p className={`text-[11px] font-medium leading-normal ${isFail ? 'text-red-950 font-semibold' : 'text-slate-700'}`}>
+                    <strong className="text-slate-900">Current Status:</strong> {rule.reason}
+                  </p>
+                  
+                  <div className="flex items-center justify-between pt-0.5">
+                    <span className="text-[10px] text-slate-400 font-mono font-semibold">Source: {rule.source}</span>
+                    <button
+                      type="button"
+                      onClick={() => navigate(`/intake?step=${rule.stepKey}&field=${rule.fieldName}`)}
+                      className="text-[10px] font-bold text-indigo-700 hover:text-indigo-900 underline flex items-center gap-0.5"
+                    >
+                      <span>Verify in Intake</span>
+                      <ArrowUpRight className="w-3 h-3" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
         </div>
       </div>
 

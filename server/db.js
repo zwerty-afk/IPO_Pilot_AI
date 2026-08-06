@@ -375,6 +375,102 @@ const INITIAL_SEED = {
             citations: ['Intake: Promoters: directors']
           }
         ]
+      },
+      company_details: {
+        status: 'draft',
+        last_updated: '2026-07-06T10:30:00Z',
+        blocks: [
+          {
+            id: 'cd-1',
+            text: 'Corporate Identity & Registration: Aarav Precision Engineering Pvt Ltd was incorporated on 2015-04-12 as a Private Limited Company under the Companies Act. Corporate Identification Number (CIN): U29220MH2015PTC263456, Permanent Account Number (PAN): AABCA1234F, GSTIN: 27AABCA1234F1Z5. Industry Classification: Precision Engineering & Manufacturing (CNC Machine Components & Precision Assemblies).',
+            confidence: 'high',
+            citations: ['Intake: Company Details: legal_name', 'Document: Certificate_of_Incorporation_2015.pdf']
+          },
+          {
+            id: 'cd-2',
+            text: 'Registered Office & Operating Locations: Registered Office: W-45, MIDC Industrial Area, Phase II, Dombivli East, Thane, Maharashtra - 421204. Operating Branches & Facilities: Primary manufacturing plant in Dombivli (Thane); regional office in Pune. Storage & Logistics Warehouses: Central raw material vault & finished goods warehouse at Dombivli site.',
+            confidence: 'high',
+            citations: ['Intake: Company Details: registered_office']
+          },
+          {
+            id: 'cd-3',
+            text: 'Share Capital & Proposed Issue: Authorized Capital: 20,000,000 INR (2,000,000 Equity Shares of Rs 10 each). Pre-IPO Paid-up Capital: 10,000,000 INR (1,000,000 Equity Shares of Rs 10 each). Proposed Issue Size: 50,000,000 INR on NSE Emerge / BSE SME.',
+            confidence: 'high',
+            citations: ['Intake: Company Details: authorized_capital', 'Intake: Company Details: proposed_exchange']
+          }
+        ]
+      },
+      financials: {
+        status: 'draft',
+        last_updated: '2026-07-06T10:30:00Z',
+        blocks: [
+          {
+            id: 'fin-1',
+            text: 'Financial Performance (3-Year Summary): Total Operating Revenue was INR 125,000,000 in FY25, INR 95,000,000 in FY24, and INR 72,000,000 in FY23. Revenue Breakup: Automotive Tier-1 components (55%), Industrial Hydraulics (30%), Aerospace & Defense Sub-assemblies (15%).',
+            confidence: 'high',
+            citations: ['Intake: Financials: revenue_fy25', 'Document: Audited_Financial_Statements_FY25.pdf']
+          },
+          {
+            id: 'fin-2',
+            text: 'Profitability & Ratios: Net Profit After Tax (PAT) stood at INR 11,000,000 in FY25 and INR 7,500,000 in FY24. EBITDA Margin: 18.5%, PAT Margin: 9.3%.',
+            confidence: 'high',
+            citations: ['Intake: Financials: profit_fy25']
+          },
+          {
+            id: 'fin-3',
+            text: 'Borrowings, Working Capital & CAPEX: Outstanding Debt: INR 25,000,000. Working Capital Facilities: Secured cash credit and bank overdraft facilities against inventory and receivables. Capital Expenditure (CAPEX): INR 15,000,000 invested in 2 VMC machines in FY25.',
+            confidence: 'high',
+            citations: ['Intake: Financials: total_debt']
+          }
+        ]
+      },
+      legal_compliance: {
+        status: 'draft',
+        last_updated: '2026-07-06T10:30:00Z',
+        blocks: [
+          {
+            id: 'lc-1',
+            text: 'Statutory & Tax Compliances: ROC Compliance: All annual returns and financial statements filed up to FY25 with zero delay fees. GST Compliance: GSTR-3B and GSTR-1 filed up to date with zero tax defaults. PF/ESI Compliance: EPFO Code MH/THN/104592; all monthly statutory employee contributions deposited on time. Income Tax Compliance: Income Tax Return (ITR-6) filed up to Assessment Year 2025-26.',
+            confidence: 'high',
+            citations: ['Intake: Legal Compliance: roc_compliance', 'Intake: Legal Compliance: gst_compliance']
+          },
+          {
+            id: 'lc-2',
+            text: 'Licenses & Clearances: Factory License: Factory License # 45920-THN valid through Dec 2028. Pollution Consent: MPCB Consent to Operate (Orange Category) valid till March 2029. Fire NOC: Thane Municipal Fire NOC # 112/2025 valid till Oct 2027.',
+            confidence: 'high',
+            citations: ['Intake: Legal Compliance: factory_license', 'Intake: Legal Compliance: pollution_noc']
+          },
+          {
+            id: 'lc-3',
+            text: 'Key Intermediaries & Advisors: Statutory Auditor: M/s Shah & Associates, Chartered Accountants (FRN: 104920W), Partner: CA Rajesh Shah. Company Secretary: M/s K. V. & Associates, Practicing Company Secretaries, Mumbai. Registrar to the Issue: Bigshare Services Pvt Ltd (SEBI Reg: INR000001385). Lead Merchant Banker: Apex Capital Advisors Pvt Ltd (SEBI Reg: INM000012490).',
+            confidence: 'high',
+            citations: ['Intake: Legal Compliance: auditor_details', 'Intake: Legal Compliance: merchant_banker_details']
+          }
+        ]
+      },
+      other_disclosures: {
+        status: 'draft',
+        last_updated: '2026-07-06T10:30:00Z',
+        blocks: [
+          {
+            id: 'od-1',
+            text: 'Dividend Policy, CSR & Employee Benefits: Dividend Policy: The Company has not declared dividends in the last 3 fiscal years to retain profits for capital expansion. CSR Initiatives: CSR activities focused on local vocational skill training in Thane industrial belt. ESOP & Benefits: Gratuity trust maintained with LIC of India; ESOP Scheme 2024 covering 50,000 pool shares.',
+            confidence: 'high',
+            citations: ['Intake: Other Disclosures: dividend_policy', 'Intake: Other Disclosures: employee_benefits']
+          },
+          {
+            id: 'od-2',
+            text: 'Material Contracts, Insurance & IP: Material Contracts: Long-term component supply agreement with Sterling Auto Components valid through 2029. Asset Risk & Insurance: Standard Fire & Special Perils policy # 459102 covering plant & machinery up to INR 80,000,000. Intellectual Property: Registered Trademark "AARAV PRECISION" under Class 7 (# 3940192).',
+            confidence: 'high',
+            citations: ['Intake: Other Disclosures: material_contracts', 'Intake: Other Disclosures: insurance_coverage']
+          },
+          {
+            id: 'od-3',
+            text: 'Government Approvals & Compliance Defaults: Government Approvals: All required operating licenses from MIDC, MPCB, DIC, and Inspector of Factories are active. Statutory Defaults: No financial defaults, statutory non-compliances, or listing penalties reported.',
+            confidence: 'high',
+            citations: ['Intake: Other Disclosures: government_approvals']
+          }
+        ]
       }
     }
   },
@@ -418,75 +514,127 @@ const INITIAL_SEED = {
   ],
   sebi_notices: [
     {
-      id: 'sebi-cur-1',
-      title: 'Operationalisation of Freezing of Promoter Holdings at ISIN Level Under ICDR Regulations',
-      source_title: 'Operationalisation of Freezing of Promoter Holdings at ISIN Level Under ICDR Regulations',
-      description: 'SEBI operationalises the freezing of holdings of promoter and promoter group including their associates at the ISIN level under ICDR Regulations, strengthening IPO lock-in enforcement.',
-      date: '2026-07-01',
-      publication_date: '2026-07-01',
-      category: 'ICDR/SME',
-      source_url: 'https://www.sebi.gov.in/legal/circulars/jul-2026/operationalisation-of-freezing-of-holdings-of-promoter-and-promoter-group-including-their-associates-promoter-holdings-at-the-isin-level-u_102943.html',
-      source_attribution: 'SEBI Official Circulars Portal',
-      fetched_at: '2026-07-01T00:00:00.000Z',
-      filter_reason: 'Official SEBI ICDR Regulation for IPO Promoter Lock-In'
-    },
-    {
-      id: 'sebi-cur-2',
-      title: 'Amendment to ICDR Regulations for SME IPO Minimum Application Size',
-      source_title: 'Amendment to ICDR Regulations for SME IPO Minimum Application Size',
-      description: 'SEBI has notified amendments to the ICDR Regulations, 2018, relaxing the minimum application size for SME IPOs from Rs. 1,00,000 to Rs. 50,000, effective from Q3 FY26.',
-      date: '2026-06-15',
-      publication_date: '2026-06-15',
+      id: 'sebi-2025-01',
+      title: 'SME IPO minimum application size increased to ₹2 lakh (2 lots per application)',
+      source_title: 'SME IPO minimum application size increased to ₹2 lakh (2 lots per application)',
+      description: 'SEBI notified amendments to ICDR Regulations increasing the minimum application size for SME IPO investors from ₹1 lakh to ₹2 lakh (minimum 2 lots per application) to protect retail investors and curb speculative bidding.',
+      date: '2025-03-04',
+      publication_date: '2025-03-04',
       category: 'ICDR Amendment',
-      source_url: 'https://www.sebi.gov.in/legal/circulars/jun-2026/amendment-to-icdr-regulations-for-sme-ipos_103197.html',
-      source_attribution: 'SEBI Official Circulars Portal',
-      fetched_at: '2026-06-15T00:00:00.000Z',
-      filter_reason: 'Official SEBI ICDR Amendment for SME IPO Application Sizing'
+      source_url: 'https://www.sebi.gov.in/legal/regulations/mar-2025/sebi-icdr-amendment-regulations-2025_sme_framework.html',
+      source_attribution: 'SEBI ICDR/LODR Amendments, 2025 — SME Framework',
+      fetched_at: '2025-03-04T00:00:00.000Z',
+      filter_reason: 'Verified SEBI Notification'
     },
     {
-      id: 'sebi-cur-3',
-      title: 'SME IPO Framework — Enhanced Disclosure Requirements for Issue Size ≥ ₹10 Cr',
-      source_title: 'SME IPO Framework — Enhanced Disclosure Requirements for Issue Size ≥ ₹10 Cr',
-      description: 'SEBI mandates enhanced disclosures for SME IPOs with issue sizes of ₹10 crore and above on BSE SME and NSE Emerge platforms, aligning with ICDR (Amendment) Regulations 2024.',
-      date: '2025-11-20',
-      publication_date: '2025-11-20',
-      category: 'ICDR/SME',
-      source_url: 'https://www.sebi.gov.in/legal/circulars/nov-2025/circular-on-sme-ipo-framework_101234.html',
-      source_attribution: 'SEBI Official Circulars Portal',
-      fetched_at: '2025-11-20T00:00:00.000Z',
-      filter_reason: 'Official SEBI Circular for SME IPO Disclosure Compliance'
-    },
-    {
-      id: 'sebi-cur-4',
-      title: 'SEBI ICDR (Amendment) Regulations 2024 — Updated SME Eligibility Criteria',
-      source_title: 'SEBI ICDR (Amendment) Regulations 2024 — Updated SME Eligibility Criteria',
-      description: 'SEBI amended ICDR Regulations to update eligibility criteria for SME IPOs, including revised net tangible asset thresholds, operating profit requirements, and promoter lock-in periods.',
-      date: '2024-09-15',
-      publication_date: '2024-09-15',
+      id: 'sebi-2025-02',
+      title: 'Minimum number of allottees in SME IPO increased from 50 to 200',
+      source_title: 'Minimum number of allottees in SME IPO increased from 50 to 200',
+      description: 'SEBI mandates that SME IPO issuers must achieve at least 200 successful allottees (increased from 50) post-IPO allotment to ensure broader public shareholding and trading liquidity.',
+      date: '2025-03-04',
+      publication_date: '2025-03-04',
       category: 'ICDR Amendment',
-      source_url: 'https://www.sebi.gov.in/legal/regulations/nov-2018/securities-and-exchange-board-of-india-issue-of-capital-and-disclosure-requirements-regulations-2018_40328.html',
-      source_attribution: 'SEBI Official Circulars Portal',
-      fetched_at: '2024-09-15T00:00:00.000Z',
-      filter_reason: 'Official SEBI Regulation on SME IPO Eligibility & Track Record'
+      source_url: 'https://www.sebi.gov.in/legal/regulations/mar-2025/sebi-icdr-amendment-regulations-2025_sme_framework.html',
+      source_attribution: 'SEBI ICDR/LODR Amendments, 2025 — SME Framework',
+      fetched_at: '2025-03-04T00:00:00.000Z',
+      filter_reason: 'Verified SEBI Notification'
     },
     {
-      id: 'sebi-cur-5',
-      title: 'Merchant Banker Registration — Updated Eligibility & Compliance Requirements',
-      source_title: 'Merchant Banker Registration — Updated Eligibility & Compliance Requirements',
-      description: 'SEBI issues updated guidelines for merchant banker registration, renewal procedures, compliance obligations, and due diligence standards applicable to lead managers for SME IPOs.',
-      date: '2025-08-10',
-      publication_date: '2025-08-10',
-      category: 'Merchant Bankers',
-      source_url: 'https://www.sebi.gov.in/sebiweb/home/HomeAction.do?doListing=yes&sid=1&ssid=7&smid=0&pageno=1',
-      source_attribution: 'SEBI Official Circulars Portal',
-      fetched_at: '2025-08-10T00:00:00.000Z',
-      filter_reason: 'Official SEBI Regulatory Framework for Merchant Banker Registration & Due Diligence'
+      id: 'sebi-2025-03',
+      title: 'Offer for Sale (OFS) in SME IPOs capped at 20% of issue size',
+      source_title: 'Offer for Sale (OFS) in SME IPOs capped at 20% of issue size',
+      description: 'OFS component in SME IPOs cannot exceed 20% of total issue size, and individual selling shareholders cannot offer more than 20% of their pre-issue shareholding on a fully diluted basis.',
+      date: '2025-03-06',
+      publication_date: '2025-03-06',
+      category: 'ICDR Amendment',
+      source_url: 'https://www.sebi.gov.in/legal/regulations/mar-2025/sebi-icdr-amendment-regulations-2025_sme_framework.html',
+      source_attribution: 'SEBI ICDR/LODR Amendments, 2025 — SME Framework',
+      fetched_at: '2025-03-06T00:00:00.000Z',
+      filter_reason: 'Verified SEBI Notification'
+    },
+    {
+      id: 'sebi-2025-04',
+      title: 'Minimum operating profit (EBITDA) requirement of ₹1 crore in 2 of last 3 years introduced for SME IPO eligibility',
+      source_title: 'Minimum operating profit (EBITDA) requirement of ₹1 crore in 2 of last 3 years introduced for SME IPO eligibility',
+      description: 'Under SEBI ICDR Regulation 229(6), SME issuers must demonstrate positive operating profit (EBITDA) of at least ₹1 crore in at least 2 of the last 3 financial years.',
+      date: '2025-03-06',
+      publication_date: '2025-03-06',
+      category: 'ICDR Amendment',
+      source_url: 'https://www.sebi.gov.in/legal/regulations/mar-2025/sebi-icdr-amendment-regulations-2025_sme_framework.html',
+      source_attribution: 'SEBI ICDR/LODR Amendments, 2025 — SME Framework',
+      fetched_at: '2025-03-06T00:00:00.000Z',
+      filter_reason: 'Verified SEBI Notification'
+    },
+    {
+      id: 'sebi-2025-05',
+      title: 'Promoter lock-in (MPC) extended to 5 years for SME IPOs',
+      source_title: 'Promoter lock-in (MPC) extended to 5 years for SME IPOs',
+      description: 'Minimum Promoter Contribution (MPC 20%) lock-in period extended to 5 years. Promoter holding in excess of MPC releases in two phases (50% after 1 year, 50% after 2 years).',
+      date: '2025-03-08',
+      publication_date: '2025-03-08',
+      category: 'ICDR Amendment',
+      source_url: 'https://www.sebi.gov.in/legal/regulations/mar-2025/sebi-icdr-amendment-regulations-2025_sme_framework.html',
+      source_attribution: 'SEBI ICDR/LODR Amendments, 2025 — SME Framework',
+      fetched_at: '2025-03-08T00:00:00.000Z',
+      filter_reason: 'Verified SEBI Notification'
+    },
+    {
+      id: 'sebi-2025-06',
+      title: 'Monitoring Agency threshold reduced from ₹100 Cr to ₹20 Cr for SME issuers',
+      source_title: 'Monitoring Agency threshold reduced from ₹100 Cr to ₹20 Cr for SME issuers',
+      description: 'Appointment of a SEBI-registered Monitoring Agency is mandatory for SME IPO fresh issue sizes exceeding ₹20 crore or funding subsidiary debt/acquisitions.',
+      date: '2025-03-08',
+      publication_date: '2025-03-08',
+      category: 'ICDR Amendment',
+      source_url: 'https://www.sebi.gov.in/legal/regulations/mar-2025/sebi-icdr-amendment-regulations-2025_sme_framework.html',
+      source_attribution: 'SEBI ICDR/LODR Amendments, 2025 — SME Framework',
+      fetched_at: '2025-03-08T00:00:00.000Z',
+      filter_reason: 'Verified SEBI Notification'
+    },
+    {
+      id: 'sebi-2025-07',
+      title: 'RPT norms under LODR extended to SME listed entities (10% of turnover materiality threshold)',
+      source_title: 'RPT norms under LODR extended to SME listed entities (10% of turnover materiality threshold)',
+      description: 'Related Party Transactions exceeding 10% of annual consolidated turnover require prior shareholder approval by ordinary resolution on SME boards, effective April 1, 2025.',
+      date: '2025-03-28',
+      publication_date: '2025-03-28',
+      category: 'LODR Amendment',
+      source_url: 'https://www.sebi.gov.in/legal/regulations/mar-2025/sebi-lodr-amendment-regulations-2025_sme_framework.html',
+      source_attribution: 'SEBI ICDR/LODR Amendments, 2025 — SME Framework',
+      fetched_at: '2025-03-28T00:00:00.000Z',
+      filter_reason: 'Verified SEBI Notification'
+    },
+    {
+      id: 'sebi-2025-08',
+      title: 'SME issuers barred from using IPO proceeds to repay promoter/related-party loans',
+      source_title: 'SME issuers barred from using IPO proceeds to repay promoter/related-party loans',
+      description: 'Strict prohibition introduced under Regulation 230: public issue proceeds cannot be utilized for repayment of loans taken from Promoters, Promoter Group, or related parties.',
+      date: '2025-03-08',
+      publication_date: '2025-03-08',
+      category: 'ICDR Amendment',
+      source_url: 'https://www.sebi.gov.in/legal/regulations/mar-2025/sebi-icdr-amendment-regulations-2025_sme_framework.html',
+      source_attribution: 'SEBI ICDR/LODR Amendments, 2025 — SME Framework',
+      fetched_at: '2025-03-08T00:00:00.000Z',
+      filter_reason: 'Verified SEBI Notification'
+    },
+    {
+      id: 'sebi-2025-09',
+      title: 'Cooling-off period of 2 years introduced for companies converted from proprietorship/partnership/LLP before SME IPO',
+      source_title: 'Cooling-off period of 2 years introduced for companies converted from proprietorship/partnership/LLP before SME IPO',
+      description: 'Entities converted into a public/private limited company from a proprietorship, partnership, or LLP must complete at least 2 full financial years as a corporate entity before filing an SME IPO.',
+      date: '2025-03-08',
+      publication_date: '2025-03-08',
+      category: 'ICDR Amendment',
+      source_url: 'https://www.sebi.gov.in/legal/regulations/mar-2025/sebi-icdr-amendment-regulations-2025_sme_framework.html',
+      source_attribution: 'SEBI ICDR/LODR Amendments, 2025 — SME Framework',
+      fetched_at: '2025-03-08T00:00:00.000Z',
+      filter_reason: 'Verified SEBI Notification'
     }
   ],
   sebi_notices_meta: {
-    last_fetched: '2026-07-01T00:00:00.000Z',
-    source: 'https://www.sebi.gov.in/sebiweb/home/HomeAction.do?doListing=yes&sid=1&ssid=7&smid=0&pageno=1',
-    fetch_count: 5
+    last_fetched: '2025-03-28T00:00:00.000Z',
+    source: 'SEBI ICDR/LODR Amendments, 2025 — SME Framework',
+    fetch_count: 9
   },
   audit_logs: [
     {

@@ -227,8 +227,8 @@ export default function DraftPreview() {
                     <div
                       key={block.id}
                       className={`p-4 rounded-xl border flex flex-col justify-between gap-3 transition-all ${isLow ? 'bg-red-50/30 border-l-4 border-l-red-500 border-red-200' :
-                          isMed ? 'bg-amber-50/30 border-l-4 border-l-amber-500 border-amber-200' :
-                            'bg-slate-50/50 border-l-4 border-l-indigo-500 border-slate-200/80'
+                        isMed ? 'bg-amber-50/30 border-l-4 border-l-amber-500 border-amber-200' :
+                          'bg-slate-50/50 border-l-4 border-l-indigo-500 border-slate-200/80'
                         }`}
                     >
                       <p className="text-slate-800 text-sm leading-relaxed whitespace-pre-line font-sans">{block.text}</p>
@@ -294,10 +294,10 @@ export default function DraftPreview() {
               <div
                 key={comm.id}
                 className={`p-3 rounded-xl border space-y-2 text-xs ${comm.status === 'resolved'
-                    ? 'bg-slate-50/50 border-slate-200 opacity-60'
-                    : comm.type === 'clarification_requested'
-                      ? 'bg-amber-50 border-amber-200'
-                      : 'bg-indigo-50/50 border-indigo-100'
+                  ? 'bg-slate-50/50 border-slate-200 opacity-60'
+                  : comm.type === 'clarification_requested'
+                    ? 'bg-amber-50 border-amber-200'
+                    : 'bg-indigo-50/50 border-indigo-100'
                   }`}
               >
                 <div className="flex justify-between items-start">

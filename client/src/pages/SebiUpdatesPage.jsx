@@ -3,8 +3,9 @@ import { getSebiNotices, refreshSebiNotices } from '../services/api';
 import { RefreshCw, ExternalLink, Newspaper, Clock } from 'lucide-react';
 
 const CATEGORY_COLORS = {
+  'ICDR Amendment':       'bg-indigo-50 text-indigo-700 border-indigo-200',
+  'LODR Amendment':       'bg-purple-50 text-purple-700 border-purple-200',
   'ICDR/SME':             'bg-indigo-50 text-indigo-700 border-indigo-100',
-  'ICDR Amendment':       'bg-indigo-50 text-indigo-700 border-indigo-100',
   'Listing Obligations':  'bg-blue-50 text-blue-700 border-blue-100',
   'Insider Trading':      'bg-orange-50 text-orange-700 border-orange-100',
   'Merchant Bankers':     'bg-teal-50 text-teal-700 border-teal-100',

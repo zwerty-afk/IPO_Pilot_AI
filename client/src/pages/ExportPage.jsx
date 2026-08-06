@@ -224,6 +224,63 @@ export default function ExportPage() {
               AI-generated content. Must be reviewed by a SEBI-registered Merchant Banker and legal counsel before filing.
             </p>
           </div>
+
+          {/* 19 DRHP Sections Structure Card */}
+          <div className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div>
+                <h3 className="font-bold text-slate-900 text-sm flex items-center gap-2">
+                  <Bookmark className="w-4 h-4 text-indigo-600" />
+                  <span>19 SEBI SME DRHP Prospectus Sections</span>
+                </h3>
+                <p className="text-slate-500 text-xs mt-0.5">
+                  Mapped to SEBI (ICDR) Regulations, Schedule VI. Total length scales with company data (~35–65 pages).
+                </p>
+              </div>
+              <span className="text-xs font-bold font-mono px-2.5 py-1 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-100">
+                19 Sections
+              </span>
+            </div>
+
+            <div className="space-y-2 max-h-[420px] overflow-y-auto pr-1">
+              {[
+                { num: 1, title: 'Cover Page', pages: '1 Page', src: 'Company Details & Merchant Banker', note: 'Logo, Exchange, Date, Disclaimer' },
+                { num: 2, title: 'Table of Contents', pages: '1 Page', src: 'Auto-generated', note: 'Complete 19-section page list' },
+                { num: 3, title: 'Definitions & Abbreviations', pages: '1–2 Pages', src: 'Static Legal + Company Data', note: 'SEBI, ICDR, CIN, DIN terms' },
+                { num: 4, title: 'Risk Factors', pages: '3–6 Pages', src: 'Risk Factors Chapter', note: 'Internal, External & Issue risks' },
+                { num: 5, title: 'Summary of the Offer Document', pages: '2–3 Pages', src: 'Synthesized Cross-Chapter', note: 'Business, Issue & Risk summary' },
+                { num: 6, title: 'General Information', pages: '2–3 Pages', src: 'Company Details & Legal', note: 'CIN, Registered Office, Auditor' },
+                { num: 7, title: 'Capital Structure', pages: '2–4 Pages', src: 'Capital Structure Chapter', note: 'Share capital, holding, lock-in' },
+                { num: 8, title: 'Objects of the Issue', pages: '2–4 Pages', src: 'Objects of Issue Chapter', note: 'Fund usage, timeline, benefits' },
+                { num: 9, title: 'Business Overview', pages: '4–8 Pages', src: 'Business Overview Chapter', note: 'Operations, products, strategy' },
+                { num: 10, title: 'Industry Overview', pages: '2–3 Pages', src: 'Business Overview (Industry)', note: 'Sector landscape & market size' },
+                { num: 11, title: 'Financial Information', pages: '4–8 Pages', src: 'Financial Summary Chapter', note: '3-Year Balance Sheet, P&L, Ratios' },
+                { num: 12, title: "Management's Discussion & Analysis (MD&A)", pages: '2–4 Pages', src: 'Synthesized Financial + Strategy', note: 'Revenue trends & expansion notes' },
+                { num: 13, title: 'Promoters & Management', pages: '2–4 Pages', src: 'Promoters & Directors Chapter', note: 'Promoter profiles, Board, KMP' },
+                { num: 14, title: 'Related Party Transactions', pages: '1–3 Pages', src: 'Related Party Chapter', note: 'Disclosed related-party contracts' },
+                { num: 15, title: 'Litigation & Legal Proceedings', pages: '1–4 Pages', src: 'Litigation & Disputes Chapter', note: 'Civil, tax, GST & labor cases' },
+                { num: 16, title: 'Legal & Compliance / Government Approvals', pages: '1–2 Pages', src: 'Legal & Compliance Chapter', note: 'Licenses, Factory NOC, Approvals' },
+                { num: 17, title: 'Other Disclosures', pages: '1–3 Pages', src: 'Other Disclosures Chapter', note: 'Dividend policy, CSR, ESOP' },
+                { num: 18, title: 'Main Provisions of Articles of Association', pages: '1–2 Pages', src: 'Standard Legal Boilerplate', note: 'AOA governance & share rights' },
+                { num: 19, title: 'Declaration', pages: '1 Page', src: 'Promoters & Directors Chapter', note: 'Statutory compliance sign-off' }
+              ].map((s) => (
+                <div key={s.num} className="p-2.5 bg-slate-50 border border-slate-200/80 rounded-xl flex items-center justify-between gap-3 text-xs">
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <span className="w-5 h-5 rounded-md bg-indigo-600 text-white font-mono font-bold text-[10px] flex items-center justify-center shrink-0">
+                      {s.num}
+                    </span>
+                    <div className="min-w-0">
+                      <h4 className="font-bold text-slate-800 truncate text-xs">{s.title}</h4>
+                      <p className="text-[10px] text-slate-400 truncate">{s.src} · {s.note}</p>
+                    </div>
+                  </div>
+                  <span className="text-[10px] font-mono font-bold text-slate-500 bg-white px-2 py-0.5 rounded border border-slate-200 shrink-0">
+                    {s.pages}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
 
         {/* Version Audit Log (Right/Bottom) */}
