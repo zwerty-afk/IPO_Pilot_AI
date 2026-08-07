@@ -25,26 +25,30 @@ import {
 } from 'lucide-react';
 
 const sectionMapping = {
+  company_details: "Company Profile & Details",
   business_overview: "Business Overview",
-  risk_factors: "Risk Factors",
-  objects: "Objects of the Issue",
+  financials: "Financial Information",
   capital_structure: "Capital Structure",
-  related_party: "Related Party Transactions",
-  litigation: "Litigation & Legal Proceedings",
+  objects: "Objects of the Issue",
   promoter_details: "Promoter & Management Details",
+  related_party: "Related Party Transactions",
+  risk_factors: "Risk Factors",
+  litigation: "Litigation & Legal Proceedings",
   legal_compliance: "Legal & Compliance",
   risk_information: "Risk Information",
   other_disclosures: "Other Disclosures"
 };
 
 const sectionDescriptions = {
+  company_details: "Basic company information, incorporation details, and corporate structure.",
   business_overview: "Detailed overview of business, products, facilities, and customers.",
-  risk_factors: "Internal and external challenges and legal risk exposures.",
-  objects: "Detailed breakdown of proposed issue size and utilization of funds.",
+  financials: "Restated financial statements, revenue metrics, and debt details.",
   capital_structure: "Pre-IPO share distribution and promoter holding stats.",
-  related_party: "Financial agreements with promoter-owned enterprises.",
-  litigation: "Pending tax assessments, legal cases, and promoter status.",
+  objects: "Detailed breakdown of proposed issue size and utilization of funds.",
   promoter_details: "Detailed experience and board structural profiles.",
+  related_party: "Financial agreements with promoter-owned enterprises.",
+  risk_factors: "Internal and external challenges and legal risk exposures.",
+  litigation: "Pending tax assessments, legal cases, and promoter status.",
   legal_compliance: "ROC, GST, environmental, factory licenses, and auditor details.",
   risk_information: "Structured customer/supplier concentration and operational risk parameters.",
   other_disclosures: "Dividend policy, CSR, material contracts, insurance, and IP details."
@@ -502,28 +506,30 @@ export default function Dashboard() {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-          {stats?.heatmap && Object.keys(stats.heatmap).map(secKey => (
-            <div
-              key={secKey}
-              onClick={() => navigate(`/compliance-checklist?chapter=${secKey}`)}
-              className={`p-5 rounded-2xl border transition-all cursor-pointer hover:shadow-md flex flex-col justify-between h-40 ${getHeatmapColor(stats.heatmap[secKey])}`}
-            >
-              <div>
-                <div className="flex items-start justify-between gap-3">
-                  <h4 className="font-bold text-base tracking-tight">{sectionMapping[secKey]}</h4>
-                  {getHeatmapBadge(stats.heatmap[secKey])}
+          {stats?.heatmap && Object.keys(stats.heatmap)
+            .filter(secKey => sectionMapping[secKey] && sectionDescriptions[secKey])
+            .map(secKey => (
+              <div
+                key={secKey}
+                onClick={() => navigate(`/compliance-checklist?chapter=${secKey}`)}
+                className={`p-5 rounded-2xl border transition-all cursor-pointer hover:shadow-md flex flex-col justify-between h-40 ${getHeatmapColor(stats.heatmap[secKey])}`}
+              >
+                <div>
+                  <div className="flex items-start justify-between gap-3">
+                    <h4 className="font-bold text-base tracking-tight">{sectionMapping[secKey]}</h4>
+                    {getHeatmapBadge(stats.heatmap[secKey])}
+                  </div>
+                  <p className="text-xs opacity-75 mt-2 line-clamp-2">
+                    {sectionDescriptions[secKey]}
+                  </p>
                 </div>
-                <p className="text-xs opacity-75 mt-2 line-clamp-2">
-                  {sectionDescriptions[secKey]}
-                </p>
-              </div>
 
-              <div className="flex items-center justify-between text-xs font-semibold pt-3 border-t border-black/5">
-                <span className="opacity-80">View Compliance Section</span>
-                <ArrowRight className="w-4 h-4 transform group-hover:translate-x-1 transition-transform" />
+                <div className="flex items-center justify-between text-xs font-semibold pt-3 border-t border-black/5">
+                  <span className="opacity-80">View Compliance Section</span>
+                  <ArrowRight className="w-4 h-4 transform group-hover:translate-x-1 transition-transform" />
+                </div>
               </div>
-            </div>
-          ))}
+            ))}
         </div>
       </div>
 

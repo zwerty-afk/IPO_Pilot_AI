@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { getCompanyStatus, downloadDocx, downloadPdf, getAuditLogs } from '../services/api';
+import { getCompanyStatus, downloadDocx, downloadPdf, getAuditLogs, getIntake } from '../services/api';
 import FrontMatterTemplate from '../components/FrontMatterTemplate';
 import { 
   Download, 
@@ -32,6 +32,7 @@ const ACTION_LABELS = {
 
 export default function ExportPage() {
   const [stats, setStats] = useState(null);
+  const [intake, setIntake] = useState({});
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
   const [exportingPdf, setExportingPdf] = useState(false);
@@ -46,8 +47,12 @@ export default function ExportPage() {
   const loadStats = async () => {
     try {
       setLoading(true);
-      const res = await getCompanyStatus(companyId);
-      setStats(res.data || res || {});
+      const [statusRes, intakeRes] = await Promise.all([
+        getCompanyStatus(companyId),
+        getIntake(companyId).catch(() => ({ data: {} }))
+      ]);
+      setStats(statusRes.data || statusRes || {});
+      setIntake(intakeRes.data || intakeRes || {});
     } catch (err) {
       console.error("Failed to load export details:", err);
     } finally {
@@ -267,10 +272,11 @@ export default function ExportPage() {
                 These first 3 pages and Table of Contents use strict, non-AI document templates. Verified company and intake data are automatically injected into standard SEBI filing layouts.
               </p>
               
-              <FrontMatterTemplate 
-                company={{ name: stats?.companyName }} 
-                issueDetails={{}} 
-                stats={stats} 
+              <FrontMatterTemplate
+                company={{ name: stats?.companyName, ...((intake?.company_details) || {}) }}
+                issueDetails={{}}
+                intake={intake}
+                stats={stats}
               />
             </div>
           ) : (

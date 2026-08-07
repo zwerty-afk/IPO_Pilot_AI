@@ -1,384 +1,483 @@
 import React from 'react';
-import { 
-  Building2, 
-  FileText, 
-  ShieldAlert, 
-  ShieldCheck, 
-  QrCode, 
-  Globe, 
-  Mail, 
-  MapPin, 
-  Phone, 
-  CheckCircle2, 
-  Info,
-  Bookmark,
-  Award,
-  Layers
-} from 'lucide-react';
 
 /**
- * Fixed Front Matter Template for Final SEBI DRHP Export
- * Pages 1-3 are strictly template-driven (not AI-generated)
- * Followed by Table of Contents (Page 4) and AI DRHP chapters
+ * FrontMatterTemplate — Pages 1–3 of the SEBI DRHP
+ *
+ * Layout strictly follows template.md:
+ *   Page 1 — DRHP Cover Page
+ *   Page 2 — Issue Details & Statutory Allocation Structure
+ *   Page 3 — Table of Contents
+ *
+ * All placeholders are filled from props; remaining blanks use [•] per SEBI convention.
  */
-export default function FrontMatterTemplate({ company = {}, issueDetails = {}, stats = {} }) {
-  const compName = company.name || 'AARAV PRECISION ENGINEERING LIMITED';
-  const formerName = company.formerName || 'Aarav Precision Engineering Private Limited';
-  const cin = company.cin || 'U29220MH2015PTC263456';
-  const regOffice = company.address || company.regOffice || 'Plot W-42, MIDC Industrial Area, Dombivli East, Thane - 421203, Maharashtra, India';
-  const corpOffice = company.corpOffice || regOffice;
-  const website = company.website || 'www.aaravprecision.com';
-  const email = company.email || 'investors@aaravprecision.com';
-  const contactNo = company.contactNo || '+91 251 287 4400';
-  const complianceOfficer = company.complianceOfficer || 'Rohan Sharma, Company Secretary & Compliance Officer';
-  const promoters = company.promoters || 'Aarav Mehta & Sunita Mehta';
-  
-  const issueTitle = issueDetails.title || 'INITIAL PUBLIC OFFERING OF UP TO 4,000,000 EQUITY SHARES';
-  const freshIssue = issueDetails.freshIssue || 'Up to 4,000,000 Equity Shares aggregating up to ₹1,200.00 Million';
-  const ofs = issueDetails.ofs || 'NIL (100% Fresh Issue by Issuer Company)';
-  const faceValue = issueDetails.faceValue || '₹10.00 per Equity Share';
-  const exchange = issueDetails.exchange || 'NSE Emerge (National Stock Exchange of India Limited)';
-  const brlm = issueDetails.brlm || 'GYR Capital Advisors Private Limited';
-  const registrar = issueDetails.registrar || 'Bigshare Services Private Limited';
+export default function FrontMatterTemplate({ company = {}, issueDetails = {}, intake = {}, stats = {} }) {
+  // ── Resolve company data from all available sources ──────────────────────────
+  const cd = intake?.company_details || {};
+  const bo = intake?.business_overview || {};
+  const cap = intake?.capital_structure || {};
+  const obj = intake?.objects || {};
+  const prom = intake?.promoters || {};
+  const od = intake?.other_disclosures || {};
+
+  const compName = cd.legal_name || company.name || company.legal_name || 'AARAV PRECISION ENGINEERING LIMITED';
+  const formerName = cd.former_name || company.formerName || 'Aarav Precision Engineering Private Limited';
+  const cin = cd.cin || company.cin || 'U29220MH2015PTC263456';
+  const regOffice = cd.registered_office || company.address || 'Plot W-42, MIDC Industrial Area, Dombivli East, Thane - 421203, Maharashtra, India';
+  const complianceOfficer = cd.compliance_officer || company.complianceOfficer || 'Rohan Sharma, Company Secretary & Compliance Officer';
+  const telephone = cd.telephone || company.contactNo || '+91 251 287 4400';
+  const email = cd.email || company.email || 'investors@aaravprecision.com';
+  const website = cd.website || company.website || 'www.aaravprecision.com';
+  const promoters = prom.promoters_list || company.promoters || 'Aarav Mehta & Sunita Mehta';
+  const companyAct = cd.company_act || '2013';
+  const incDate = cd.incorporation_date || company.incorporation_date || '2015';
+  const incYear = incDate.substring(0, 4);
+  const companyType = cd.company_type || 'Private Limited Company';
+  const exchange = cd.proposed_exchange || issueDetails.exchange || 'NSE Emerge / BSE SME';
+  const faceValue = cap.face_value || issueDetails.faceValue || '10';
+  const freshIssueShares = cap.fresh_issue_shares || issueDetails.freshIssueShares || '[•]';
+  const freshIssueAmt = obj.amount_to_raise || issueDetails.freshIssueAmt || '[•]';
+  const ofsShares = cap.ofs_shares || issueDetails.ofsShares || 'N/A';
+  const ofsAmt = cap.ofs_amount || issueDetails.ofsAmt || 'N/A';
+  const totalOfferShares = issueDetails.totalOfferShares || '[•]';
+  const totalOfferAmt = issueDetails.totalOfferAmt || '[•]';
+  const brlm = od.brlm || issueDetails.brlm || 'GYR Capital Advisors Private Limited';
+  const registrar = od.registrar || issueDetails.registrar || 'Bigshare Services Private Limited';
+  const promoterSeller = prom.selling_shareholder || issueDetails.promoterSeller || '';
   const draftDate = new Date().toLocaleDateString('en-IN', { year: 'numeric', month: 'long', day: 'numeric' });
+  const anchorDate = issueDetails.anchorDate || '[•]';
+  const offerOpenDate = issueDetails.offerOpenDate || '[•]';
+  const offerCloseDate = issueDetails.offerCloseDate || '[•]';
+  const floorPrice = issueDetails.floorPrice || '[•]';
+  const capPrice = issueDetails.capPrice || '[•]';
+  const minBidLot = issueDetails.minBidLot || '[•]';
+  const designatedExchange = exchange.includes('/') ? exchange.split('/')[0].trim() : exchange;
+
+  const PAGE_BREAK = (
+    <div style={{ pageBreakAfter: 'always', breakAfter: 'page' }} />
+  );
 
   return (
-    <div className="space-y-12 font-serif text-slate-900 leading-relaxed select-none">
+    <div className="font-serif text-slate-900 leading-relaxed bg-white" style={{ fontFamily: 'Times New Roman, Times, serif' }}>
 
-      {/* ==================================================== */}
-      {/* PAGE 1 — FIXED COVER PAGE                            */}
-      {/* ==================================================== */}
-      <div className="bg-white border-2 border-slate-900 p-8 md:p-14 space-y-8 min-h-[1050px] shadow-2xl relative flex flex-col justify-between font-serif">
-        
-        {/* Top SEBI DRHP Regulatory Banner */}
-        <div className="border-b-2 border-slate-900 pb-4 text-center space-y-2">
-          <p className="text-[11px] font-mono font-bold uppercase tracking-widest text-slate-700">
+      {/* ════════════════════════════════════════════════════════════════ */}
+      {/* PAGE 1 — DRHP COVER PAGE                                       */}
+      {/* ════════════════════════════════════════════════════════════════ */}
+      <div className="border-2 border-slate-900 p-8 md:p-12 space-y-5 min-h-[1050px] shadow-md relative flex flex-col" style={{ pageBreakAfter: 'always', breakAfter: 'page' }}>
+
+        {/* DRHP Title Banner */}
+        <div className="text-center border-b-2 border-slate-900 pb-4 space-y-1">
+          <h1 className="text-xl font-black uppercase tracking-widest text-slate-900">
             DRAFT RED HERRING PROSPECTUS
-          </p>
-          <p className="text-[9px] font-mono text-slate-500 uppercase tracking-wider">
-            Dated {draftDate} | Version 1.0 (Final Export) · SEBI (ICDR) Regulations, 2018 (Schedule VI)
-          </p>
-          <div className="bg-slate-100 py-1 px-3 border border-slate-300 rounded text-[9px] font-mono font-semibold text-slate-700 uppercase tracking-wider inline-block">
-            Please read Section 32 of the Companies Act, 2013 and SEBI (ICDR) Regulations
-          </div>
-        </div>
-
-        {/* Company Identity Block */}
-        <div className="text-center space-y-3 py-4 border-b border-slate-200">
-          <div className="flex justify-center mb-2">
-            <div className="w-14 h-14 bg-indigo-900 text-white rounded-2xl flex items-center justify-center font-bold text-xl shadow-md border-2 border-indigo-700">
-              <Building2 className="w-8 h-8 text-amber-400" />
-            </div>
-          </div>
-          <h1 className="text-2xl md:text-3xl font-black text-slate-900 tracking-wide uppercase font-serif">
-            {compName.toUpperCase()}
           </h1>
-          {formerName && (
-            <p className="text-xs text-slate-600 italic">
-              (Originally incorporated under Companies Act, 1956 as "{formerName}")
-            </p>
-          )}
-          <div className="text-[11px] font-mono space-y-1 text-slate-700">
-            <p><span className="font-bold text-slate-900">CIN:</span> {cin}</p>
-            <p><span className="font-bold text-slate-900">Registered Office:</span> {regOffice}</p>
-            <p><span className="font-bold text-slate-900">Corporate Office:</span> {corpOffice}</p>
-            <p className="flex items-center justify-center gap-4 text-[10px] text-slate-600 pt-1">
-              <span><Globe className="w-3 h-3 inline mr-1 text-indigo-600" />{website}</span>
-              <span><Mail className="w-3 h-3 inline mr-1 text-indigo-600" />{email}</span>
-              <span><Phone className="w-3 h-3 inline mr-1 text-indigo-600" />{contactNo}</span>
-            </p>
-          </div>
-        </div>
-
-        {/* Issue Details Box */}
-        <div className="bg-slate-50 p-6 border border-slate-300 rounded-xl space-y-4 text-center">
-          <h2 className="text-xs font-bold font-mono text-slate-900 uppercase tracking-widest border-b border-slate-200 pb-2">
-            OFFER DETAILS & ISSUE STRUCTURE
-          </h2>
-          <p className="text-xs font-bold text-slate-900 leading-relaxed uppercase">
-            {issueTitle} OF FACE VALUE OF {faceValue.toUpperCase()} FOR CASH AT A PRICE OF ₹[•] PER EQUITY SHARE (INCLUDING PREMIUM OF ₹[•] PER EQUITY SHARE) AGGREGATING UP TO ₹1,200.00 MILLION ON SME EXCHANGE.
+          <p className="text-[10px] font-mono text-slate-500 uppercase tracking-wider">
+            (This Draft Red Herring Prospectus will be updated upon filing with the RoC)
           </p>
-          <div className="grid grid-cols-2 gap-4 text-xs font-sans text-left border-t border-slate-200 pt-3">
-            <div>
-              <span className="font-mono text-[10px] uppercase text-slate-400 font-bold block">Fresh Issue Portion:</span>
-              <span className="font-bold text-slate-800">{freshIssue}</span>
-            </div>
-            <div>
-              <span className="font-mono text-[10px] uppercase text-slate-400 font-bold block">Offer For Sale (OFS):</span>
-              <span className="font-bold text-slate-800">{ofs}</span>
-            </div>
+          <div className="flex justify-center items-center gap-6 flex-wrap pt-1">
+            <span className="text-[11px] font-bold text-slate-700"><strong>Dated:</strong> {draftDate}</span>
+            <span className="text-[11px] font-bold text-slate-800">Please read Section 32 of the Companies Act, 2013</span>
+            <span className="text-[11px] font-bold text-indigo-800 uppercase tracking-wide">100% Book Built Offer</span>
           </div>
         </div>
 
-        {/* Key Intermediaries & Designated Stock Exchange Table */}
-        <div className="border border-slate-300 rounded-xl overflow-hidden text-xs font-sans">
-          <table className="w-full text-left">
-            <thead className="bg-slate-900 text-white font-mono text-[10px] uppercase">
-              <tr>
-                <th className="p-2.5">Book Running Lead Manager</th>
-                <th className="p-2.5">Registrar to the Issue</th>
-                <th className="p-2.5">Designated SME Exchange</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-200 bg-white font-medium text-slate-800 text-[11px]">
-              <tr>
-                <td className="p-2.5 font-bold text-indigo-900">{brlm}</td>
-                <td className="p-2.5 font-bold text-indigo-900">{registrar}</td>
-                <td className="p-2.5 font-bold text-slate-900">{exchange}</td>
-              </tr>
-            </tbody>
-          </table>
+        {/* Company Name & Identity */}
+        <div className="text-center space-y-2 border-b border-slate-300 pb-4">
+          <h2 className="text-2xl font-black uppercase text-slate-900 tracking-wide">
+            {compName.toUpperCase()}
+          </h2>
+          <p className="text-[11px] text-slate-600 italic">
+            (Originally incorporated as <em>"{formerName}"</em> under the Companies Act, {companyAct}; converted/renamed to{' '}
+            <em>"{compName}"</em> on {incYear})
+          </p>
+          <div className="text-left max-w-xl mx-auto space-y-1 pt-2">
+            <p className="text-[11px]"><strong>Corporate Identification Number (CIN):</strong> <span className="font-mono">{cin}</span></p>
+            <p className="text-[11px]"><strong>Registered &amp; Corporate Office:</strong> {regOffice}</p>
+            <p className="text-[11px]"><strong>Contact Person / Compliance Officer:</strong> {complianceOfficer}</p>
+            <p className="text-[11px]"><strong>Telephone &amp; Email:</strong> {telephone} | {email}</p>
+            <p className="text-[11px]"><strong>Website:</strong> {website}</p>
+          </div>
         </div>
 
-        {/* Footer Disclaimers & QR Code */}
-        <div className="border-t-2 border-slate-900 pt-4 flex items-center justify-between text-[9px] font-sans text-slate-600 gap-4">
-          <div className="space-y-1 max-w-xl">
-            <p className="font-bold text-slate-900 uppercase">REGULATORY NOTICE & RISK WARNING:</p>
-            <p className="leading-snug">
-              Investment in equity shares involves a high degree of risk. For details, please see "Risk Factors" on page 12 before bidding. A copy of this DRHP has been submitted to SEBI and the Designated SME Stock Exchange.
-            </p>
+        {/* OUR PROMOTERS */}
+        <div className="text-center border-b border-slate-300 pb-3">
+          <h3 className="text-sm font-bold uppercase tracking-widest text-slate-800">OUR PROMOTERS</h3>
+          <p className="text-sm font-black text-slate-900 mt-1">{promoters.toUpperCase()}</p>
+        </div>
+
+        {/* DETAILS OF THE OFFER TO THE PUBLIC */}
+        <div className="space-y-1">
+          <h3 className="text-[11px] font-bold uppercase tracking-widest text-slate-800 border-b border-slate-400 pb-1">DETAILS OF THE OFFER TO THE PUBLIC</h3>
+          <div className="overflow-x-auto">
+            <table className="w-full text-[10px] border-collapse border border-slate-400">
+              <thead>
+                <tr className="bg-slate-100">
+                  <th className="border border-slate-400 p-1.5 text-left font-bold uppercase">TYPE</th>
+                  <th className="border border-slate-400 p-1.5 text-left font-bold uppercase">FRESH ISSUE SIZE</th>
+                  <th className="border border-slate-400 p-1.5 text-left font-bold uppercase">OFFER FOR SALE SIZE</th>
+                  <th className="border border-slate-400 p-1.5 text-left font-bold uppercase">TOTAL OFFER SIZE</th>
+                  <th className="border border-slate-400 p-1.5 text-left font-bold uppercase">ELIGIBILITY AND SHARE RESERVATION</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td className="border border-slate-400 p-1.5 font-medium">Fresh Issue</td>
+                  <td className="border border-slate-400 p-1.5">Up to <strong>{freshIssueShares}</strong> Equity Shares aggregating up to ₹<strong>{freshIssueAmt}</strong> Million</td>
+                  <td className="border border-slate-400 p-1.5">
+                    {ofsShares === 'N/A' ? 'Not Applicable' : `Up to ${ofsShares} Equity Shares aggregating up to ₹${ofsAmt} Million`}
+                  </td>
+                  <td className="border border-slate-400 p-1.5">Up to <strong>[•]</strong> Equity Shares aggregating up to ₹<strong>[•]</strong> Million</td>
+                  <td className="border border-slate-400 p-1.5 text-[9px]">The Offer is being made pursuant to Regulation 6(1) of the SEBI (ICDR) Regulations, 2018, as amended. For further details, see "Other Regulatory and Statutory Disclosures".</td>
+                </tr>
+              </tbody>
+            </table>
           </div>
-          <div className="p-2 bg-slate-50 border border-slate-300 rounded-xl text-center shrink-0">
-            <QrCode className="w-10 h-10 text-slate-800 mx-auto" />
-            <span className="font-mono text-[8px] block font-bold text-slate-500 mt-1">SEBI FILING VERIFICATION</span>
+        </div>
+
+        {/* DETAILS OF THE OFFER FOR SALE BY SELLING SHAREHOLDERS */}
+        <div className="space-y-1">
+          <h3 className="text-[11px] font-bold uppercase tracking-widest text-slate-800 border-b border-slate-400 pb-1">DETAILS OF THE OFFER FOR SALE BY SELLING SHAREHOLDERS</h3>
+          <div className="overflow-x-auto">
+            <table className="w-full text-[10px] border-collapse border border-slate-400">
+              <thead>
+                <tr className="bg-slate-100">
+                  <th className="border border-slate-400 p-1.5 text-left font-bold uppercase">NAME OF SELLING SHAREHOLDER</th>
+                  <th className="border border-slate-400 p-1.5 text-left font-bold uppercase">TYPE</th>
+                  <th className="border border-slate-400 p-1.5 text-left font-bold uppercase">NO. OF EQUITY SHARES OFFERED / AMOUNT (IN ₹ MILLION)</th>
+                  <th className="border border-slate-400 p-1.5 text-left font-bold uppercase">WEIGHTED AVERAGE COST OF ACQUISITION PER EQUITY SHARE (IN ₹)</th>
+                </tr>
+              </thead>
+              <tbody>
+                {promoterSeller ? (
+                  <tr>
+                    <td className="border border-slate-400 p-1.5 font-medium">{promoterSeller}</td>
+                    <td className="border border-slate-400 p-1.5">Promoter Selling Shareholder</td>
+                    <td className="border border-slate-400 p-1.5">Up to [•] Equity Shares aggregating up to ₹[•] Million</td>
+                    <td className="border border-slate-400 p-1.5">Nil</td>
+                  </tr>
+                ) : (
+                  <tr>
+                    <td colSpan={4} className="border border-slate-400 p-1.5 text-center text-slate-500 italic">Not Applicable — 100% Fresh Issue (No Offer for Sale)</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+          <p className="text-[9px] italic text-slate-600">*As certified by Statutory Auditors / Chartered Accountants pursuant to certificate dated {draftDate}.</p>
+        </div>
+
+        {/* STATUTORY & GENERAL RISK DISCLOSURES */}
+        <div className="space-y-2 border-t border-slate-300 pt-3">
+          <h3 className="text-[11px] font-bold uppercase tracking-widest text-slate-800">STATUTORY &amp; GENERAL RISK DISCLOSURES</h3>
+          <ul className="space-y-1.5 list-none text-[10px] text-slate-800 leading-snug">
+            <li>
+              <strong>RISKS IN RELATION TO THE FIRST OFFER:</strong> This being the first public issue/offer of Equity Shares of our Company, there has been no formal market for the Equity Shares. The face value of each Equity Share is ₹{faceValue}. The Floor Price, Cap Price, and Offer Price as determined by our Company in consultation with the Book Running Lead Managers (BRLMs) in accordance with the SEBI ICDR Regulations should not be taken to be indicative of the market price after listing.
+            </li>
+            <li>
+              <strong>GENERAL RISK:</strong> Investments in equity and equity-related securities involve a degree of risk. Bidders/Investors should not invest any funds in the Offer unless they can afford to take the risk of losing their entire investment. Investors are advised to read the risk factors carefully before taking an investment decision.
+            </li>
+            <li>
+              <strong>ISSUER'S AND SELLING SHAREHOLDERS' ABSOLUTE RESPONSIBILITY:</strong> Our Company accepts full responsibility for confirming that this DRHP contains all material information and is true, correct, and not misleading in any material respect. Each Selling Shareholder severally accepts responsibility for disclosures specifically pertaining to itself and its portion of Offered Shares.
+            </li>
+            <li>
+              <strong>LISTING:</strong> The Equity Shares offered through the Red Herring Prospectus are proposed to be listed on the BSE Limited ("BSE") and the National Stock Exchange of India Limited ("NSE"). The Designated Stock Exchange shall be {designatedExchange}.
+            </li>
+          </ul>
+        </div>
+
+        {/* INTERMEDIARIES & BID/OFFER PROGRAMME */}
+        <div className="space-y-2 border-t border-slate-300 pt-3">
+          <h3 className="text-[11px] font-bold uppercase tracking-widest text-slate-800">INTERMEDIARIES &amp; BID/OFFER PROGRAMME</h3>
+          <div className="overflow-x-auto">
+            <table className="w-full text-[10px] border-collapse border border-slate-400">
+              <thead>
+                <tr className="bg-slate-100">
+                  <th className="border border-slate-400 p-1.5 text-left font-bold uppercase w-1/2">BOOK RUNNING LEAD MANAGERS (BRLMs)</th>
+                  <th className="border border-slate-400 p-1.5 text-left font-bold uppercase w-1/2">REGISTRAR TO THE OFFER</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td className="border border-slate-400 p-1.5">
+                    <p className="font-bold text-indigo-900">{brlm}</p>
+                    <p className="text-slate-600 text-[9px]">Contact: Compliance Officer<br />Tel: [•] | Email: ipo@{brlm.toLowerCase().replace(/\s+/g,'')+'.com'}</p>
+                  </td>
+                  <td className="border border-slate-400 p-1.5">
+                    <p className="font-bold text-indigo-900">{registrar}</p>
+                    <p className="text-slate-600 text-[9px]">Contact: Investor Relations<br />Tel: [•] | Email: ipo@bigshareonline.com<br />SEBI Reg. No.: INR000001385</p>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div className="text-[10px] space-y-0.5 pt-1">
+            <p><strong>BID/OFFER PROGRAMME</strong></p>
+            <p><strong>ANCHOR INVESTOR BIDDING DATE:</strong> {anchorDate} <em>(1 Working Day prior to Bid/Offer Opening Date)</em></p>
+            <p><strong>BID/OFFER OPENS ON:</strong> {offerOpenDate}</p>
+            <p><strong>BID/OFFER CLOSES ON:</strong> {offerCloseDate} <em>(UPI Mandate end time: 5:00 PM on Bid/Offer Closing Date)</em></p>
           </div>
         </div>
 
       </div>
 
-      {/* ==================================================== */}
-      {/* PAGE 2 — FIXED OFFER SNAPSHOT                        */}
-      {/* ==================================================== */}
-      <div className="bg-white border-2 border-slate-900 p-8 md:p-14 space-y-8 min-h-[1050px] shadow-2xl relative font-sans">
-        
-        <div className="border-b-2 border-slate-900 pb-3 flex items-center justify-between">
-          <div>
-            <span className="font-mono text-[10px] font-bold text-indigo-600 uppercase tracking-widest">SECTION I</span>
-            <h2 className="text-xl font-extrabold text-slate-900 uppercase tracking-wide">OFFER SNAPSHOT & ISSUER SUMMARY</h2>
+      {/* ════════════════════════════════════════════════════════════════ */}
+      {/* PAGE 2 — ISSUE DETAILS & STATUTORY ALLOCATION STRUCTURE        */}
+      {/* ════════════════════════════════════════════════════════════════ */}
+      <div className="border-2 border-slate-900 p-8 md:p-12 space-y-6 min-h-[1050px] shadow-md relative flex flex-col mt-8" style={{ pageBreakAfter: 'always', breakAfter: 'page' }}>
+
+        {/* Page 2 Header */}
+        <div className="text-center border-b-2 border-slate-900 pb-4 space-y-1">
+          <h2 className="text-xl font-black uppercase tracking-wide text-slate-900">{compName.toUpperCase()}</h2>
+          <p className="text-[10px] text-slate-600 italic">
+            (Registered &amp; Corporate Office: {regOffice}, Tel: {telephone}, Email: {email}, Website: {website}, CIN: {cin})
+          </p>
+        </div>
+
+        {/* Full IPO Offer Sentence */}
+        <div className="p-4 bg-slate-50 border border-slate-300 rounded">
+          <p className="text-[11px] font-bold text-slate-900 leading-relaxed uppercase text-center">
+            INITIAL PUBLIC OFFER OF UP TO [{freshIssueShares}] EQUITY SHARES OF FACE VALUE OF ₹{faceValue} EACH FOR CASH AT A PRICE OF ₹[•] PER EQUITY SHARE
+            (INCLUDING A PREMIUM OF ₹[•] PER EQUITY SHARE) AGGREGATING UP TO ₹[•] MILLION COMPRISING A FRESH ISSUE OF UP TO [•] EQUITY SHARES AGGREGATING
+            UP TO ₹[{freshIssueAmt}] MILLION {ofsShares !== 'N/A' ? `AND AN OFFER FOR SALE OF UP TO [•] EQUITY SHARES AGGREGATING UP TO ₹[${ofsAmt}] MILLION BY THE SELLING SHAREHOLDERS.` : '(100% FRESH ISSUE; NO OFFER FOR SALE).'}
+          </p>
+        </div>
+
+        {/* PRICE BAND & BID LOT DETAILS */}
+        <div className="space-y-2">
+          <h3 className="text-[11px] font-bold uppercase tracking-widest text-slate-800 border-b border-slate-400 pb-1">PRICE BAND &amp; BID LOT DETAILS</h3>
+          <ul className="space-y-1.5 text-[11px] text-slate-800 list-none">
+            <li><strong>FACE VALUE:</strong> ₹{faceValue} per Equity Share.</li>
+            <li><strong>PRICE BAND:</strong> ₹{floorPrice} to ₹{capPrice} per Equity Share. The Cap Price shall be at least 105% of the Floor Price and less than or equal to 120% of the Floor Price.</li>
+            <li><strong>MINIMUM BID LOT:</strong> {minBidLot} Equity Shares and in multiples of {minBidLot} Equity Shares thereafter.</li>
+            <li><strong>DISSEMINATION:</strong> The Price Band, Employee Discount (if any), and Minimum Bid Lot will be advertised in an English national daily, a Hindi national daily, and a regional daily newspaper at least 2 Working Days prior to the Bid/Offer Opening Date.</li>
+          </ul>
+        </div>
+
+        {/* OFFER STRUCTURE & ALLOCATION CATEGORIES */}
+        <div className="space-y-2">
+          <h3 className="text-[11px] font-bold uppercase tracking-widest text-slate-800 border-b border-slate-400 pb-1">OFFER STRUCTURE &amp; ALLOCATION CATEGORIES</h3>
+          <p className="text-[10px] text-slate-700">
+            The Offer is being made through the Book Building Process in compliance with Rule 19(2)(b) of the SCRR read with Regulation 31 &amp; 6(1) of the SEBI ICDR Regulations:
+          </p>
+          <ol className="space-y-2 text-[10px] text-slate-800 list-decimal list-inside leading-relaxed">
+            <li>
+              <strong>QUALIFIED INSTITUTIONAL BUYERS (QIB) PORTION:</strong> Not more than <strong>50%</strong> of the Net Offer shall be available for allocation to QIBs on a proportionate basis.
+              <ul className="list-disc list-inside ml-4 mt-1 space-y-0.5">
+                <li><strong>Anchor Investor Portion:</strong> Up to <strong>60%</strong> of the QIB Portion may be allocated to Anchor Investors on a discretionary basis, of which 33.33% is reserved for domestic Mutual Funds and 6.67% for Life Insurance Companies &amp; Pension Funds.</li>
+                <li><strong>Mutual Fund Portion:</strong> <strong>5%</strong> of the Net QIB Portion shall be available for allocation to domestic Mutual Funds only.</li>
+              </ul>
+            </li>
+            <li>
+              <strong>NON-INSTITUTIONAL INVESTORS (NII) PORTION:</strong> Not less than <strong>15%</strong> of the Net Offer shall be available for allocation to NIIs:
+              <ul className="list-disc list-inside ml-4 mt-1 space-y-0.5">
+                <li>One-third reserved for applicants with application size &gt; ₹200,000 up to ₹1,000,000.</li>
+                <li>Two-thirds reserved for applicants with application size &gt; ₹1,000,000.</li>
+              </ul>
+            </li>
+            <li>
+              <strong>RETAIL INDIVIDUAL INVESTORS (RII) PORTION:</strong> Not less than <strong>35%</strong> of the Net Offer shall be available for allocation to Retail Individual Bidders in accordance with SEBI ICDR Regulations.
+            </li>
+            <li>
+              <strong>MANDATORY ASBA &amp; UPI:</strong> All Bidders (except Anchor Investors) are mandatorily required to utilize the Application Supported by Blocked Amount (ASBA) process including UPI mechanism for UPI Bidders.
+            </li>
+          </ol>
+
+          {/* Allocation Table */}
+          <div className="overflow-x-auto mt-3">
+            <table className="w-full text-[10px] border-collapse border border-slate-400">
+              <thead>
+                <tr className="bg-slate-900 text-white">
+                  <th className="border border-slate-600 p-1.5 text-left font-bold uppercase">Investor Category</th>
+                  <th className="border border-slate-600 p-1.5 text-left font-bold uppercase">Allocation %</th>
+                  <th className="border border-slate-600 p-1.5 text-left font-bold uppercase">Indicative Shares</th>
+                  <th className="border border-slate-600 p-1.5 text-left font-bold uppercase">Method</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr><td className="border border-slate-400 p-1.5 font-bold">Qualified Institutional Buyers (QIB)</td><td className="border border-slate-400 p-1.5">Not more than 50.00% of Net Issue</td><td className="border border-slate-400 p-1.5 font-mono">[•] Equity Shares</td><td className="border border-slate-400 p-1.5">Proportionate</td></tr>
+                <tr className="bg-slate-50"><td className="border border-slate-400 p-1.5 pl-5 italic text-slate-600">— Anchor Investor Portion</td><td className="border border-slate-400 p-1.5">Up to 60% of QIB Portion</td><td className="border border-slate-400 p-1.5 font-mono">[•]</td><td className="border border-slate-400 p-1.5">Discretionary</td></tr>
+                <tr><td className="border border-slate-400 p-1.5 pl-5 italic text-slate-600">— Mutual Fund Portion</td><td className="border border-slate-400 p-1.5">5% of Net QIB</td><td className="border border-slate-400 p-1.5 font-mono">[•]</td><td className="border border-slate-400 p-1.5">Proportionate</td></tr>
+                <tr className="bg-slate-50"><td className="border border-slate-400 p-1.5 font-bold">Non-Institutional Investors (NII)</td><td className="border border-slate-400 p-1.5">Not less than 15.00% of Net Issue</td><td className="border border-slate-400 p-1.5 font-mono">[•] Equity Shares</td><td className="border border-slate-400 p-1.5">Proportionate</td></tr>
+                <tr><td className="border border-slate-400 p-1.5 font-bold">Retail Individual Investors (RII)</td><td className="border border-slate-400 p-1.5">Not less than 35.00% of Net Issue</td><td className="border border-slate-400 p-1.5 font-mono">[•] Equity Shares</td><td className="border border-slate-400 p-1.5">Proportionate by lots</td></tr>
+              </tbody>
+            </table>
           </div>
-          <span className="font-mono text-xs text-slate-400 font-bold">PAGE 2 OF DRHP</span>
         </div>
 
-        {/* Structured Table 1: Corporate Profile Summary */}
-        <div className="space-y-2">
-          <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider font-mono flex items-center gap-1.5">
-            <Building2 className="w-3.5 h-3.5 text-indigo-600" />
-            <span>1. Corporate Information & Key Contacts</span>
-          </h3>
-          <table className="w-full text-xs border border-slate-300 rounded-xl overflow-hidden">
-            <tbody className="divide-y divide-slate-200">
-              <tr className="bg-slate-50">
-                <td className="p-2.5 font-mono font-bold text-slate-600 w-1/3">Company Legal Name</td>
-                <td className="p-2.5 font-bold text-slate-900">{compName}</td>
-              </tr>
-              <tr>
-                <td className="p-2.5 font-mono font-bold text-slate-600">Corporate Identification (CIN)</td>
-                <td className="p-2.5 font-mono font-semibold text-indigo-700">{cin}</td>
-              </tr>
-              <tr className="bg-slate-50">
-                <td className="p-2.5 font-mono font-bold text-slate-600">Promoters of Company</td>
-                <td className="p-2.5 font-semibold text-slate-800">{promoters}</td>
-              </tr>
-              <tr>
-                <td className="p-2.5 font-mono font-bold text-slate-600">Compliance Officer & CS</td>
-                <td className="p-2.5 font-medium text-slate-800">{complianceOfficer}</td>
-              </tr>
-              <tr className="bg-slate-50">
-                <td className="p-2.5 font-mono font-bold text-slate-600">Statutory Auditors</td>
-                <td className="p-2.5 font-medium text-slate-800">M/s R. K. Doshi & Co. LLP, Chartered Accountants</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-
-        {/* Structured Table 2: Issue Structure & Net Allocation */}
-        <div className="space-y-2">
-          <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider font-mono flex items-center gap-1.5">
-            <Layers className="w-3.5 h-3.5 text-indigo-600" />
-            <span>2. Issue Structure & Investor Category Allocation</span>
-          </h3>
-          <table className="w-full text-xs border border-slate-300 rounded-xl overflow-hidden text-left">
-            <thead className="bg-slate-900 text-white font-mono text-[10px] uppercase">
-              <tr>
-                <th className="p-2.5">Category</th>
-                <th className="p-2.5">Allocation Percentage</th>
-                <th className="p-2.5">Number of Shares</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-200 font-medium text-slate-800">
-              <tr>
-                <td className="p-2.5 font-bold text-slate-900">Qualified Institutional Buyers (QIB)</td>
-                <td className="p-2.5 font-mono">Not more than 50.00% of Net Issue</td>
-                <td className="p-2.5 font-mono font-bold">Up to 1,900,000 Equity Shares</td>
-              </tr>
-              <tr className="bg-slate-50">
-                <td className="p-2.5 font-bold text-slate-900">Non-Institutional Investors (NII)</td>
-                <td className="p-2.5 font-mono">Not less than 15.00% of Net Issue</td>
-                <td className="p-2.5 font-mono font-bold">Not less than 570,000 Equity Shares</td>
-              </tr>
-              <tr>
-                <td className="p-2.5 font-bold text-slate-900">Retail Individual Investors (RII)</td>
-                <td className="p-2.5 font-mono">Not less than 35.00% of Net Issue</td>
-                <td className="p-2.5 font-mono font-bold">Not less than 1,330,000 Equity Shares</td>
-              </tr>
-              <tr className="bg-slate-50">
-                <td className="p-2.5 font-bold text-indigo-900">Market Maker Reservation</td>
-                <td className="p-2.5 font-mono text-indigo-700">5.00% of Gross Issue Size</td>
-                <td className="p-2.5 font-mono font-bold text-indigo-900">200,000 Equity Shares</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-
-        {/* Structured Table 3: Objects of the Issue Summary */}
-        <div className="space-y-2">
-          <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider font-mono flex items-center gap-1.5">
-            <Award className="w-3.5 h-3.5 text-indigo-600" />
-            <span>3. Objects of the Issue (Use of Proceeds Summary)</span>
-          </h3>
-          <table className="w-full text-xs border border-slate-300 rounded-xl overflow-hidden text-left">
-            <thead className="bg-slate-100 text-slate-700 font-mono text-[10px] uppercase border-b">
-              <tr>
-                <th className="p-2.5">Object Particulars</th>
-                <th className="p-2.5">Estimated Amount (₹ Cr)</th>
-                <th className="p-2.5">Deployment Timeline</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-200 text-slate-800">
-              <tr>
-                <td className="p-2.5 font-bold">Funding Capital Expenditure for CNC Machinery</td>
-                <td className="p-2.5 font-mono font-bold text-indigo-700">₹45.00 Cr</td>
-                <td className="p-2.5 font-mono">FY26 - FY27</td>
-              </tr>
-              <tr className="bg-slate-50">
-                <td className="p-2.5 font-bold">Working Capital Expenditure Expansion</td>
-                <td className="p-2.5 font-mono font-bold text-indigo-700">₹35.00 Cr</td>
-                <td className="p-2.5 font-mono">FY26 - FY27</td>
-              </tr>
-              <tr>
-                <td className="p-2.5 font-bold">Repayment / Prepayment of Credit Debt</td>
-                <td className="p-2.5 font-mono font-bold text-indigo-700">₹20.00 Cr</td>
-                <td className="p-2.5 font-mono">FY26</td>
-              </tr>
-              <tr className="bg-slate-50">
-                <td className="p-2.5 font-bold">General Corporate Purposes & Issue Expenses</td>
-                <td className="p-2.5 font-mono font-bold text-indigo-700">₹20.00 Cr</td>
-                <td className="p-2.5 font-mono">FY26</td>
-              </tr>
-            </tbody>
-          </table>
+        {/* SEBI QR Code Notice */}
+        <div className="text-center mt-auto pt-4 border-t border-slate-300">
+          <p className="text-[9px] text-slate-600 italic">
+            [SEBI 2026 COMPLIANCE] QR codes and web links directing to this DRHP are available on the front cover page, public announcements, and application forms in accordance with SEBI (ICDR) Amendment Regulations, 2026.
+          </p>
         </div>
 
       </div>
 
-      {/* ==================================================== */}
-      {/* PAGE 3 — FIXED IMPORTANT INFORMATION                 */}
-      {/* ==================================================== */}
-      <div className="bg-white border-2 border-slate-900 p-8 md:p-14 space-y-8 min-h-[1050px] shadow-2xl relative font-sans">
-        
-        <div className="border-b-2 border-slate-900 pb-3 flex items-center justify-between">
-          <div>
-            <span className="font-mono text-[10px] font-bold text-indigo-600 uppercase tracking-widest">SECTION II</span>
-            <h2 className="text-xl font-extrabold text-slate-900 uppercase tracking-wide">IMPORTANT INFORMATION & STATUTORY DISCLAIMERS</h2>
-          </div>
-          <span className="font-mono text-xs text-slate-400 font-bold">PAGE 3 OF DRHP</span>
+      {/* ════════════════════════════════════════════════════════════════ */}
+      {/* PAGE 3 — TABLE OF CONTENTS                                     */}
+      {/* ════════════════════════════════════════════════════════════════ */}
+      <div className="border-2 border-slate-900 p-8 md:p-12 space-y-4 min-h-[1050px] shadow-md relative flex flex-col mt-8">
+
+        <div className="text-center border-b-2 border-slate-900 pb-3">
+          <h2 className="text-xl font-black uppercase tracking-widest text-slate-900">TABLE OF CONTENTS</h2>
         </div>
 
-        {/* Mandatory Regulatory Clauses */}
-        <div className="space-y-4 text-xs text-slate-700 leading-relaxed">
-          
-          <div className="p-4 bg-slate-50 border border-slate-300 rounded-xl space-y-2">
-            <h4 className="font-bold text-slate-900 uppercase font-mono text-[11px] flex items-center gap-1.5">
-              <ShieldAlert className="w-4 h-4 text-red-600" />
-              <span>1. SEBI Disclaimer Clause</span>
-            </h4>
-            <p className="text-[11px] leading-relaxed">
-              It is to be distinctly understood that submission of this Draft Red Herring Prospectus to SEBI should not in any way be deemed or construed that the same has been cleared or approved by SEBI. SEBI does not take any responsibility either for the financial soundness of any scheme or for the correctness of the statements made or opinions expressed in this Offer Document.
-            </p>
-          </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-[10px] border-collapse border border-slate-400">
+            <thead>
+              <tr className="bg-slate-100">
+                <th className="border border-slate-400 p-1.5 text-left font-bold uppercase w-20">SECTION</th>
+                <th className="border border-slate-400 p-1.5 text-left font-bold uppercase">SECTION TITLE</th>
+                <th className="border border-slate-400 p-1.5 text-right font-bold uppercase w-20">PAGE NO.</th>
+              </tr>
+            </thead>
+            <tbody>
+              {/* Front Matter */}
+              <tr className="bg-indigo-50">
+                <td className="border border-slate-400 p-1.5 font-bold">—</td>
+                <td className="border border-slate-400 p-1.5 font-bold">Front Matter — Cover Page, Issue Details &amp; Statutory Allocation</td>
+                <td className="border border-slate-400 p-1.5 text-right font-mono font-bold">1–2</td>
+              </tr>
+              <tr className="bg-indigo-50">
+                <td className="border border-slate-400 p-1.5 font-bold">—</td>
+                <td className="border border-slate-400 p-1.5 font-bold">Table of Contents</td>
+                <td className="border border-slate-400 p-1.5 text-right font-mono font-bold">3</td>
+              </tr>
 
-          <div className="p-4 bg-slate-50 border border-slate-300 rounded-xl space-y-2">
-            <h4 className="font-bold text-slate-900 uppercase font-mono text-[11px] flex items-center gap-1.5">
-              <ShieldCheck className="w-4 h-4 text-indigo-600" />
-              <span>2. Stock Exchange Disclaimer Clause (NSE Emerge / BSE SME)</span>
-            </h4>
-            <p className="text-[11px] leading-relaxed">
-              Listing of Equity Shares on the SME Exchange is pursuant to SEBI ICDR Regulations. The Stock Exchange has given in-principle permission to list the Equity Shares, but does not guarantee the safety of investment or liquidity of shares.
-            </p>
-          </div>
+              {/* Section I */}
+              <tr className="bg-slate-50">
+                <td className="border border-slate-400 p-1.5 font-bold">SECTION I</td>
+                <td className="border border-slate-400 p-1.5 font-bold uppercase">GENERAL</td>
+                <td className="border border-slate-400 p-1.5 text-right font-mono font-bold">4</td>
+              </tr>
+              {[
+                ['', 'Definitions and Abbreviations', '4'],
+                ['', 'Certain Conventions, Presentation of Financial, Industry, and Market Data', '[•]'],
+                ['', 'Forward-Looking Statements', '[•]'],
+              ].map(([sec, title, pg], i) => (
+                <tr key={i}><td className="border border-slate-400 p-1 pl-4 font-mono text-[9px]">{sec}</td><td className="border border-slate-400 p-1 pl-6 text-[10px]">{title}</td><td className="border border-slate-400 p-1 text-right font-mono text-[9px]">{pg}</td></tr>
+              ))}
 
-          <div className="p-4 bg-slate-50 border border-slate-300 rounded-xl space-y-2">
-            <h4 className="font-bold text-slate-900 uppercase font-mono text-[11px] flex items-center gap-1.5">
-              <Info className="w-4 h-4 text-indigo-600" />
-              <span>3. Investor Grievance & Contact Mechanism</span>
-            </h4>
-            <div className="grid grid-cols-2 gap-3 text-[11px]">
-              <div>
-                <span className="font-bold text-slate-900 block">Registrar Helpline:</span>
-                <p>{registrar}</p>
-                <p className="text-slate-500 font-mono">Email: ipo@bigshareonline.com</p>
-              </div>
-              <div>
-                <span className="font-bold text-slate-900 block">Company Compliance Officer:</span>
-                <p>{complianceOfficer}</p>
-                <p className="text-slate-500 font-mono">Email: {email}</p>
-              </div>
-            </div>
-          </div>
+              {/* Section II */}
+              <tr className="bg-slate-50">
+                <td className="border border-slate-400 p-1.5 font-bold">SECTION II</td>
+                <td className="border border-slate-400 p-1.5 font-bold uppercase">RISK FACTORS</td>
+                <td className="border border-slate-400 p-1.5 text-right font-mono font-bold">[•]</td>
+              </tr>
 
+              {/* Section III */}
+              <tr className="bg-slate-50">
+                <td className="border border-slate-400 p-1.5 font-bold">SECTION III</td>
+                <td className="border border-slate-400 p-1.5 font-bold uppercase">INTRODUCTION</td>
+                <td className="border border-slate-400 p-1.5 text-right font-mono font-bold">[•]</td>
+              </tr>
+              {[
+                ['The Offer', '[•]'],
+                ['Summary of Restated Financial Information', '[•]'],
+                ['Summary of Contingent Liabilities & Related Party Transactions', '[•]'],
+                ['General Information', '[•]'],
+                ['Capital Structure', '[•]'],
+              ].map(([title, pg], i) => (
+                <tr key={i}><td className="border border-slate-400 p-1 pl-4 font-mono text-[9px]"></td><td className="border border-slate-400 p-1 pl-6 text-[10px]">{title}</td><td className="border border-slate-400 p-1 text-right font-mono text-[9px]">{pg}</td></tr>
+              ))}
+
+              {/* Section IV */}
+              <tr className="bg-slate-50">
+                <td className="border border-slate-400 p-1.5 font-bold">SECTION IV</td>
+                <td className="border border-slate-400 p-1.5 font-bold uppercase">PARTICULARS OF THE OFFER / OBJECTS</td>
+                <td className="border border-slate-400 p-1.5 text-right font-mono font-bold">[•]</td>
+              </tr>
+              {[
+                ['Objects of the Offer', '[•]'],
+                ['Basis for Offer Price', '[•]'],
+                ['Statement of Possible Special Tax Benefits', '[•]'],
+              ].map(([title, pg], i) => (
+                <tr key={i}><td className="border border-slate-400 p-1 pl-4 font-mono text-[9px]"></td><td className="border border-slate-400 p-1 pl-6 text-[10px]">{title}</td><td className="border border-slate-400 p-1 text-right font-mono text-[9px]">{pg}</td></tr>
+              ))}
+
+              {/* Section V */}
+              <tr className="bg-slate-50">
+                <td className="border border-slate-400 p-1.5 font-bold">SECTION V</td>
+                <td className="border border-slate-400 p-1.5 font-bold uppercase">ABOUT OUR COMPANY</td>
+                <td className="border border-slate-400 p-1.5 text-right font-mono font-bold">[•]</td>
+              </tr>
+              {[
+                ['Industry Overview', '[•]'],
+                ['Our Business', '[•]'],
+                ['Key Regulations and Policies', '[•]'],
+                ['History and Certain Corporate Matters', '[•]'],
+                ['Our Management', '[•]'],
+                ['Our Promoters and Promoter Group', '[•]'],
+                ['Dividend Policy', '[•]'],
+              ].map(([title, pg], i) => (
+                <tr key={i}><td className="border border-slate-400 p-1 pl-4 font-mono text-[9px]"></td><td className="border border-slate-400 p-1 pl-6 text-[10px]">{title}</td><td className="border border-slate-400 p-1 text-right font-mono text-[9px]">{pg}</td></tr>
+              ))}
+
+              {/* Section VI */}
+              <tr className="bg-slate-50">
+                <td className="border border-slate-400 p-1.5 font-bold">SECTION VI</td>
+                <td className="border border-slate-400 p-1.5 font-bold uppercase">FINANCIAL INFORMATION</td>
+                <td className="border border-slate-400 p-1.5 text-right font-mono font-bold">[•]</td>
+              </tr>
+              {[
+                ['Restated Financial Statements', '[•]'],
+                ["Management's Discussion and Analysis (MD&A)", '[•]'],
+                ['Financial Indebtedness & Capitalisation Statement', '[•]'],
+              ].map(([title, pg], i) => (
+                <tr key={i}><td className="border border-slate-400 p-1 pl-4 font-mono text-[9px]"></td><td className="border border-slate-400 p-1 pl-6 text-[10px]">{title}</td><td className="border border-slate-400 p-1 text-right font-mono text-[9px]">{pg}</td></tr>
+              ))}
+
+              {/* Section VII */}
+              <tr className="bg-slate-50">
+                <td className="border border-slate-400 p-1.5 font-bold">SECTION VII</td>
+                <td className="border border-slate-400 p-1.5 font-bold uppercase">LEGAL AND OTHER INFORMATION</td>
+                <td className="border border-slate-400 p-1.5 text-right font-mono font-bold">[•]</td>
+              </tr>
+              {[
+                ['Outstanding Litigation and Material Developments', '[•]'],
+                ['Government and Other Approvals', '[•]'],
+                ['Group Companies', '[•]'],
+                ['Other Regulatory and Statutory Disclosures', '[•]'],
+              ].map(([title, pg], i) => (
+                <tr key={i}><td className="border border-slate-400 p-1 pl-4 font-mono text-[9px]"></td><td className="border border-slate-400 p-1 pl-6 text-[10px]">{title}</td><td className="border border-slate-400 p-1 text-right font-mono text-[9px]">{pg}</td></tr>
+              ))}
+
+              {/* Section VIII */}
+              <tr className="bg-slate-50">
+                <td className="border border-slate-400 p-1.5 font-bold">SECTION VIII</td>
+                <td className="border border-slate-400 p-1.5 font-bold uppercase">OFFER INFORMATION</td>
+                <td className="border border-slate-400 p-1.5 text-right font-mono font-bold">[•]</td>
+              </tr>
+              {[
+                ['Terms of the Offer & Offer Structure', '[•]'],
+                ['Offer Procedure', '[•]'],
+              ].map(([title, pg], i) => (
+                <tr key={i}><td className="border border-slate-400 p-1 pl-4 font-mono text-[9px]"></td><td className="border border-slate-400 p-1 pl-6 text-[10px]">{title}</td><td className="border border-slate-400 p-1 text-right font-mono text-[9px]">{pg}</td></tr>
+              ))}
+
+              {/* Sections IX–XI */}
+              <tr className="bg-slate-50">
+                <td className="border border-slate-400 p-1.5 font-bold">SECTION IX</td>
+                <td className="border border-slate-400 p-1.5 font-bold uppercase">DESCRIPTION OF EQUITY SHARES &amp; ARTICLES OF ASSOCIATION</td>
+                <td className="border border-slate-400 p-1.5 text-right font-mono font-bold">[•]</td>
+              </tr>
+              <tr className="bg-slate-50">
+                <td className="border border-slate-400 p-1.5 font-bold">SECTION X</td>
+                <td className="border border-slate-400 p-1.5 font-bold uppercase">MATERIAL CONTRACTS AND DOCUMENTS FOR INSPECTION</td>
+                <td className="border border-slate-400 p-1.5 text-right font-mono font-bold">[•]</td>
+              </tr>
+              <tr className="bg-slate-50">
+                <td className="border border-slate-400 p-1.5 font-bold">SECTION XI</td>
+                <td className="border border-slate-400 p-1.5 font-bold uppercase">DECLARATIONS</td>
+                <td className="border border-slate-400 p-1.5 text-right font-mono font-bold">[•]</td>
+              </tr>
+            </tbody>
+          </table>
         </div>
 
-      </div>
-
-      {/* ==================================================== */}
-      {/* PAGE 4 — TABLE OF CONTENTS                           */}
-      {/* ==================================================== */}
-      <div className="bg-white border-2 border-slate-900 p-8 md:p-14 space-y-6 min-h-[1050px] shadow-2xl relative font-serif">
-        
-        <div className="border-b-2 border-slate-900 pb-3 flex items-center justify-between">
-          <h2 className="text-xl font-black text-slate-900 uppercase tracking-wide">TABLE OF CONTENTS</h2>
-          <span className="font-mono text-xs text-slate-400 font-bold font-sans">PAGE 4 OF DRHP</span>
+        <div className="mt-auto pt-4 border-t border-slate-300 text-center">
+          <p className="text-[9px] text-slate-500 italic">
+            Generated by IPO Pilot AI — {draftDate} — This Draft Red Herring Prospectus is subject to review by SEBI-registered Merchant Banker and Legal Counsel before filing.
+          </p>
         </div>
-
-        <div className="space-y-2 font-sans text-xs">
-          
-          {/* Front Matter Pages */}
-          <div className="p-2.5 bg-indigo-50/60 border border-indigo-100 rounded-xl flex justify-between font-bold text-indigo-950">
-            <span>Front Matter — Cover Page & Issue Snapshot</span>
-            <span className="font-mono">Pages 1 – 3</span>
-          </div>
-
-          <div className="p-2.5 bg-slate-50 border border-slate-200 rounded-xl flex justify-between font-bold text-slate-800">
-            <span>Table of Contents</span>
-            <span className="font-mono">Page 4</span>
-          </div>
-
-          {/* DRHP Chapters */}
-          {[
-            { title: 'Section I: Definitions & Abbreviations', page: 'Page 5' },
-            { title: 'Section II: Certain Conventions & Industry Presentation', page: 'Page 7' },
-            { title: 'Section III: Risk Factors (Internal & External)', page: 'Page 12' },
-            { title: 'Section IV: Summary of the Offer Document', page: 'Page 20' },
-            { title: 'Section V: General Information & Capital Structure', page: 'Page 24' },
-            { title: 'Section VI: Objects of the Offer', page: 'Page 30' },
-            { title: 'Section VII: Basis for Offer Price & Special Tax Benefits', page: 'Page 36' },
-            { title: 'Section VIII: Industry Overview', page: 'Page 40' },
-            { title: 'Section IX: Our Business Operations & Strategy', page: 'Page 44' },
-            { title: 'Section X: Key Regulations & Statutory Approvals', page: 'Page 52' },
-            { title: 'Section XI: History and Certain Corporate Matters', page: 'Page 56' },
-            { title: 'Section XII: Our Management & Promoters', page: 'Page 60' },
-            { title: 'Section XIII: Financial Information & MD&A', page: 'Page 66' },
-            { title: 'Section XIV: Outstanding Litigation & Material Disputes', page: 'Page 78' },
-            { title: 'Section XV: Other Disclosures & Declaration', page: 'Page 84' }
-          ].map((item, idx) => (
-            <div key={idx} className="p-2.5 bg-white border border-slate-100 hover:bg-slate-50 rounded-xl flex justify-between font-medium text-slate-800">
-              <span>{item.title}</span>
-              <span className="font-mono text-slate-500">{item.page}</span>
-            </div>
-          ))}
-
-        </div>
-
       </div>
 
     </div>

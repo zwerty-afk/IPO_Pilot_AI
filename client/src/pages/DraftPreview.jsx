@@ -13,6 +13,7 @@ import {
   getDocuments 
 } from '../services/api';
 import { useAuth } from '../context/AuthContext';
+import FrontMatterTemplate from '../components/FrontMatterTemplate';
 import ChapterHealthSidebar, { SECTION_KEYS, getIntakeForSection } from '../components/ChapterHealthSidebar';
 import { DRHP_HIERARCHY, findDrhpNode } from '../data/sebiDrhpSchema';
 import { 
@@ -164,9 +165,13 @@ export default function DraftPreview() {
   const location = useLocation();
 
   // Focused active TOC subitem: default to "definitions_and_abbreviations"
-  const [activeTocId, setActiveTocId] = useState('definitions_and_abbreviations');
-  const activeNode = findDrhpNode(activeTocId);
-  const selectedSectionKey = activeNode.key || 'company_details';
+  // Special sentinel: 'cover_pages' renders the FrontMatterTemplate (Pages 1-3)
+  const [activeTocId, setActiveTocId] = useState('cover_pages');
+  const isCoverPages = activeTocId === 'cover_pages';
+  const activeNode = isCoverPages
+    ? { section: { id: 'cover_pages', title: 'Cover Pages (1–3)', key: 'cover_pages', subsections: [] }, key: 'cover_pages', number: '0', fullTitle: 'Fixed Front Matter — Pages 1–3' }
+    : findDrhpNode(activeTocId);
+  const selectedSectionKey = isCoverPages ? 'cover_pages' : (activeNode.key || 'company_details');
 
   const [drafts, setDrafts] = useState({});
   const [gapReport, setGapReport] = useState([]);
@@ -198,9 +203,9 @@ export default function DraftPreview() {
     };
   }, [activeNode.section.id, drafts]);
 
-  const chapterSubsections = (activeNode.section.subsections && activeNode.section.subsections.length > 0)
+  const chapterSubsections = (!isCoverPages && activeNode.section.subsections && activeNode.section.subsections.length > 0)
     ? activeNode.section.subsections
-    : [{ id: activeNode.section.id, title: activeNode.section.title, key: activeNode.section.key }];
+    : (!isCoverPages ? [{ id: activeNode.section.id, title: activeNode.section.title, key: activeNode.section.key }] : []);
   const [comments, setComments] = useState([]);
   const [newCommentText, setNewCommentText] = useState('');
   const [loading, setLoading] = useState(true);
@@ -221,6 +226,10 @@ export default function DraftPreview() {
 
   // AI Suggestions
   const [dismissedSuggestions, setDismissedSuggestions] = useState({});
+
+  // Interactive Editable PDF Preview state
+  const [zoomLevel, setZoomLevel] = useState(100);
+  const [pdfEditMode, setPdfEditMode] = useState(true);
 
   // Caches for metadata calculation
   const [intakeCache, setIntakeCache] = useState({});
@@ -617,9 +626,9 @@ export default function DraftPreview() {
             <div className="flex items-center gap-1.5 text-xs text-slate-500 font-medium">
               <span>SEBI DRHP</span>
               <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
-              <span className="font-semibold text-slate-700">{activeNode.section.title}</span>
+              <span className="font-semibold text-slate-700">{isCoverPages ? 'Fixed Front Matter' : activeNode.section.title}</span>
               <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
-              <span className="font-bold text-indigo-600">{activeNode.number}</span>
+              <span className="font-bold text-indigo-600">{isCoverPages ? 'Pages 1–3' : activeNode.number}</span>
             </div>
 
             {/* Auto-Save & Status Badge */}
@@ -658,9 +667,11 @@ export default function DraftPreview() {
           {/* Focused Subsection Title & Toolbar */}
           <div className="flex items-center justify-between gap-4 flex-wrap">
             <div>
-              <h2 className="text-lg font-bold text-slate-900">{activeNode.fullTitle}</h2>
+              <h2 className="text-lg font-bold text-slate-900">{isCoverPages ? 'Fixed Front Matter — Pages 1–3 (Template Preview)' : activeNode.fullTitle}</h2>
               <p className="text-xs text-slate-500 mt-0.5">
-                Intelligent disclosure composition combining structured tables, legal narrative, and visual analytics.
+                {isCoverPages
+                  ? 'SEBI-compliant front matter template: Cover Page, Issue Details & Table of Contents. Populated with your intake data.'
+                  : 'Intelligent disclosure composition combining structured tables, legal narrative, and visual analytics.'}
               </p>
             </div>
 
@@ -772,15 +783,75 @@ export default function DraftPreview() {
         )}
 
         {/* ---------------------------------------------------- */}
-        {/* CONTINUOUS A4 DRHP DOCUMENT CANVAS WORKSPACE         */}
+        {/* INTERACTIVE EDITABLE PDF PREVIEW WORKSPACE           */}
         {/* ---------------------------------------------------- */}
-        <div className="bg-slate-100/90 py-8 px-2 md:px-6 w-full flex justify-center rounded-2xl border border-slate-200/60 shadow-inner overflow-x-auto">
+        <div className="space-y-3">
+          {/* PDF Toolbar */}
+          <div className="bg-slate-900 text-white p-3 rounded-xl flex items-center justify-between shadow-md flex-wrap gap-2 text-xs font-sans">
+            <div className="flex items-center gap-2">
+              <span className="bg-red-600 text-white font-black text-[10px] px-2 py-0.5 rounded font-mono uppercase tracking-wider">
+                PDF PREVIEW
+              </span>
+              <span className="font-semibold text-slate-200">
+                SEBI DRHP — Interactive Document Canvas
+              </span>
+            </div>
 
-          {/* Centered A4 Paper DRHP Document Canvas */}
-          <div className="w-full max-w-[800px] bg-white shadow-2xl border border-slate-200/80 rounded-sm p-8 md:p-14 space-y-10 font-serif text-slate-900 relative min-h-[900px]">
+            <div className="flex items-center gap-3">
+              {/* Live PDF Edit Toggle */}
+              <button
+                onClick={() => setPdfEditMode(!pdfEditMode)}
+                className={`px-2.5 py-1 rounded-lg font-bold text-[11px] transition-all flex items-center gap-1 ${
+                  pdfEditMode
+                    ? 'bg-emerald-500 text-slate-950 hover:bg-emerald-400'
+                    : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+                }`}
+              >
+                <Edit3 className="w-3 h-3" />
+                <span>{pdfEditMode ? 'Live Edit Enabled' : 'View Mode'}</span>
+              </button>
 
-            {/* Watermark Overlay for Draft mode */}
-            {currentSection.status !== 'certified' && (
+              {/* Zoom Controls */}
+              <div className="flex items-center gap-1 bg-slate-800 p-1 rounded-lg border border-slate-700">
+                <button
+                  onClick={() => setZoomLevel(prev => Math.max(60, prev - 10))}
+                  className="px-2 py-0.5 hover:bg-slate-700 rounded font-bold text-slate-300 transition-colors"
+                  title="Zoom Out"
+                >
+                  -
+                </button>
+                <span className="font-mono text-[11px] px-1 text-slate-300 font-bold min-w-[36px] text-center">
+                  {zoomLevel}%
+                </span>
+                <button
+                  onClick={() => setZoomLevel(prev => Math.min(150, prev + 10))}
+                  className="px-2 py-0.5 hover:bg-slate-700 rounded font-bold text-slate-300 transition-colors"
+                  title="Zoom In"
+                >
+                  +
+                </button>
+                {zoomLevel !== 100 && (
+                  <button
+                    onClick={() => setZoomLevel(100)}
+                    className="px-1.5 py-0.5 hover:bg-slate-700 rounded text-[10px] text-indigo-400 font-mono"
+                  >
+                    Reset
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-slate-100/90 py-8 px-2 md:px-6 w-full flex justify-center rounded-2xl border border-slate-200/60 shadow-inner overflow-x-auto min-h-[920px]">
+
+            {/* Centered A4 Paper DRHP Document Canvas with Scale Transform */}
+            <div
+              style={{ transform: `scale(${zoomLevel / 100})`, transformOrigin: 'top center' }}
+              className="w-full max-w-[800px] bg-white shadow-2xl border border-slate-200/80 rounded-sm p-8 md:p-14 space-y-10 font-serif text-slate-900 relative min-h-[900px] transition-transform duration-200"
+            >
+
+              {/* Watermark Overlay for Draft mode */}
+              {!isCoverPages && currentSection.status !== 'certified' && (
               <div className="absolute inset-0 pointer-events-none select-none flex items-center justify-center overflow-hidden opacity-[0.025] z-0">
                 <div className="text-[3.2rem] font-black uppercase -rotate-[30deg] tracking-widest text-slate-900 whitespace-nowrap">
                   DRAFT RED HERRING PROSPECTUS — FOR OFFICIAL REVIEW ONLY
@@ -788,121 +859,135 @@ export default function DraftPreview() {
               </div>
             )}
 
-            {/* Formal Main Chapter Document Header */}
-            <div id={activeNode.section.id} className="border-b-2 border-slate-900 pb-4 space-y-2 font-serif text-center drhp-section-anchor">
-              <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest font-mono">
-                BEFORE THE SECURITIES AND EXCHANGE BOARD OF INDIA
-              </p>
-              <input
-                type="text"
-                defaultValue={activeNode.section.title}
-                className="text-xl md:text-2xl font-black text-slate-900 tracking-wide uppercase text-center w-full bg-transparent focus:bg-slate-50 border-b border-transparent focus:border-indigo-500 focus:outline-none"
-              />
-              <p className="text-xs text-slate-500 italic font-sans">
-                Official Draft Red Herring Prospectus Disclosure Output — Continuous Document View
-              </p>
-            </div>
+            {/* ── COVER PAGES VIEW (Pages 1-3 Template) ───────────────── */}
+            {isCoverPages ? (
+              <div className="-m-8 md:-m-14">
+                <FrontMatterTemplate
+                  company={intakeCache?.company_details || {}}
+                  issueDetails={{}}
+                  intake={intakeCache}
+                />
+              </div>
+            ) : (
+              <>
+                {/* Formal Main Chapter Document Header */}
+                <div id={activeNode.section.id} className="border-b-2 border-slate-900 pb-4 space-y-2 font-serif text-center drhp-section-anchor">
+                  <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest font-mono">
+                    BEFORE THE SECURITIES AND EXCHANGE BOARD OF INDIA
+                  </p>
+                  <input
+                    type="text"
+                    defaultValue={activeNode.section.title}
+                    className="text-xl md:text-2xl font-black text-slate-900 tracking-wide uppercase text-center w-full bg-transparent focus:bg-slate-50 border-b border-transparent focus:border-indigo-500 focus:outline-none"
+                  />
+                  <p className="text-xs text-slate-500 italic font-sans">
+                    Official Draft Red Herring Prospectus Disclosure Output — Continuous Document View
+                  </p>
+                </div>
 
-            {/* Subsections Rendered Sequentially */}
-            <div className="space-y-10 z-10 relative">
-              {chapterSubsections.map((sub, sIdx) => {
-                const subKey = sub.key;
-                const subBlocks = getBlocksForSubsection(sub.id, subKey, drafts, intakeCache);
-                const subCitations = subBlocks.flatMap(b => b.citations || []);
-                const uniqueSubCitations = Array.from(new Set(subCitations));
+                {/* Subsections Rendered Sequentially */}
+                <div className="space-y-10 z-10 relative">
+                  {chapterSubsections.map((sub, sIdx) => {
+                    const subKey = sub.key;
+                    const subBlocks = getBlocksForSubsection(sub.id, subKey, drafts, intakeCache);
+                    const subCitations = subBlocks.flatMap(b => b.citations || []);
+                    const uniqueSubCitations = Array.from(new Set(subCitations));
 
-                return (
-                  <div key={sub.id} id={sub.id} data-toc-id={sub.id} className="drhp-subsection-anchor space-y-5 pt-2">
-                    {/* Subsection Header (Inline Editable) */}
-                    <div className="flex items-center justify-between border-b border-slate-200 pb-2">
-                      <div className="flex items-center gap-2 flex-1">
-                        <span className="text-indigo-600 font-mono font-bold text-xs shrink-0">
-                          {activeNode.section.id === sub.id ? `${sIdx + 1}.0` : `${sIdx + 1}.${sIdx + 1}`}
-                        </span>
-                        <input
-                          type="text"
-                          defaultValue={sub.title}
-                          className="text-base font-bold text-slate-900 tracking-tight uppercase font-serif w-full bg-transparent focus:bg-slate-50 border-b border-transparent focus:border-indigo-500 focus:outline-none"
-                        />
-                      </div>
-                      <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-slate-100 text-slate-600 border border-slate-200 uppercase font-sans shrink-0">
-                        {subKey.replace(/_/g, ' ')}
-                      </span>
-                    </div>
-
-                    {/* Multi-Format Composition Blocks */}
-                    <div className="space-y-5 font-sans">
-                      {subBlocks && subBlocks.length > 0 ? (
-                        subBlocks.map((blk, bIdx) => (
-                          <DrhpBlockRenderer key={blk.id || bIdx} block={blk} onCitationClick={handleSourceClick} />
-                        ))
-                      ) : (
-                        <p className="text-xs text-slate-500 italic font-sans">
-                          Disclosure text pending generation for {sub.title}. Click "Regenerate" to compose output.
-                        </p>
-                      )}
-                    </div>
-
-                    {/* Inline Narrative Editor per subsection */}
-                    <div className="space-y-1.5 pt-3 border-t border-slate-100 font-sans">
-                      <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400 font-mono flex items-center justify-between">
-                        <span>SEBI Disclosure Narrative</span>
-                        <span className="text-slate-400 font-sans font-normal text-[10px]">Real-time Auto-Save Editor</span>
-                      </label>
-                      <textarea
-                        value={subBlocks.map(b => b.text).join('\n\n')}
-                        onChange={(e) => {
-                          const val = e.target.value;
-                          setEditorText(val);
-                          triggerAutoSave(val);
-                        }}
-                        placeholder={`Enter disclosure narrative for ${sub.title}...`}
-                        className="w-full p-4 border border-slate-200 rounded-xl bg-slate-50/50 focus:bg-white text-xs leading-relaxed font-sans text-slate-800 focus:ring-2 focus:ring-indigo-500 focus:outline-none min-h-[140px] resize-y transition-all"
-                      />
-                    </div>
-
-                    {/* Grounding Citations */}
-                    {uniqueSubCitations.length > 0 && (
-                      <div className="flex items-center gap-1.5 pt-2 border-t border-slate-100 text-[10px] font-sans">
-                        <span className="text-slate-400 font-mono uppercase font-bold">Grounding Citations:</span>
-                        <div className="flex flex-wrap gap-1">
-                          {uniqueSubCitations.map((cite, cidx) => (
-                            <button
-                              key={cidx}
-                              onClick={() => handleSourceClick(cite)}
-                              className="px-2 py-0.5 rounded bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-medium border border-indigo-100 flex items-center gap-1 transition-colors cursor-pointer"
-                              title="Click to trace evidence source"
-                            >
-                              <Bookmark className="w-2.5 h-2.5 text-indigo-400" />
-                              <span>{cite.split(': ').pop()}</span>
-                              <ExternalLink className="w-2.5 h-2.5 text-indigo-400" />
-                            </button>
-                          ))}
+                    return (
+                      <div key={sub.id} id={sub.id} data-toc-id={sub.id} className="drhp-subsection-anchor space-y-5 pt-2">
+                        {/* Subsection Header (Inline Editable) */}
+                        <div className="flex items-center justify-between border-b border-slate-200 pb-2">
+                          <div className="flex items-center gap-2 flex-1">
+                            <span className="text-indigo-600 font-mono font-bold text-xs shrink-0">
+                              {activeNode.section.id === sub.id ? `${sIdx + 1}.0` : `${sIdx + 1}.${sIdx + 1}`}
+                            </span>
+                            <input
+                              type="text"
+                              defaultValue={sub.title}
+                              className="text-base font-bold text-slate-900 tracking-tight uppercase font-serif w-full bg-transparent focus:bg-slate-50 border-b border-transparent focus:border-indigo-500 focus:outline-none"
+                            />
+                          </div>
+                          <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-slate-100 text-slate-600 border border-slate-200 uppercase font-sans shrink-0">
+                            {subKey.replace(/_/g, ' ')}
+                          </span>
                         </div>
-                      </div>
-                    )}
 
-                    {/* Page Break Boundary Divider */}
-                    {sIdx < chapterSubsections.length - 1 && (
-                      <div className="pt-8 pb-4 flex items-center justify-center font-mono text-[10px] text-slate-400 select-none">
-                        <div className="w-full border-t border-dashed border-slate-300" />
-                        <span className="px-3 py-0.5 bg-slate-100 text-slate-500 rounded-full border border-slate-200 text-[9px] uppercase tracking-widest font-bold shrink-0 mx-2">
-                          Page Break — SEBI DRHP Document
-                        </span>
-                        <div className="w-full border-t border-dashed border-slate-300" />
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
+                        {/* Multi-Format Composition Blocks */}
+                        <div className="space-y-5 font-sans">
+                          {subBlocks && subBlocks.length > 0 ? (
+                            subBlocks.map((blk, bIdx) => (
+                              <DrhpBlockRenderer key={blk.id || bIdx} block={blk} onCitationClick={handleSourceClick} />
+                            ))
+                          ) : (
+                            <p className="text-xs text-slate-500 italic font-sans">
+                              Disclosure text pending generation for {sub.title}. Click "Regenerate" to compose output.
+                            </p>
+                          )}
+                        </div>
 
-            <div className="mt-8 pt-4 border-t border-slate-200 text-[11px] text-slate-400 text-center font-serif italic">
-              This document represents the continuous assembled output for inclusion in the Draft Red Herring Prospectus.
-            </div>
+                        {/* Inline Narrative Editor per subsection */}
+                        <div className="space-y-1.5 pt-3 border-t border-slate-100 font-sans">
+                          <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400 font-mono flex items-center justify-between">
+                            <span>SEBI Disclosure Narrative</span>
+                            <span className="text-slate-400 font-sans font-normal text-[10px]">Real-time Auto-Save Editor</span>
+                          </label>
+                          <textarea
+                            value={subBlocks.map(b => b.text).join('\n\n')}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              setEditorText(val);
+                              triggerAutoSave(val);
+                            }}
+                            placeholder={`Enter disclosure narrative for ${sub.title}...`}
+                            className="w-full p-4 border border-slate-200 rounded-xl bg-slate-50/50 focus:bg-white text-xs leading-relaxed font-sans text-slate-800 focus:ring-2 focus:ring-indigo-500 focus:outline-none min-h-[140px] resize-y transition-all"
+                          />
+                        </div>
+
+                        {/* Grounding Citations */}
+                        {uniqueSubCitations.length > 0 && (
+                          <div className="flex items-center gap-1.5 pt-2 border-t border-slate-100 text-[10px] font-sans">
+                            <span className="text-slate-400 font-mono uppercase font-bold">Grounding Citations:</span>
+                            <div className="flex flex-wrap gap-1">
+                              {uniqueSubCitations.map((cite, cidx) => (
+                                <button
+                                  key={cidx}
+                                  onClick={() => handleSourceClick(cite)}
+                                  className="px-2 py-0.5 rounded bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-medium border border-indigo-100 flex items-center gap-1 transition-colors cursor-pointer"
+                                  title="Click to trace evidence source"
+                                >
+                                  <Bookmark className="w-2.5 h-2.5 text-indigo-400" />
+                                  <span>{cite.split(': ').pop()}</span>
+                                  <ExternalLink className="w-2.5 h-2.5 text-indigo-400" />
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Page Break Boundary Divider */}
+                        {sIdx < chapterSubsections.length - 1 && (
+                          <div className="pt-8 pb-4 flex items-center justify-center font-mono text-[10px] text-slate-400 select-none">
+                            <div className="w-full border-t border-dashed border-slate-300" />
+                            <span className="px-3 py-0.5 bg-slate-100 text-slate-500 rounded-full border border-slate-200 text-[9px] uppercase tracking-widest font-bold shrink-0 mx-2">
+                              Page Break — SEBI DRHP Document
+                            </span>
+                            <div className="w-full border-t border-dashed border-slate-300" />
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+
+                <div className="mt-8 pt-4 border-t border-slate-200 text-[11px] text-slate-400 text-center font-serif italic">
+                  This document represents the continuous assembled output for inclusion in the Draft Red Herring Prospectus.
+                </div>
+              </>
+            )}
           </div>
         </div>
       </div>
+    </div>
 
       {/* Right Sidebar: Annotations & AI Composition Recommendations */}
       <div className="xl:col-span-1 space-y-4 sticky top-6 h-fit font-sans">
