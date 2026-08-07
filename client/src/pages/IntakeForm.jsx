@@ -1073,36 +1073,22 @@ export default function IntakeForm() {
       {/* Questionnaire Body */}
       <div className="lg:col-span-3 space-y-6">
         
-        {/* AI Company Intelligence Profile Banner */}
-        {(() => {
-          const classification = classifyCompany({ name: companyId }, allIntake, documents);
-          return (
-            <div className="p-4 bg-gradient-to-r from-slate-900 via-navy-900 to-indigo-950 text-white rounded-2xl shadow-md border border-slate-800 flex items-center justify-between gap-4">
-              <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-xl bg-indigo-500/20 border border-indigo-400/30 flex items-center justify-center text-indigo-300">
-                  <Sparkles className="w-4.5 h-4.5 animate-pulse-slow" />
-                </div>
-                <div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-[9px] font-mono uppercase tracking-wider bg-indigo-500/30 text-indigo-200 px-2 py-0.5 rounded-full border border-indigo-400/30 font-bold">
-                      AI Adaptive Profile
-                    </span>
-                    <h4 className="text-sm font-bold text-white">{classification.businessCategory}</h4>
-                  </div>
-                  <p className="text-slate-300 text-[11px] mt-0.5">
-                    {classification.aiExplanation}
-                  </p>
-                </div>
-              </div>
-            </div>
-          );
-        })()}
-
         <div className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm">
           <div className="border-b border-slate-100 pb-4 mb-6">
             <div className="flex items-center justify-between">
               <div>
-                <span className="text-[10px] font-bold text-indigo-600 uppercase tracking-widest font-mono">Step {currentStepIndex + 1} of {steps.length}</span>
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] font-bold text-indigo-600 uppercase tracking-widest font-mono">Step {currentStepIndex + 1} of {steps.length}</span>
+                  {(() => {
+                    const classification = classifyCompany({ name: companyId }, allIntake, documents);
+                    return (
+                      <span className="text-[10px] font-bold text-slate-600 bg-slate-100 px-2.5 py-0.5 rounded-full font-mono flex items-center gap-1 border border-slate-200" title={classification.aiExplanation}>
+                        <Sparkles className="w-3 h-3 text-indigo-600" />
+                        {classification.businessCategory}
+                      </span>
+                    );
+                  })()}
+                </div>
                 <h2 className="text-xl font-bold text-slate-900 mt-1">{currentStep.label}</h2>
               </div>
               <div className="flex items-center gap-3">

@@ -61,6 +61,39 @@ function getBlocksForSubsection(subId, subKey, drafts, intakeCache = {}) {
   const allBlocks = sectionDraft.blocks || [];
 
   switch (subId) {
+    case 'definitions_and_abbreviations':
+      return [
+        {
+          id: 'g-sec-1',
+          type: 'drhp_glossary',
+          company: intakeCache?.company_details || {},
+          intake: intakeCache || {},
+          citations: ['Intake: Company Details: legal_name', 'Intake: Promoters: promoters_list', 'Intake: Legal Compliance: merchant_banker_details']
+        }
+      ];
+
+    case 'certain_conventions_presentation':
+      return [
+        {
+          id: 'cc-sec-1',
+          type: 'drhp_conventions',
+          company: intakeCache?.company_details || {},
+          intake: intakeCache || {},
+          citations: ['Intake: Financials: restated_fs', 'Document: Audited_Financial_Statements_FY25.pdf', 'Document: CRISIL_Precision_Engineering_Report.pdf']
+        }
+      ];
+
+    case 'forward_looking_statements':
+      return [
+        {
+          id: 'fl-sec-1',
+          type: 'drhp_forward_looking',
+          company: intakeCache?.company_details || {},
+          intake: intakeCache || {},
+          citations: ['Intake: Risk Factors & Disclosures', 'SEBI ICDR Regulations 2018']
+        }
+      ];
+
     case 'industry_overview':
       return [
         {

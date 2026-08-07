@@ -3,12 +3,12 @@
 export const DRHP_HIERARCHY = [
   {
     id: "general",
-    title: "GENERAL",
+    title: "SECTION I – GENERAL",
     key: "company_details",
     subsections: [
-      { id: "definitions_and_abbreviations", title: "Definitions and Abbreviations", key: "company_details" },
-      { id: "certain_conventions_presentation", title: "Certain Conventions, Presentation of Financial, Industry and Market Data and Currency of Presentation", key: "company_details" },
-      { id: "forward_looking_statements", title: "Forward Looking Statements", key: "company_details" }
+      { id: "definitions_and_abbreviations", title: "1.1 Definitions and Abbreviations", key: "company_details" },
+      { id: "certain_conventions_presentation", title: "1.2 Certain Conventions, Use of Financial Information & Market Data", key: "company_details" },
+      { id: "forward_looking_statements", title: "1.3 Forward Looking Statements", key: "company_details" }
     ]
   },
   {

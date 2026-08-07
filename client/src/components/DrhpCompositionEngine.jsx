@@ -18,7 +18,13 @@ import {
   Plus,
   Trash2,
   Edit3,
-  ExternalLink
+  ExternalLink,
+  Search,
+  Table,
+  BookOpen,
+  Check,
+  History,
+  RefreshCw
 } from 'lucide-react';
 
 /** ----------------------------------------------------
@@ -1382,13 +1388,695 @@ export function DrhpNarrative({ text, citations = [], onCitationClick }) {
   );
 }
 
+
 /** ----------------------------------------------------
- * 13. Dynamic DRHP Block Composition Renderer
+ * 13. SECTION 1.1: DRHP DEFINITIONS & ABBREVIATIONS GLOSSARY
+ * ---------------------------------------------------- */
+export const GLOSSARY_CATEGORIES = [
+  "Company Related Terms",
+  "Offer Related Terms",
+  "Legal & Regulatory Terms",
+  "Financial Terms",
+  "Corporate Governance Terms",
+  "Industry Specific Terms",
+  "General Abbreviations"
+];
+
+export function DrhpGlossarySection({ company = {}, intake = {}, citations = [], onCitationClick }) {
+  const companyName = company.legal_name || company.name || intake.company_details?.legal_name || 'Aarav Precision Engineering Pvt Ltd';
+  const cin = company.cin || intake.company_details?.cin || 'U29220MH2015PTC263456';
+  const incDate = company.incorporation_date || intake.company_details?.incorporation_date || '2015-04-12';
+  const regOffice = intake.company_details?.registered_office || 'W-45, MIDC Industrial Area, Phase II, Dombivli East, Thane, Maharashtra - 421204';
+  const promoterNames = intake.promoters?.promoters_list || 'Aarav Mehta & Rohan Mehta';
+  const auditorName = intake.legal_compliance?.auditor_details || 'M/s Shah & Associates, Chartered Accountants (FRN: 104920W)';
+  const mbName = intake.legal_compliance?.merchant_banker_details || 'Apex Capital Advisors Pvt Ltd (SEBI Reg: INM000012490)';
+
+  const initialTerms = [
+    // 1. Company Related Terms
+    { id: 'g-1', category: 'Company Related Terms', term: 'Company / Our Company', description: `${companyName}, a private limited company incorporated on ${incDate} under the Companies Act with Corporate Identification Number ${cin}.` },
+    { id: 'g-2', category: 'Company Related Terms', term: 'Registered Office', description: regOffice },
+    { id: 'g-3', category: 'Company Related Terms', term: 'Promoters', description: `${promoterNames}, being the individual promoters of our Company.` },
+    { id: 'g-4', category: 'Company Related Terms', term: 'Promoter Group', description: 'Includes Aarav Mehta, Rohan Mehta, Mrs. Sunita Mehta, and Aarav Precision Tooling Ltd.' },
+    { id: 'g-5', category: 'Company Related Terms', term: 'Group Companies', description: 'Mehta Industrial Properties and Mehta CNC Tooling Solutions.' },
+
+    // 2. Offer Related Terms
+    { id: 'g-6', category: 'Offer Related Terms', term: 'Draft Red Herring Prospectus (DRHP)', description: 'This Draft Red Herring Prospectus dated February 2026 issued in accordance with SEBI ICDR Regulations.' },
+    { id: 'g-7', category: 'Offer Related Terms', term: 'Red Herring Prospectus (RHP)', description: 'The prospectus to be filed with ROC after approval of DRHP, containing the price band or issue price.' },
+    { id: 'g-8', category: 'Offer Related Terms', term: 'Offer / Issue', description: 'Initial Public Offering of Equity Shares by our Company aggregating up to ₹50,000,000.' },
+    { id: 'g-9', category: 'Offer Related Terms', term: 'Equity Shares', description: 'Equity shares of our Company having face value of ₹10 each.' },
+    { id: 'g-10', category: 'Offer Related Terms', term: 'Lead Manager / Merchant Banker', description: mbName },
+    { id: 'g-11', category: 'Offer Related Terms', term: 'Registrar to the Issue', description: 'Bigshare Services Pvt Ltd (SEBI Reg: INR000001385).' },
+
+    // 3. Legal & Regulatory Terms
+    { id: 'g-12', category: 'Legal & Regulatory Terms', term: 'SEBI ICDR Regulations', description: 'Securities and Exchange Board of India (Issue of Capital and Disclosure Requirements) Regulations, 2018 as amended.' },
+    { id: 'g-13', category: 'Legal & Regulatory Terms', term: 'Companies Act', description: 'The Companies Act, 2013 and applicable rules framed thereunder.' },
+    { id: 'g-14', category: 'Legal & Regulatory Terms', term: 'SEBI', description: 'Securities and Exchange Board of India constituted under the SEBI Act, 1992.' },
+    { id: 'g-15', category: 'Legal & Regulatory Terms', term: 'ROC', description: 'Registrar of Companies, Mumbai, Maharashtra.' },
+    { id: 'g-16', category: 'Legal & Regulatory Terms', term: 'ASBA', description: 'Application Supported by Blocked Amount mechanism for bidding in the Issue.' },
+    { id: 'g-17', category: 'Legal & Regulatory Terms', term: 'UPI', description: 'Unified Payments Interface mechanism for retail individual bidders.' },
+
+    // 4. Financial Terms
+    { id: 'g-18', category: 'Financial Terms', term: 'Restated Financial Statements', description: 'Restated Statement of Assets and Liabilities, Profit & Loss, and Cash Flows for FY23, FY24, and FY25.' },
+    { id: 'g-19', category: 'Financial Terms', term: 'Statutory Auditors', description: auditorName },
+    { id: 'g-20', category: 'Financial Terms', term: 'Net Worth', description: 'Aggregate value of paid-up equity share capital and reserves (₹42.50 Cr for FY25).' },
+    { id: 'g-21', category: 'Financial Terms', term: 'Net Tangible Assets', description: 'Tangible assets net of total liabilities (Exceeds ₹3.00 Cr requirement under SEBI Reg 6(1)).' },
+    { id: 'g-22', category: 'Financial Terms', term: 'EBITDA', description: 'Earnings Before Interest, Taxes, Depreciation, and Amortization.' },
+    { id: 'g-23', category: 'Financial Terms', term: 'PAT', description: 'Profit After Tax.' },
+
+    // 5. Corporate Governance Terms
+    { id: 'g-24', category: 'Corporate Governance Terms', term: 'Board / Board of Directors', description: 'Board of Directors of Aarav Precision Engineering Pvt Ltd.' },
+    { id: 'g-25', category: 'Corporate Governance Terms', term: 'Managing Director', description: 'Aarav Mehta, Managing Director of the Company.' },
+    { id: 'g-26', category: 'Corporate Governance Terms', term: 'CFO', description: 'Chief Financial Officer of the Company.' },
+    { id: 'g-27', category: 'Corporate Governance Terms', term: 'Company Secretary', description: 'M/s K. V. & Associates, Practicing Company Secretaries.' },
+    { id: 'g-28', category: 'Corporate Governance Terms', term: 'Audit Committee', description: 'Audit Committee of the Board constituted under Section 177 of the Companies Act, 2013.' },
+
+    // 6. Industry Specific Terms
+    { id: 'g-29', category: 'Industry Specific Terms', term: 'CNC / VMC', description: 'Computer Numerical Control / Vertical Machining Center equipped at Dombivli facility.' },
+    { id: 'g-30', category: 'Industry Specific Terms', term: 'AS9100D', description: 'Aerospace Quality Management System standard certified for defense precision component supply.' },
+    { id: 'g-31', category: 'Industry Specific Terms', term: 'MIDC', description: 'Maharashtra Industrial Development Corporation.' },
+    { id: 'g-32', category: 'Industry Specific Terms', term: 'Metrology Lab', description: 'CMM (Coordinate Measuring Machine) quality inspection laboratory.' },
+
+    // 7. General Abbreviations
+    { id: 'g-33', category: 'General Abbreviations', term: 'AY', description: 'Assessment Year under the Income Tax Act.' },
+    { id: 'g-34', category: 'General Abbreviations', term: 'CAGR', description: 'Compounded Annual Growth Rate.' },
+    { id: 'g-35', category: 'General Abbreviations', term: 'CIN', description: 'Corporate Identity Number.' },
+    { id: 'g-36', category: 'General Abbreviations', term: 'DIN', description: 'Director Identification Number.' },
+    { id: 'g-37', category: 'General Abbreviations', term: 'EPFO', description: "Employees' Provident Fund Organisation." },
+    { id: 'g-38', category: 'General Abbreviations', term: 'GSTIN', description: 'Goods and Services Tax Identification Number.' }
+  ];
+
+  const [terms, setTerms] = useState(initialTerms);
+  const [activeCategory, setActiveCategory] = useState('All');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [editingId, setEditingId] = useState(null);
+  const [editTermText, setEditTermText] = useState('');
+  const [editDescText, setEditDescText] = useState('');
+  const [showAddRow, setShowAddRow] = useState(false);
+  const [newCat, setNewCat] = useState(GLOSSARY_CATEGORIES[0]);
+  const [newTerm, setNewTerm] = useState('');
+  const [newDesc, setNewDesc] = useState('');
+
+  const filteredTerms = terms.filter(t => {
+    const matchesCat = activeCategory === 'All' || t.category === activeCategory;
+    const q = searchQuery.toLowerCase().trim();
+    const matchesQuery = !q || t.term.toLowerCase().includes(q) || t.description.toLowerCase().includes(q) || t.category.toLowerCase().includes(q);
+    return matchesCat && matchesQuery;
+  });
+
+  const categoriesToRender = activeCategory === 'All'
+    ? GLOSSARY_CATEGORIES.filter(cat => terms.some(t => t.category === cat))
+    : [activeCategory];
+
+  const handleStartEdit = (item) => {
+    setEditingId(item.id);
+    setEditTermText(item.term);
+    setEditDescText(item.description);
+  };
+
+  const handleSaveEdit = (id) => {
+    setTerms(prev => prev.map(t => t.id === id ? { ...t, term: editTermText, description: editDescText } : t));
+    setEditingId(null);
+  };
+
+  const handleDeleteTerm = (id) => {
+    setTerms(prev => prev.filter(t => t.id !== id));
+  };
+
+  const handleAddTerm = (e) => {
+    e.preventDefault();
+    if (!newTerm.trim() || !newDesc.trim()) return;
+    const newItem = {
+      id: `g-custom-${Date.now()}`,
+      category: newCat,
+      term: newTerm.trim(),
+      description: newDesc.trim()
+    };
+    setTerms(prev => [...prev, newItem]);
+    setNewTerm('');
+    setNewDesc('');
+    setShowAddRow(false);
+  };
+
+  return (
+    <div className="space-y-6 font-sans">
+      {/* Header & Controls Bar */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-slate-50 p-4 rounded-2xl border border-slate-200">
+        <div>
+          <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+            <BookOpen className="w-4 h-4 text-indigo-600" />
+            <span>1.1 SEBI DRHP Glossary & Master Definitions</span>
+          </h3>
+          <p className="text-xs text-slate-500 mt-0.5">
+            Auto-populated from Intake data & SEBI statutory templates. Fully editable by Merchant Banker.
+          </p>
+        </div>
+
+        <div className="flex items-center gap-2 flex-wrap">
+          {/* Search Input */}
+          <div className="relative">
+            <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search glossary..."
+              className="pl-8 pr-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs outline-none focus:border-indigo-500 w-44"
+            />
+          </div>
+
+          <button
+            type="button"
+            onClick={() => setShowAddRow(!showAddRow)}
+            className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl flex items-center gap-1 transition-all shadow-sm cursor-pointer"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            <span>Add Term</span>
+          </button>
+        </div>
+      </div>
+
+      {/* Category Tabs */}
+      <div className="flex items-center gap-1.5 overflow-x-auto pb-2 border-b border-slate-200">
+        <button
+          type="button"
+          onClick={() => setActiveCategory('All')}
+          className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
+            activeCategory === 'All'
+              ? 'bg-slate-900 text-white'
+              : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+          }`}
+        >
+          All Categories ({terms.length})
+        </button>
+        {GLOSSARY_CATEGORIES.map(cat => {
+          const count = terms.filter(t => t.category === cat).length;
+          return (
+            <button
+              key={cat}
+              type="button"
+              onClick={() => setActiveCategory(cat)}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
+                activeCategory === cat
+                  ? 'bg-indigo-600 text-white'
+                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+              }`}
+            >
+              {cat} ({count})
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Inline Add Term Form */}
+      {showAddRow && (
+        <form onSubmit={handleAddTerm} className="p-4 bg-indigo-50/60 border border-indigo-200 rounded-2xl space-y-3 animate-fade-in">
+          <h4 className="text-xs font-bold text-indigo-950 uppercase font-mono tracking-wider flex items-center gap-1.5">
+            <Plus className="w-3.5 h-3.5 text-indigo-600" /> Add New Glossary Term
+          </h4>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div>
+              <label className="text-[10px] font-bold text-slate-500 uppercase font-mono">Category</label>
+              <select
+                value={newCat}
+                onChange={(e) => setNewCat(e.target.value)}
+                className="w-full p-2 bg-white border border-slate-200 rounded-xl text-xs focus:outline-none"
+              >
+                {GLOSSARY_CATEGORIES.map(cat => (
+                  <option key={cat} value={cat}>{cat}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="text-[10px] font-bold text-slate-500 uppercase font-mono">Term / Abbreviation</label>
+              <input
+                type="text"
+                value={newTerm}
+                onChange={(e) => setNewTerm(e.target.value)}
+                placeholder="e.g. EBITDA / Company"
+                className="w-full p-2 bg-white border border-slate-200 rounded-xl text-xs focus:outline-none"
+                required
+              />
+            </div>
+            <div>
+              <label className="text-[10px] font-bold text-slate-500 uppercase font-mono">Description</label>
+              <input
+                type="text"
+                value={newDesc}
+                onChange={(e) => setNewDesc(e.target.value)}
+                placeholder="Full disclosure definition..."
+                className="w-full p-2 bg-white border border-slate-200 rounded-xl text-xs focus:outline-none"
+                required
+              />
+            </div>
+          </div>
+          <div className="flex justify-end gap-2 pt-1">
+            <button
+              type="button"
+              onClick={() => setShowAddRow(false)}
+              className="px-3 py-1.5 bg-white text-slate-600 text-xs font-bold rounded-xl border border-slate-200 cursor-pointer"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              className="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl shadow-sm cursor-pointer"
+            >
+              Save Term
+            </button>
+          </div>
+        </form>
+      )}
+
+      {/* Render Tables Categorized */}
+      <div className="space-y-6">
+        {categoriesToRender.map(cat => {
+          const categoryTerms = filteredTerms.filter(t => t.category === cat);
+          if (categoryTerms.length === 0) return null;
+
+          return (
+            <div key={cat} className="space-y-2">
+              <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider font-mono border-b border-slate-200 pb-1 flex items-center gap-1.5">
+                <Table className="w-3.5 h-3.5 text-indigo-600" />
+                <span>{cat}</span>
+              </h4>
+
+              <div className="overflow-x-auto rounded-xl border border-slate-200 shadow-2xs">
+                <table className="w-full text-left text-xs border-collapse font-sans">
+                  <thead>
+                    <tr className="bg-slate-100 text-slate-700 font-bold uppercase tracking-wider text-[11px] border-b border-slate-200">
+                      <th className="py-2.5 px-4 w-1/3">Term</th>
+                      <th className="py-2.5 px-4">Description</th>
+                      <th className="py-2.5 px-4 w-20 text-center">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 bg-white">
+                    {categoryTerms.map(item => {
+                      const isEditingThis = editingId === item.id;
+                      return (
+                        <tr key={item.id} className="hover:bg-slate-50/70 transition-colors">
+                          <td className="py-3 px-4 font-bold text-slate-900 align-top">
+                            {isEditingThis ? (
+                              <input
+                                type="text"
+                                value={editTermText}
+                                onChange={(e) => setEditTermText(e.target.value)}
+                                className="w-full p-1.5 border border-indigo-300 rounded text-xs focus:outline-none"
+                              />
+                            ) : (
+                              item.term
+                            )}
+                          </td>
+                          <td className="py-3 px-4 text-slate-700 leading-relaxed align-top">
+                            {isEditingThis ? (
+                              <textarea
+                                value={editDescText}
+                                onChange={(e) => setEditDescText(e.target.value)}
+                                className="w-full p-1.5 border border-indigo-300 rounded text-xs focus:outline-none min-h-[60px]"
+                              />
+                            ) : (
+                              item.description
+                            )}
+                          </td>
+                          <td className="py-3 px-4 align-top text-center">
+                            {isEditingThis ? (
+                              <div className="flex items-center justify-center gap-1">
+                                <button
+                                  type="button"
+                                  onClick={() => handleSaveEdit(item.id)}
+                                  className="p-1 bg-emerald-100 text-emerald-700 hover:bg-emerald-200 rounded cursor-pointer"
+                                  title="Save"
+                                >
+                                  <Check className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            ) : (
+                              <div className="flex items-center justify-center gap-1">
+                                <button
+                                  type="button"
+                                  onClick={() => handleStartEdit(item)}
+                                  className="p-1 text-slate-400 hover:text-indigo-600 rounded cursor-pointer"
+                                  title="Edit Row"
+                                >
+                                  <Edit3 className="w-3.5 h-3.5" />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteTerm(item.id)}
+                                  className="p-1 text-slate-400 hover:text-red-600 rounded cursor-pointer"
+                                  title="Delete Row"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {citations.length > 0 && (
+        <div className="flex items-center gap-1.5 text-[10px] pt-2 border-t border-slate-100 font-sans">
+          <span className="text-slate-400 font-mono uppercase font-bold">Grounding Citations:</span>
+          {citations.map((c, idx) => (
+            <button
+              key={idx}
+              type="button"
+              onClick={() => onCitationClick && onCitationClick(c)}
+              className="px-2 py-0.5 rounded bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-medium border border-indigo-100 flex items-center gap-1 transition-colors cursor-pointer"
+            >
+              <Bookmark className="w-2.5 h-2.5 text-indigo-400" /> {c.split(': ').pop()}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** ----------------------------------------------------
+ * 14. SECTION 1.2: CERTAIN CONVENTIONS, FINANCIAL & MARKET DATA
+ * ---------------------------------------------------- */
+export function DrhpConventionsSection({ company = {}, intake = {}, citations = [], onCitationClick }) {
+  const [cardsData, setCardsData] = useState({
+    currency: "All references in this Draft Red Herring Prospectus to 'INR', 'Rs.', 'Rupees', or '₹' are to the Indian Rupee, the official currency of the Republic of India. Financial amounts are presented in Indian Rupees and formatted in Crores (1 Crore = 10,000,000 INR) or Lakhs (1 Lakh = 100,000 INR) unless otherwise specified.",
+    financial: "Financial information included in this DRHP is derived from our Restated Financial Statements for FY 2022-23, FY 2023-24, and FY 2024-25, prepared in accordance with Indian Accounting Standards (Ind AS) / Indian GAAP and the Companies Act, 2013. Our Fiscal Year commences on April 1 and ends on March 31 of the following calendar year.",
+    market: "Market and industry data used throughout this DRHP has been obtained from CRISIL Research Report, Ministry of Heavy Industries, MCA filings, and official government publications. Industry publications generally state that the information contained therein has been obtained from sources believed to be reliable.",
+    numerical: "Certain numerical figures and percentages in this DRHP have been subject to rounding adjustments. Component figures in tables may not sum exactly to stated totals due to rounding off to two decimal places."
+  });
+
+  const [sources] = useState([
+    { id: 'src-1', title: 'Audited FS FY25', desc: 'Audited Financial Statements for FY 2024-25', badge: 'Audited FS FY25' },
+    { id: 'src-2', title: 'CRISIL Industry Report', desc: 'CRISIL Research Precision Engineering Outlook', badge: 'CRISIL Report' },
+    { id: 'src-3', title: 'MCA ROC Vault', desc: 'Ministry of Corporate Affairs ROC Filings', badge: 'MCA' },
+    { id: 'src-4', title: 'Intake Questionnaire', desc: 'Verified Company Profile Intake Data', badge: 'Intake: Company Details' }
+  ]);
+
+  const [editingCard, setEditingCard] = useState(null);
+  const [editText, setEditText] = useState('');
+
+  const handleStartEdit = (key) => {
+    setEditingCard(key);
+    setEditText(cardsData[key]);
+  };
+
+  const handleSaveCard = (key) => {
+    setCardsData(prev => ({ ...prev, [key]: editText }));
+    setEditingCard(null);
+  };
+
+  return (
+    <div className="space-y-6 font-sans">
+      <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200">
+        <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+          <Info className="w-4 h-4 text-indigo-600" />
+          <span>1.2 Certain Conventions, Presentation of Financial & Market Data</span>
+        </h3>
+        <p className="text-xs text-slate-500 mt-0.5">
+          SEBI disclosure conventions regarding currency notation, restated financial reporting, market research sources, and rounding rules.
+        </p>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {/* Card 1: Currency Convention */}
+        <div className="p-5 bg-white rounded-2xl border border-slate-200 shadow-2xs space-y-3 relative group">
+          <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+            <h4 className="text-xs font-bold text-slate-900 uppercase font-mono tracking-wider flex items-center gap-1.5">
+              <DollarSign className="w-3.5 h-3.5 text-emerald-600" /> Currency Convention
+            </h4>
+            <button
+              type="button"
+              onClick={() => editingCard === 'currency' ? handleSaveCard('currency') : handleStartEdit('currency')}
+              className="text-[10px] font-bold text-indigo-600 hover:text-indigo-800 flex items-center gap-1 cursor-pointer"
+            >
+              {editingCard === 'currency' ? <><Check className="w-3 h-3 text-emerald-600" /> Save</> : <><Edit3 className="w-3 h-3" /> Edit</>}
+            </button>
+          </div>
+          {editingCard === 'currency' ? (
+            <textarea
+              value={editText}
+              onChange={(e) => setEditText(e.target.value)}
+              className="w-full p-2 text-xs border border-indigo-300 rounded-xl focus:outline-none min-h-[90px]"
+            />
+          ) : (
+            <p className="text-xs text-slate-700 leading-relaxed font-sans">{cardsData.currency}</p>
+          )}
+          <div className="flex items-center gap-2 pt-1">
+            <span className="px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 font-bold border border-emerald-200 text-[10px]">INR / ₹</span>
+            <span className="px-2 py-0.5 rounded bg-slate-100 text-slate-600 font-bold border border-slate-200 text-[10px]">Crore & Lakh Format</span>
+          </div>
+        </div>
+
+        {/* Card 2: Financial Reporting */}
+        <div className="p-5 bg-white rounded-2xl border border-slate-200 shadow-2xs space-y-3 relative group">
+          <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+            <h4 className="text-xs font-bold text-slate-900 uppercase font-mono tracking-wider flex items-center gap-1.5">
+              <Briefcase className="w-3.5 h-3.5 text-indigo-600" /> Financial Reporting Standards
+            </h4>
+            <button
+              type="button"
+              onClick={() => editingCard === 'financial' ? handleSaveCard('financial') : handleStartEdit('financial')}
+              className="text-[10px] font-bold text-indigo-600 hover:text-indigo-800 flex items-center gap-1 cursor-pointer"
+            >
+              {editingCard === 'financial' ? <><Check className="w-3 h-3 text-emerald-600" /> Save</> : <><Edit3 className="w-3 h-3" /> Edit</>}
+            </button>
+          </div>
+          {editingCard === 'financial' ? (
+            <textarea
+              value={editText}
+              onChange={(e) => setEditText(e.target.value)}
+              className="w-full p-2 text-xs border border-indigo-300 rounded-xl focus:outline-none min-h-[90px]"
+            />
+          ) : (
+            <p className="text-xs text-slate-700 leading-relaxed font-sans">{cardsData.financial}</p>
+          )}
+          <div className="flex items-center gap-2 pt-1">
+            <span className="px-2 py-0.5 rounded bg-indigo-50 text-indigo-700 font-bold border border-indigo-200 text-[10px]">Ind AS / Indian GAAP</span>
+            <span className="px-2 py-0.5 rounded bg-slate-100 text-slate-600 font-bold border border-slate-200 text-[10px]">Fiscal Year: April 1 – March 31</span>
+          </div>
+        </div>
+
+        {/* Card 3: Market Data Sources */}
+        <div className="p-5 bg-white rounded-2xl border border-slate-200 shadow-2xs space-y-3 relative group">
+          <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+            <h4 className="text-xs font-bold text-slate-900 uppercase font-mono tracking-wider flex items-center gap-1.5">
+              <Layers className="w-3.5 h-3.5 text-amber-600" /> Market & Industry Data Sources
+            </h4>
+            <button
+              type="button"
+              onClick={() => editingCard === 'market' ? handleSaveCard('market') : handleStartEdit('market')}
+              className="text-[10px] font-bold text-indigo-600 hover:text-indigo-800 flex items-center gap-1 cursor-pointer"
+            >
+              {editingCard === 'market' ? <><Check className="w-3 h-3 text-emerald-600" /> Save</> : <><Edit3 className="w-3 h-3" /> Edit</>}
+            </button>
+          </div>
+          {editingCard === 'market' ? (
+            <textarea
+              value={editText}
+              onChange={(e) => setEditText(e.target.value)}
+              className="w-full p-2 text-xs border border-indigo-300 rounded-xl focus:outline-none min-h-[90px]"
+            />
+          ) : (
+            <p className="text-xs text-slate-700 leading-relaxed font-sans">{cardsData.market}</p>
+          )}
+          <div className="flex items-center gap-2 pt-1 flex-wrap">
+            <span className="px-2 py-0.5 rounded bg-amber-50 text-amber-700 font-bold border border-amber-200 text-[10px]">CRISIL Report</span>
+            <span className="px-2 py-0.5 rounded bg-slate-100 text-slate-600 font-bold border border-slate-200 text-[10px]">Govt Sources</span>
+            <span className="px-2 py-0.5 rounded bg-slate-100 text-slate-600 font-bold border border-slate-200 text-[10px]">MCA Filings</span>
+          </div>
+        </div>
+
+        {/* Card 4: Numerical Conventions */}
+        <div className="p-5 bg-white rounded-2xl border border-slate-200 shadow-2xs space-y-3 relative group">
+          <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+            <h4 className="text-xs font-bold text-slate-900 uppercase font-mono tracking-wider flex items-center gap-1.5">
+              <TrendingUp className="w-3.5 h-3.5 text-blue-600" /> Numerical Conventions
+            </h4>
+            <button
+              type="button"
+              onClick={() => editingCard === 'numerical' ? handleSaveCard('numerical') : handleStartEdit('numerical')}
+              className="text-[10px] font-bold text-indigo-600 hover:text-indigo-800 flex items-center gap-1 cursor-pointer"
+            >
+              {editingCard === 'numerical' ? <><Check className="w-3 h-3 text-emerald-600" /> Save</> : <><Edit3 className="w-3 h-3" /> Edit</>}
+            </button>
+          </div>
+          {editingCard === 'numerical' ? (
+            <textarea
+              value={editText}
+              onChange={(e) => setEditText(e.target.value)}
+              className="w-full p-2 text-xs border border-indigo-300 rounded-xl focus:outline-none min-h-[90px]"
+            />
+          ) : (
+            <p className="text-xs text-slate-700 leading-relaxed font-sans">{cardsData.numerical}</p>
+          )}
+          <div className="flex items-center gap-2 pt-1">
+            <span className="px-2 py-0.5 rounded bg-blue-50 text-blue-700 font-bold border border-blue-200 text-[10px]">2 Decimal Places</span>
+            <span className="px-2 py-0.5 rounded bg-slate-100 text-slate-600 font-bold border border-slate-200 text-[10px]">Component Total Match</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Data Sources Grid (Source Badges) */}
+      <div className="p-5 bg-indigo-50/40 border border-indigo-100 rounded-2xl space-y-3">
+        <h4 className="text-xs font-bold text-indigo-950 uppercase font-mono tracking-wider flex items-center gap-1.5">
+          <Bookmark className="w-3.5 h-3.5 text-indigo-600" /> Mapped Grounding Data Sources
+        </h4>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+          {sources.map(src => (
+            <div key={src.id} className="p-3 bg-white border border-indigo-100 rounded-xl space-y-1 hover:border-indigo-300 transition-all">
+              <span className="px-2 py-0.5 rounded bg-indigo-100 text-indigo-800 font-mono text-[9px] font-bold uppercase inline-block">
+                {src.badge}
+              </span>
+              <p className="text-xs font-bold text-slate-800">{src.title}</p>
+              <p className="text-[10px] text-slate-500">{src.desc}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** ----------------------------------------------------
+ * 15. SECTION 1.3: FORWARD LOOKING STATEMENTS
+ * ---------------------------------------------------- */
+export function DrhpForwardLookingSection({ company = {}, intake = {}, citations = [], onCitationClick }) {
+  const defaultStatement = `This Draft Red Herring Prospectus contains certain forward-looking statements that involve risks and uncertainties. All statements other than statements of historical facts contained in this DRHP, including statements regarding our Company's future financial position, business strategy, expansion plans, financial targets, and objectives of management for future operations, are forward-looking statements.
+
+These statements can generally be identified by words or phrases such as "aim", "anticipate", "believe", "expect", "estimate", "intend", "objective", "plan", "project", "shall", "will", "will continue", "will pursue", or other words of similar import.
+
+Forward-looking statements contained in this DRHP regarding our growth strategies in precision machining, expansion of 5-axis CNC capacities, customer retention, raw material supply contracts, and financial projections are based on assumptions regarding our present and future business strategies and the environment in which we operate.
+
+Actual results could differ materially from those expressed or implied in such forward-looking statements due to various factors, including:
+1. Volatility in prices of raw materials (alloy steel, brass ingots) and power tariffs.
+2. High customer concentration and dependency on top Tier-1 automotive OEMs.
+3. Operational risks associated with a single manufacturing facility at Dombivli, Thane.
+4. Pending legal proceedings and income tax appeals before the CIT(A), Mumbai.
+5. Changes in government policies, SEBI ICDR regulations, and general economic conditions in India.
+
+Neither our Company, the Promoters, the Lead Manager, nor any of their respective affiliates undertake any obligation to update or revise any forward-looking statement, whether as a result of new information, future events, or otherwise, except as required by SEBI (ICDR) Regulations, 2018 or applicable law.`;
+
+  const [statementText, setStatementText] = useState(defaultStatement);
+  const [originalText, setOriginalText] = useState(defaultStatement);
+  const [isDiffMode, setIsDiffMode] = useState(false);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [accepted, setAccepted] = useState(true);
+
+  const handleRegenerate = () => {
+    setIsGenerating(true);
+    setTimeout(() => {
+      const refreshed = defaultStatement + `\n\n[SEBI ICDR Schedule VI legal disclosure re-verified on ${new Date().toLocaleDateString()}]`;
+      setStatementText(refreshed);
+      setAccepted(false);
+      setIsGenerating(false);
+    }, 600);
+  };
+
+  const handleAcceptChanges = () => {
+    setOriginalText(statementText);
+    setAccepted(true);
+    setIsDiffMode(false);
+  };
+
+  return (
+    <div className="space-y-5 font-sans">
+      {/* Header & AI Workflow Actions */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-slate-50 p-4 rounded-2xl border border-slate-200">
+        <div>
+          <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+            <ShieldAlert className="w-4 h-4 text-indigo-600" />
+            <span>1.3 Forward Looking Statements</span>
+          </h3>
+          <p className="text-xs text-slate-500 mt-0.5">
+            SEBI DRHP statutory legal disclaimer covering projections, risk disclosures, and update obligations.
+          </p>
+        </div>
+
+        <div className="flex items-center gap-2 flex-wrap">
+          <button
+            type="button"
+            onClick={handleRegenerate}
+            disabled={isGenerating}
+            className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl flex items-center gap-1.5 transition-all border border-slate-200 cursor-pointer disabled:opacity-50"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 text-indigo-600 ${isGenerating ? 'animate-spin' : ''}`} />
+            <span>Regenerate AI</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setIsDiffMode(!isDiffMode)}
+            className={`px-3 py-1.5 text-xs font-bold rounded-xl flex items-center gap-1.5 transition-all border cursor-pointer ${
+              isDiffMode
+                ? 'bg-indigo-600 text-white border-indigo-600'
+                : 'bg-white text-slate-700 hover:bg-slate-100 border-slate-200'
+            }`}
+          >
+            <History className="w-3.5 h-3.5" />
+            <span>Compare Versions</span>
+          </button>
+
+          {!accepted && (
+            <button
+              type="button"
+              onClick={handleAcceptChanges}
+              className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl flex items-center gap-1 transition-all shadow-sm cursor-pointer"
+            >
+              <Check className="w-3.5 h-3.5" />
+              <span>Accept Changes</span>
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* View Mode: Normal Editor vs Split Diff View */}
+      {isDiffMode ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl space-y-2">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 font-mono">Original / Base SEBI Version</span>
+            <div className="text-xs text-slate-700 leading-relaxed whitespace-pre-wrap font-sans">{originalText}</div>
+          </div>
+          <div className="p-4 bg-indigo-50/40 border border-indigo-200 rounded-2xl space-y-2">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-600 font-mono">Active Edited / AI Version</span>
+            <div className="text-xs text-slate-900 leading-relaxed whitespace-pre-wrap font-sans font-medium">{statementText}</div>
+          </div>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          <label className="text-[10px] font-bold uppercase font-mono tracking-wider text-slate-400 flex items-center justify-between">
+            <span>Editable SEBI Forward-Looking Disclaimer Text</span>
+            <span>{statementText.length} Characters</span>
+          </label>
+          <textarea
+            value={statementText}
+            onChange={(e) => { setStatementText(e.target.value); setAccepted(false); }}
+            className="w-full p-4 text-xs leading-relaxed font-sans text-slate-800 bg-white border border-slate-200 rounded-2xl focus:ring-2 focus:ring-indigo-500 focus:outline-none min-h-[240px] resize-y shadow-2xs"
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** ----------------------------------------------------
+ * 16. Dynamic DRHP Block Composition Renderer
  * ---------------------------------------------------- */
 export function DrhpBlockRenderer({ block, onCitationClick }) {
   if (!block) return null;
 
   switch (block.type) {
+    case 'drhp_glossary':
+      return <DrhpGlossarySection company={block.company} intake={block.intake} citations={block.citations} onCitationClick={onCitationClick} />;
+    case 'drhp_conventions':
+      return <DrhpConventionsSection company={block.company} intake={block.intake} citations={block.citations} onCitationClick={onCitationClick} />;
+    case 'drhp_forward_looking':
+      return <DrhpForwardLookingSection company={block.company} intake={block.intake} citations={block.citations} onCitationClick={onCitationClick} />;
     case 'stat_cards':
       return <DrhpStatCards stats={block.stats} citations={block.citations} onCitationClick={onCitationClick} />;
     case 'line_chart':
@@ -1418,4 +2106,5 @@ export function DrhpBlockRenderer({ block, onCitationClick }) {
       return <DrhpNarrative text={block.text} citations={block.citations} onCitationClick={onCitationClick} />;
   }
 }
+
 

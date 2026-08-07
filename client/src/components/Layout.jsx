@@ -44,31 +44,35 @@ export default function Layout({ children }) {
   const [sebiCount,     setSebiCount]     = useState(0);      // badge count
   const [mobileOpen,    setMobileOpen]    = useState(false);  // mobile drawer
 
-  // ── load company + heatmap + sebi count ────────────────────────────────────
+  // ── load company + heatmap + sebi count in parallel ────────────────────────
   const loadSidebarData = useCallback(async () => {
     try {
-      const res = await getCompanies();
-      const companies = res.data.companies || res.data;
-      if (companies && companies.length > 0) {
-        const comp = companies[0];
-        setCompany(comp);
-        const id = comp._id || comp.id;
-        localStorage.setItem('ipo_company_id', id);
+      const [compRes, sebiRes] = await Promise.allSettled([
+        getCompanies(),
+        getSebiNotices()
+      ]);
 
-        try {
-          const readinessRes = await getIpoReadiness(id);
-          const readinessData = readinessRes.data || readinessRes;
-          if (readinessData && readinessData.overall_score !== undefined) {
-            setReadiness(readinessData.overall_score);
-          }
-        } catch (e) { /* non-fatal */ }
+      if (compRes.status === 'fulfilled') {
+        const res = compRes.value;
+        const companies = res.data?.companies || res.data;
+        if (companies && companies.length > 0) {
+          const comp = companies[0];
+          setCompany(comp);
+          const id = comp._id || comp.id;
+          localStorage.setItem('ipo_company_id', id);
 
-        try {
-          const sebiRes = await getSebiNotices();
-          // Handle both old array response and new {notices, meta} shape
-          const notices = sebiRes.data?.notices || sebiRes.data || [];
-          setSebiCount(Array.isArray(notices) ? notices.length : 0);
-        } catch (e) { /* non-fatal */ }
+          getIpoReadiness(id).then(readinessRes => {
+            const readinessData = readinessRes.data || readinessRes;
+            if (readinessData && readinessData.overall_score !== undefined) {
+              setReadiness(readinessData.overall_score);
+            }
+          }).catch(() => {});
+        }
+      }
+
+      if (sebiRes.status === 'fulfilled') {
+        const notices = sebiRes.value.data?.notices || sebiRes.value.data || [];
+        setSebiCount(Array.isArray(notices) ? notices.length : 0);
       }
     } catch (err) {
       console.error('Layout: failed to load sidebar data', err);

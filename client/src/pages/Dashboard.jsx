@@ -46,21 +46,24 @@ export default function Dashboard() {
   const loadStatus = async () => {
     try {
       setLoading(true);
-      const [res, readinessRes, intakeRes, docsRes, draftsRes, auditLogsRes] = await Promise.all([
+      const results = await Promise.allSettled([
         getCompanyStatus(companyId),
         getIpoReadiness(companyId),
         getIntake(companyId),
         getDocuments(companyId),
         getDrafts(companyId),
-        getAuditLogs(companyId).catch(() => ({ data: { logs: [] } }))
+        getAuditLogs(companyId)
       ]);
-      setStats(res.data || res);
-      setReadinessData(readinessRes.data || readinessRes);
-      setIntakeData(intakeRes.data || intakeRes || {});
-      setDocuments(docsRes.data || docsRes || []);
-      setDrafts(draftsRes.data || draftsRes || {});
-      const logs = auditLogsRes.data?.logs || auditLogsRes.logs || [];
-      setAuditLogs(logs);
+
+      if (results[0].status === 'fulfilled') setStats(results[0].value?.data || results[0].value);
+      if (results[1].status === 'fulfilled') setReadinessData(results[1].value?.data || results[1].value);
+      if (results[2].status === 'fulfilled') setIntakeData(results[2].value?.data || results[2].value || {});
+      if (results[3].status === 'fulfilled') setDocuments(results[3].value?.data || results[3].value || []);
+      if (results[4].status === 'fulfilled') setDrafts(results[4].value?.data || results[4].value || {});
+      if (results[5].status === 'fulfilled') {
+        const logs = results[5].value?.data?.logs || results[5].value?.logs || [];
+        setAuditLogs(logs);
+      }
     } catch (err) {
       console.error("Failed to load dashboard status:", err);
     } finally {

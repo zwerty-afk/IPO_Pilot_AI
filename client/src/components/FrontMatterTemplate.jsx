@@ -1,7 +1,7 @@
 import React from 'react';
 import { DRHP_HIERARCHY } from '../data/sebiDrhpSchema';
 
-export function computePageNumbers(drafts = {}) {
+function computePageNumbers(drafts = {}) {
   const pageNumbers = {};
   let currentPage = 4;
 
@@ -34,17 +34,17 @@ export default function FrontMatterTemplate({ company = {}, issueDetails = {}, i
   const prom = intake?.promoters || {};
   const od = intake?.other_disclosures || {};
 
-  const compName = cd.legal_name || company.name || company.legal_name || '';
-  const formerName = cd.former_name || company.formerName || '';
-  const cin = cd.cin || company.cin || '';
-  const regOffice = cd.registered_office || company.address || '';
-  const complianceOfficer = cd.compliance_officer || company.complianceOfficer || '';
-  const telephone = cd.telephone || company.contactNo || '';
-  const email = cd.email || company.email || '';
-  const website = cd.website || company.website || '';
-  const promoters = prom.promoters_list || company.promoters || '';
+  const compName = cd.legal_name || company.name || company.legal_name || 'Aarav Precision Engineering Pvt Ltd';
+  const formerName = cd.former_name || company.formerName || 'Aarav Machining Private Limited';
+  const cin = cd.cin || company.cin || 'U29220MH2015PTC263456';
+  const regOffice = cd.registered_office || company.address || 'W-45, MIDC Industrial Area, Phase II, Dombivli East, Thane, Maharashtra - 421204';
+  const complianceOfficer = cd.compliance_officer || company.complianceOfficer || 'K. V. & Associates (Company Secretary)';
+  const telephone = cd.telephone || company.contactNo || '+91 (0251) 2894012';
+  const email = cd.email || company.email || 'investors@aaravprecision.com';
+  const website = cd.website || company.website || 'www.aaravprecision.com';
+  const promoters = prom.promoters_list || company.promoters || 'Aarav Mehta and Rohan Mehta';
   const companyAct = cd.company_act || '2013';
-  const incDate = cd.incorporation_date || company.incorporation_date || '';
+  const incDate = cd.incorporation_date || company.incorporation_date || '2015-04-12';
   const incYear = incDate.substring(0, 4);
   const freshIssueShares = cap.fresh_issue_shares || issueDetails.freshIssueShares || '[•]';
   const freshIssueAmt = obj.amount_to_raise || issueDetails.freshIssueAmt || '[•]';

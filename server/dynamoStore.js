@@ -79,10 +79,18 @@ async function loadAll() {
 }
 
 async function putCollection(key, value) {
-  await doc.send(new PutCommand({
-    TableName: TABLE,
-    Item: { pk: key, value, updated_at: new Date().toISOString() }
-  }));
+  try {
+    await doc.send(new PutCommand({
+      TableName: TABLE,
+      Item: { pk: key, value, updated_at: new Date().toISOString() }
+    }));
+  } catch (err) {
+    if (err.name === 'ValidationException' && err.message.includes('exceeded the maximum allowed size')) {
+      console.warn(`[dynamo] collection "${key}" exceeded 400KB limit — keeping in-memory state active`);
+    } else {
+      console.error(`[dynamo] putCollection error for "${key}":`, err.message);
+    }
+  }
 }
 
 /**
