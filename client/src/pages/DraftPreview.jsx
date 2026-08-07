@@ -165,11 +165,11 @@ export default function DraftPreview() {
   const location = useLocation();
 
   // Focused active TOC subitem: default to "definitions_and_abbreviations"
-  // Special sentinel: 'cover_pages' renders the FrontMatterTemplate (Pages 1-3)
+  // Special sentinel: 'draft_preview' / 'cover_pages' renders the FrontMatterTemplate (Pages 1-3)
   const [activeTocId, setActiveTocId] = useState('cover_pages');
-  const isCoverPages = activeTocId === 'cover_pages';
+  const isCoverPages = activeTocId === 'cover_pages' || activeTocId === 'draft_preview';
   const activeNode = isCoverPages
-    ? { section: { id: 'cover_pages', title: 'Cover Pages (1–3)', key: 'cover_pages', subsections: [] }, key: 'cover_pages', number: '0', fullTitle: 'Fixed Front Matter — Pages 1–3' }
+    ? { section: { id: 'draft_preview', title: 'Draft Preview (Pages 1–3)', key: 'draft_preview', subsections: [] }, key: 'draft_preview', number: '0', fullTitle: 'Draft Preview (Fixed Template — Pages 1–3)' }
     : findDrhpNode(activeTocId);
   const selectedSectionKey = isCoverPages ? 'cover_pages' : (activeNode.key || 'company_details');
 
@@ -626,7 +626,7 @@ export default function DraftPreview() {
             <div className="flex items-center gap-1.5 text-xs text-slate-500 font-medium">
               <span>SEBI DRHP</span>
               <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
-              <span className="font-semibold text-slate-700">{isCoverPages ? 'Fixed Front Matter' : activeNode.section.title}</span>
+              <span className="font-semibold text-slate-700">{isCoverPages ? 'Draft Preview' : activeNode.section.title}</span>
               <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
               <span className="font-bold text-indigo-600">{isCoverPages ? 'Pages 1–3' : activeNode.number}</span>
             </div>
@@ -667,7 +667,7 @@ export default function DraftPreview() {
           {/* Focused Subsection Title & Toolbar */}
           <div className="flex items-center justify-between gap-4 flex-wrap">
             <div>
-              <h2 className="text-lg font-bold text-slate-900">{isCoverPages ? 'Fixed Front Matter — Pages 1–3 (Template Preview)' : activeNode.fullTitle}</h2>
+              <h2 className="text-lg font-bold text-slate-900">{isCoverPages ? 'Draft Preview — Pages 1–3 (Fixed Template)' : activeNode.fullTitle}</h2>
               <p className="text-xs text-slate-500 mt-0.5">
                 {isCoverPages
                   ? 'SEBI-compliant front matter template: Cover Page, Issue Details & Table of Contents. Populated with your intake data.'
@@ -786,61 +786,6 @@ export default function DraftPreview() {
         {/* INTERACTIVE EDITABLE PDF PREVIEW WORKSPACE           */}
         {/* ---------------------------------------------------- */}
         <div className="space-y-3">
-          {/* PDF Toolbar */}
-          <div className="bg-slate-900 text-white p-3 rounded-xl flex items-center justify-between shadow-md flex-wrap gap-2 text-xs font-sans">
-            <div className="flex items-center gap-2">
-              <span className="bg-red-600 text-white font-black text-[10px] px-2 py-0.5 rounded font-mono uppercase tracking-wider">
-                PDF PREVIEW
-              </span>
-              <span className="font-semibold text-slate-200">
-                SEBI DRHP — Interactive Document Canvas
-              </span>
-            </div>
-
-            <div className="flex items-center gap-3">
-              {/* Live PDF Edit Toggle */}
-              <button
-                onClick={() => setPdfEditMode(!pdfEditMode)}
-                className={`px-2.5 py-1 rounded-lg font-bold text-[11px] transition-all flex items-center gap-1 ${
-                  pdfEditMode
-                    ? 'bg-emerald-500 text-slate-950 hover:bg-emerald-400'
-                    : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
-                }`}
-              >
-                <Edit3 className="w-3 h-3" />
-                <span>{pdfEditMode ? 'Live Edit Enabled' : 'View Mode'}</span>
-              </button>
-
-              {/* Zoom Controls */}
-              <div className="flex items-center gap-1 bg-slate-800 p-1 rounded-lg border border-slate-700">
-                <button
-                  onClick={() => setZoomLevel(prev => Math.max(60, prev - 10))}
-                  className="px-2 py-0.5 hover:bg-slate-700 rounded font-bold text-slate-300 transition-colors"
-                  title="Zoom Out"
-                >
-                  -
-                </button>
-                <span className="font-mono text-[11px] px-1 text-slate-300 font-bold min-w-[36px] text-center">
-                  {zoomLevel}%
-                </span>
-                <button
-                  onClick={() => setZoomLevel(prev => Math.min(150, prev + 10))}
-                  className="px-2 py-0.5 hover:bg-slate-700 rounded font-bold text-slate-300 transition-colors"
-                  title="Zoom In"
-                >
-                  +
-                </button>
-                {zoomLevel !== 100 && (
-                  <button
-                    onClick={() => setZoomLevel(100)}
-                    className="px-1.5 py-0.5 hover:bg-slate-700 rounded text-[10px] text-indigo-400 font-mono"
-                  >
-                    Reset
-                  </button>
-                )}
-              </div>
-            </div>
-          </div>
 
           <div className="bg-slate-100/90 py-8 px-2 md:px-6 w-full flex justify-center rounded-2xl border border-slate-200/60 shadow-inner overflow-x-auto min-h-[920px]">
 

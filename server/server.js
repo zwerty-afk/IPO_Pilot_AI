@@ -9,7 +9,7 @@ import multerS3 from 'multer-s3';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
-import { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType } from 'docx';
+import { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType, Table, TableRow, TableCell, WidthType } from 'docx';
 import PDFDocument from 'pdfkit';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import cron from 'node-cron';
@@ -2847,14 +2847,26 @@ IMPORTANT DISCLAIMER: Informational and due diligence assistance only. Does not 
 
 app.get('/api/export/:companyId/docx', authenticateToken, async (req, res) => {
   const { companyId } = req.params;
-  const company = db.getCompany(companyId) || { name: 'Aarav Precision Engineering Limited' };
+  const company = db.getCompany(companyId) || {};
+  const intake = db.getIntake(companyId) || {};
+  const docs = db.getDocuments(companyId) || [];
   
-  const drafts = db.getDrafts(companyId) || {};
+  let drafts = db.getDrafts(companyId) || {};
+  const generatedDrafts = generateDraftData(companyId);
+  CHAPTER_ORDER.forEach(({ key }) => {
+    if (!drafts[key] || !drafts[key].blocks || drafts[key].blocks.length === 0) {
+      drafts[key] = generatedDrafts[key] || { status: 'draft', blocks: [] };
+    }
+  });
+
   const allCertified = CHAPTER_ORDER.every(({ key }) => drafts[key] && drafts[key].status === 'certified');
   
-  const compName = company.name || 'AARAV PRECISION ENGINEERING LIMITED';
-  const cin = company.cin || 'U29220MH2015PTC263456';
-  const address = company.address || 'Plot W-42, MIDC Industrial Area, Dombivli East, Thane - 421203, Maharashtra, India';
+  const cdData = intake.company_details || {};
+  const promData = intake.promoters || {};
+  const compName = cdData.legal_name || company.legal_name || company.name || 'Aarav Precision Engineering Limited';
+  const cin = cdData.cin || company.cin || 'U29220MH2015PTC263456';
+  const address = cdData.registered_office || company.address || 'Plot W-45, MIDC Industrial Area, Phase II, Dombivli East, Thane - 421204, Maharashtra, India';
+  const promoters = promData.promoters_list || 'Aarav Mehta & Sunita Mehta';
 
   // 1. FIXED FRONT MATTER TEMPLATE (PAGES 1 - 3 + TABLE OF CONTENTS PAGE 4)
   const draftDate = new Date().toLocaleDateString('en-IN', { year: 'numeric', month: 'long', day: 'numeric' });
@@ -2873,7 +2885,7 @@ app.get('/api/export/:companyId/docx', authenticateToken, async (req, res) => {
     new Paragraph({ alignment: AlignmentType.LEFT, spacing: { after: 40 }, children: [new TextRun({ text: `Email: investors@aaravprecision.com  |  Website: www.aaravprecision.com`, size: 18, color: '334155' })] }),
 
     new Paragraph({ spacing: { before: 200, after: 60 }, children: [new TextRun({ text: 'OUR PROMOTERS', bold: true, size: 22, color: '0f172a', allCaps: true })] }),
-    new Paragraph({ spacing: { after: 60 }, children: [new TextRun({ text: 'Aarav Mehta & Sunita Mehta', bold: true, size: 22, color: '1e1b4b' })] }),
+    new Paragraph({ spacing: { after: 60 }, children: [new TextRun({ text: promoters, bold: true, size: 22, color: '1e1b4b' })] }),
 
     new Paragraph({ spacing: { before: 200, after: 60 }, children: [new TextRun({ text: 'DETAILS OF THE OFFER TO THE PUBLIC', bold: true, size: 20, color: '0f172a', allCaps: true })] }),
     new Paragraph({ spacing: { after: 60 }, children: [
@@ -2949,12 +2961,10 @@ app.get('/api/export/:companyId/docx', authenticateToken, async (req, res) => {
   // 2. MERGE ALL APPROVED / DRAFTED DRHP CHAPTERS IN EXHAUSTIVE EXPANDED SEBI FORMAT
   let exportedChaptersCount = 0;
 
-  const cdData = intake.company_details || {};
   const boData = intake.business_overview || {};
   const finData = intake.financials || {};
   const capData = intake.capital_structure || {};
   const objData = intake.objects || {};
-  const promData = intake.promoters || {};
   const rptData = intake.rpt || {};
   const litData = intake.litigation || {};
   const lcData = intake.legal_compliance || {};
@@ -3144,8 +3154,49 @@ app.get('/api/export/:companyId/docx', authenticateToken, async (req, res) => {
 
   // ── SECTION XI: DECLARATIONS ─────────────────────────────────────────────
   addChapterHeader('XI', 'Declarations & Sign-Off');
-  addPara('We hereby declare that all relevant provisions of the Companies Act, 2013 and SEBI ICDR Regulations have been complied with and no statement in this DRHP is contrary to statutory provisions.');
-  addPara('For and on behalf of the Board of Directors of Aarav Precision Engineering Limited:\n\n_______________________\nAarav Mehta (Managing Director)\n\n_______________________\nSunita Mehta (Director)');
+  // Append custom draft blocks for each chapter
+  CHAPTER_ORDER.forEach(({ key, title }) => {
+    const sec = drafts[key];
+    if (!sec || !sec.blocks || sec.blocks.length === 0) return;
+    
+    addSubHeader(`Disclosures for ${title} (${sec.status === 'certified' ? 'Certified Copy' : 'Draft Copy'})`);
+    sec.blocks.forEach(b => {
+      if (b.type === 'table' && b.rows && b.rows.length > 0) {
+        if (b.title) addPara(b.title, true);
+        const tableRows = [];
+        if (b.headers && b.headers.length > 0) {
+          tableRows.push(
+            new TableRow({
+              children: b.headers.map(h => new TableCell({
+                width: { size: Math.floor(100 / b.headers.length), type: WidthType.PERCENTAGE },
+                children: [new Paragraph({ children: [new TextRun({ text: String(h), bold: true, size: 16, color: '0f172a' })] })]
+              }))
+            })
+          );
+        }
+        b.rows.forEach(row => {
+          if (Array.isArray(row)) {
+            tableRows.push(
+              new TableRow({
+                children: row.map(cell => new TableCell({
+                  width: { size: Math.floor(100 / row.length), type: WidthType.PERCENTAGE },
+                  children: [new Paragraph({ children: [new TextRun({ text: String(cell), size: 16, color: '334155' })] })]
+                }))
+              })
+            );
+          }
+        });
+        if (tableRows.length > 0) {
+          docElements.push(new Table({ rows: tableRows, width: { size: 100, type: WidthType.PERCENTAGE } }));
+        }
+      } else if (b.text) {
+        addPara(b.text);
+      }
+      if (b.citations && b.citations.length > 0) {
+        addPara(`Citations: ${b.citations.join(' | ')}`, false, true);
+      }
+    });
+  });
 
   docElements.push(new Paragraph({ spacing: { before: 400 }, children: [
     new TextRun({ text: `\nGenerated by IPO Pilot AI — ${new Date().toLocaleString('en-IN')} — Official Complete SEBI DRHP Export Package`, italic: true, size: 16, color: '94a3b8' })
@@ -3163,15 +3214,27 @@ app.get('/api/export/:companyId/docx', authenticateToken, async (req, res) => {
 
 app.get('/api/export/:companyId/pdf', authenticateToken, async (req, res) => {
   const { companyId } = req.params;
-  const company = db.getCompany(companyId) || { name: 'Aarav Precision Engineering Limited' };
+  const company = db.getCompany(companyId) || {};
+  const intake = db.getIntake(companyId) || {};
+  const docs = db.getDocuments(companyId) || [];
   
-  const drafts = db.getDrafts(companyId) || {};
+  let drafts = db.getDrafts(companyId) || {};
+  const generatedDrafts = generateDraftData(companyId);
+  CHAPTER_ORDER.forEach(({ key }) => {
+    if (!drafts[key] || !drafts[key].blocks || drafts[key].blocks.length === 0) {
+      drafts[key] = generatedDrafts[key] || { status: 'draft', blocks: [] };
+    }
+  });
+
   const allCertified = CHAPTER_ORDER.every(({ key }) => drafts[key] && drafts[key].status === 'certified');
   const watermarkText = allCertified ? 'OFFICIAL CERTIFIED SEBI FILING COPY' : 'DRAFT — PENDING PROFESSIONAL REVIEW (AI-ASSISTED)';
 
-  const compName = company.name || 'AARAV PRECISION ENGINEERING LIMITED';
-  const cin = company.cin || 'U29220MH2015PTC263456';
-  const address = company.address || 'Plot W-42, MIDC Industrial Area, Dombivli East, Thane - 421203, Maharashtra, India';
+  const cdData = intake.company_details || {};
+  const promData = intake.promoters || {};
+  const compName = cdData.legal_name || company.legal_name || company.name || 'Aarav Precision Engineering Limited';
+  const cin = cdData.cin || company.cin || 'U29220MH2015PTC263456';
+  const address = cdData.registered_office || company.address || 'Plot W-45, MIDC Industrial Area, Phase II, Dombivli East, Thane - 421204, Maharashtra, India';
+  const promoters = promData.promoters_list || 'Aarav Mehta & Sunita Mehta';
 
   const doc = new PDFDocument({ margin: 50 });
   const filename = `SEBI_SME_DRHP_${companyId}_${Date.now()}.pdf`;
@@ -3194,7 +3257,7 @@ app.get('/api/export/:companyId/pdf', authenticateToken, async (req, res) => {
   doc.fontSize(9).fillColor('#334155').font('Helvetica').text('Email: investors@aaravprecision.com  |  Website: www.aaravprecision.com', { align: 'left' }).moveDown(0.8);
 
   doc.fontSize(11).fillColor('#0f172a').font('Helvetica-Bold').text('OUR PROMOTERS').moveDown(0.2);
-  doc.fontSize(11).fillColor('#1e1b4b').font('Helvetica-Bold').text('Aarav Mehta & Sunita Mehta').moveDown(0.8);
+  doc.fontSize(11).fillColor('#1e1b4b').font('Helvetica-Bold').text(promoters).moveDown(0.8);
 
   doc.fontSize(11).fillColor('#0f172a').font('Helvetica-Bold').text('DETAILS OF THE OFFER TO THE PUBLIC').moveDown(0.3);
   doc.fontSize(9).fillColor('#334155').font('Helvetica').text('Fresh Issue: Up to [•] Equity Shares of Rs.10 face value aggregating up to Rs.1,200.00 Million (100% Fresh Issue, No OFS).').moveDown(0.2);

@@ -129,25 +129,6 @@ export default function ChapterHealthSidebar({
       <h3 className="font-bold text-slate-800 text-sm px-3 mb-4">DRHP Table of Contents</h3>
 
       <div className="space-y-1">
-        {/* ── Pinned: Cover Pages (Pages 1–3 Template) ─────────────── */}
-        <button
-          type="button"
-          onClick={() => {
-            if (setActiveId) setActiveId('cover_pages');
-            if (onNavigateSection) onNavigateSection('cover_pages', 'cover_pages');
-          }}
-          className={`w-full flex items-center gap-2 px-3 py-2.5 rounded-xl text-left text-xs font-bold transition-all duration-200 border ${
-            activeId === 'cover_pages'
-              ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/10 border-indigo-600'
-              : 'text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border-indigo-200'
-          }`}
-        >
-          <span className="shrink-0 text-[9px] font-black uppercase tracking-wider bg-indigo-200/60 text-indigo-800 px-1.5 py-0.5 rounded font-mono">
-            PG 1–3
-          </span>
-          <span className="truncate flex-1">Cover Pages (Fixed Template)</span>
-        </button>
-
         {DRHP_HIERARCHY.map((sec, secIdx) => {
           const secNum = secIdx + 1;
           const isExpanded = expandedSectionId === sec.id;
@@ -223,6 +204,27 @@ export default function ChapterHealthSidebar({
             </div>
           );
         })}
+
+        {/* ── Last Item: Draft Preview (Fixed Template Pages 1–3) ─────────────── */}
+        <div className="pt-2 border-t border-slate-200/80 mt-2">
+          <button
+            type="button"
+            onClick={() => {
+              if (setActiveId) setActiveId('draft_preview');
+              if (onNavigateSection) onNavigateSection('draft_preview', 'draft_preview');
+            }}
+            className={`w-full flex items-center gap-2 px-3 py-2.5 rounded-xl text-left text-xs font-bold transition-all duration-200 border ${
+              activeId === 'draft_preview' || activeId === 'cover_pages'
+                ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/10 border-indigo-600'
+                : 'text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border-indigo-200'
+            }`}
+          >
+            <span className="shrink-0 text-[9px] font-black uppercase tracking-wider bg-indigo-200/60 text-indigo-800 px-1.5 py-0.5 rounded font-mono">
+              PREVIEW
+            </span>
+            <span className="truncate flex-1">Draft Preview</span>
+          </button>
+        </div>
       </div>
     </div>
   );
