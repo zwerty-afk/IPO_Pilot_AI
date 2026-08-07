@@ -15,10 +15,15 @@ export function AuthProvider({ children }) {
       if (storedToken) {
         try {
           const res = await getMe();
-          setUser(res.data.user || res.data);
+          const userData = res.data.user || res.data;
+          setUser(userData);
+          if (userData?.companyId) {
+            localStorage.setItem('ipo_company_id', userData.companyId);
+          }
           setToken(storedToken);
         } catch {
           localStorage.removeItem('ipo_token');
+          localStorage.removeItem('ipo_company_id');
           setUser(null);
           setToken(null);
         }
@@ -32,6 +37,9 @@ export function AuthProvider({ children }) {
     const res = await loginApi(email, password);
     const { token: newToken, user: userData } = res.data;
     localStorage.setItem('ipo_token', newToken);
+    if (userData?.companyId) {
+      localStorage.setItem('ipo_company_id', userData.companyId);
+    }
     setToken(newToken);
     setUser(userData);
     return res.data;
@@ -41,6 +49,9 @@ export function AuthProvider({ children }) {
     const res = await registerApi(payload);
     const { token: newToken, user: userData } = res.data;
     localStorage.setItem('ipo_token', newToken);
+    if (userData?.companyId) {
+      localStorage.setItem('ipo_company_id', userData.companyId);
+    }
     setToken(newToken);
     setUser(userData);
     return res.data;
@@ -48,6 +59,7 @@ export function AuthProvider({ children }) {
 
   const logout = useCallback(() => {
     localStorage.removeItem('ipo_token');
+    localStorage.removeItem('ipo_company_id');
     setToken(null);
     setUser(null);
   }, []);

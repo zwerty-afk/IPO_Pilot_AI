@@ -65,29 +65,29 @@ export default function LoginPage() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
-    // validateEmail passes on an empty string (it only rejects malformed input),
-    // so without these checks a blank submit reached the server and came back as
-    // "Invalid credentials", which reads as though correct details were rejected.
-    if (!email.trim()) { setError('Please enter your email address.'); return; }
+    const trimmedEmail = email.trim();
+    const trimmedName = name.trim();
+    const trimmedCompany = companyName.trim();
+
+    if (!trimmedEmail) { setError('Please enter your email address.'); return; }
     if (!password) { setError('Please enter your password.'); return; }
-    if (isSignup && !name.trim()) { setError('Please enter your name.'); return; }
-    if (isSignup && selectedRole === 'issuer' && !companyName.trim()) {
+    if (isSignup && !trimmedName) { setError('Please enter your name.'); return; }
+    if (isSignup && selectedRole === 'issuer' && !trimmedCompany) {
       setError('Please enter your company name.'); return;
     }
-    if (!validateEmail(email)) return;
+    if (!validateEmail(trimmedEmail)) return;
     setLoading(true);
     try {
       if (isSignup) {
-        await register({ name: name.trim(), email: email.trim(), password, role: selectedRole, companyName: companyName.trim() });
+        await register({ name: trimmedName, email: trimmedEmail, password, role: selectedRole, companyName: trimmedCompany });
       } else {
-        await login(email.trim(), password);
+        await login(trimmedEmail, password);
       }
-      // replace: true so the back button cannot return to the login form in an
-      // already-authenticated session.
       navigate('/dashboard', { replace: true });
     } catch (err) {
-      const fallback = isSignup ? 'Could not create your account. Please try again.' : 'Invalid credentials. Please try again.';
-      setError(err.response?.data?.message || fallback);
+      const serverMsg = err.response?.data?.message;
+      const fallback = isSignup ? 'Could not create your account. Please try again.' : 'Invalid email or password. Please try again.';
+      setError(serverMsg || fallback);
     } finally {
       setLoading(false);
     }

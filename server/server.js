@@ -1383,86 +1383,108 @@ app.get('/api/health', async (req, res) => {
 // ─── AUTH ─────────────────────────────────────────────────────────────────────
 
 app.post('/api/auth/login', (req, res) => {
-  const { email, password } = req.body;
-  if (!email || !password) return res.status(400).json({ message: 'Email and password are required.' });
-  const user = db.findUser(email);
-  if (!user || !verifyPassword(password, user.password)) {
-    return res.status(400).json({ message: 'Invalid email or password.' });
+  try {
+    const { email, password } = req.body || {};
+    if (!email || !password) {
+      return res.status(400).json({ message: 'Email and password are required.' });
+    }
+    const normalizedEmail = String(email).trim().toLowerCase();
+    const user = db.findUser(normalizedEmail);
+    if (!user || !verifyPassword(password, user.password)) {
+      return res.status(401).json({ message: 'Invalid email or password.' });
+    }
+    const token = signToken(user.email);
+    db.addAuditLog({
+      actor_email: user.email,
+      actor_name: user.name,
+      actor_role: user.role,
+      action: 'LOGIN',
+      entity_type: 'session',
+      entity_id: user.companyId || 'global',
+      description: `User ${user.name} logged in.`,
+      metadata: {},
+      ip: getClientIp(req)
+    });
+    res.json({ token, user: { email: user.email, role: user.role, name: user.name, companyId: user.companyId } });
+  } catch (err) {
+    console.error('[auth/login] error:', err);
+    res.status(500).json({ message: 'An unexpected server error occurred during login. Please try again.' });
   }
-  const token = signToken(user.email);
-  // Audit log
-  db.addAuditLog({ actor_email: user.email, actor_name: user.name, actor_role: user.role, action: 'LOGIN', entity_type: 'session', entity_id: user.companyId, description: `User ${user.name} logged in.`, metadata: {}, ip: getClientIp(req) });
-  // companyId is included so the client knows which company to load immediately.
-  // /auth/me already returned it, but login did not, so the first render after
-  // signing in had no company and pages keyed on it came up empty until a reload.
-  res.json({ token, user: { email: user.email, role: user.role, name: user.name, companyId: user.companyId } });
 });
 
 app.post('/api/auth/register', (req, res) => {
-  const { name, email, password, role, companyName } = req.body || {};
+  try {
+    const { name, email, password, role, companyName } = req.body || {};
 
-  // ── Validation ──────────────────────────────────────────────────────────────
-  if (!name || !email || !password) {
-    return res.status(400).json({ message: 'Name, email, and password are required.' });
+    // ── Validation ──────────────────────────────────────────────────────────────
+    if (!name || !email || !password) {
+      return res.status(400).json({ message: 'Name, email, and password are required.' });
+    }
+    const normalizedEmail = String(email).trim().toLowerCase();
+    const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail);
+    if (!emailOk) return res.status(400).json({ message: 'Please enter a valid email address.' });
+    if (String(password).length < 6) {
+      return res.status(400).json({ message: 'Password must be at least 6 characters.' });
+    }
+    const normalizedRole = role === 'reviewer' ? 'reviewer' : 'issuer';
+    if (db.findUser(normalizedEmail)) {
+      return res.status(409).json({ message: 'An account with this email already exists. Please sign in.' });
+    }
+    if (normalizedRole === 'issuer' && (!companyName || !String(companyName).trim())) {
+      return res.status(400).json({ message: 'Company name is required for issuer accounts.' });
+    }
+
+    // ── Create company for issuers; reviewers join without a company of their own ─
+    let companyId = null;
+    if (normalizedRole === 'issuer') {
+      const cleanCompName = String(companyName).trim();
+      const company = db.addCompany({ name: cleanCompName, legal_name: cleanCompName });
+      companyId = company.id;
+      try {
+        generateDraftData(companyId);
+      } catch (e) {
+        console.warn('[auth/register] Draft generation warning:', e.message);
+      }
+    }
+
+    const user = {
+      email: normalizedEmail,
+      password: hashPassword(password),
+      role: normalizedRole,
+      name: String(name).trim(),
+      companyId
+    };
+    db.addUser(user);
+
+    const token = signToken(user.email);
+    db.addAuditLog({
+      actor_email: user.email,
+      actor_name: user.name,
+      actor_role: user.role,
+      action: 'REGISTER',
+      entity_type: 'session',
+      entity_id: companyId || 'global',
+      description: `New ${normalizedRole} account created for ${user.name}.`,
+      metadata: {},
+      ip: getClientIp(req)
+    });
+
+    db.addNotification({
+      companyId,
+      recipient_role: normalizedRole,
+      recipient_email: user.email,
+      message: normalizedRole === 'issuer'
+        ? 'Welcome to IPOPilotAI! Start by completing your Company Details to begin building your IPO draft.'
+        : 'Welcome to IPOPilotAI! Open the Reviewer Workspace to begin certifying draft chapters.',
+      related_section: normalizedRole === 'issuer' ? 'dashboard' : 'reviewer',
+      type: 'welcome'
+    });
+
+    res.status(201).json({ token, user: { email: user.email, role: user.role, name: user.name, companyId: user.companyId } });
+  } catch (err) {
+    console.error('[auth/register] error:', err);
+    res.status(500).json({ message: 'Could not create account due to a server error. Please try again.' });
   }
-  // Normalize before validating and before storing. The regex rejects embedded
-  // whitespace, so an address with a stray leading/trailing space (autofill, paste,
-  // mobile keyboard) failed signup with "Please enter a valid email address" even
-  // though the address itself was fine.
-  const normalizedEmail = String(email).trim().toLowerCase();
-  const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail);
-  if (!emailOk) return res.status(400).json({ message: 'Please enter a valid email address.' });
-  if (String(password).length < 6) {
-    return res.status(400).json({ message: 'Password must be at least 6 characters.' });
-  }
-  const normalizedRole = role === 'reviewer' ? 'reviewer' : 'issuer';
-  if (db.findUser(normalizedEmail)) {
-    return res.status(409).json({ message: 'An account with this email already exists. Please sign in.' });
-  }
-  if (normalizedRole === 'issuer' && !companyName) {
-    return res.status(400).json({ message: 'Company name is required for issuer accounts.' });
-  }
-
-  // ── Create company for issuers; reviewers join without a company of their own ─
-  let companyId = null;
-  if (normalizedRole === 'issuer') {
-    const company = db.addCompany({ name: companyName, legal_name: companyName });
-    companyId = company.id;
-  }
-
-  const user = {
-    email: normalizedEmail,
-    password: hashPassword(password),
-    role: normalizedRole,
-    name: String(name).trim(),
-    companyId
-  };
-  db.addUser(user);
-
-  const token = signToken(user.email);
-  db.addAuditLog({ actor_email: user.email, actor_name: user.name, actor_role: user.role, action: 'REGISTER', entity_type: 'session', entity_id: companyId, description: `New ${normalizedRole} account created for ${user.name}.`, metadata: {}, ip: getClientIp(req) });
-
-  // Seed the notification bell so a brand-new account does not open onto an empty
-  // panel. Uses the same notifications store as comment/certify events — it is
-  // just triggered once here at signup instead of by another user's action.
-  // Reviewers have no companyId, and getNotifications filters on it, so their
-  // welcome note is keyed to the company they were created against (null) and
-  // still reaches them via recipient_email.
-  db.addNotification({
-    companyId,
-    recipient_role: normalizedRole,
-    recipient_email: user.email,
-    message: normalizedRole === 'issuer'
-      ? 'Welcome to IPOPilotAI! Start by completing your Company Details to begin building your IPO draft.'
-      : 'Welcome to IPOPilotAI! Open the Reviewer Workspace to begin certifying draft chapters.',
-    related_section: normalizedRole === 'issuer' ? 'dashboard' : 'reviewer',
-    type: 'welcome'
-  });
-
-  // companyId mirrors the login response: a fresh issuer gets a company at signup,
-  // and the client needs it in the auth payload so the dashboard can load it
-  // without waiting for a /auth/me round-trip.
-  res.status(201).json({ token, user: { email: user.email, role: user.role, name: user.name, companyId: user.companyId } });
 });
 
 app.get('/api/auth/me', authenticateToken, (req, res) => {
@@ -3337,5 +3359,5 @@ export default async function handler(req, res) {
   return app(req, res);
 }
 
-export { assembleDrhpSections, generateDraftData, CHAPTER_ORDER };
+export { generateDraftData, CHAPTER_ORDER };
 
