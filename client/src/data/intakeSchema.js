@@ -142,14 +142,14 @@ export const stepQuestions = {
   ],
 
   legal_compliance: [
-    { name: 'roc_compliance', label: 'ROC & MCA Filings Status', type: 'text', placeholder: 'e.g. All annual returns filed up to FY25', why: 'Confirms corporate compliance with Registrar of Companies.', example: 'All annual returns and financial statements filed up to FY25.', optional: true },
-    { name: 'gst_compliance', label: 'GST Filings & Returns Status', type: 'text', placeholder: 'e.g. GSTR-3B & GSTR-1 regular', why: 'Proves statutory indirect tax compliance.', example: 'GSTR-3B and GSTR-1 filed up to date with zero tax defaults.', optional: true },
-    { name: 'pf_esi_compliance', label: 'PF & ESI Registrations & Dues', type: 'text', placeholder: 'PF/ESI code and remittance status', why: 'Confirms labor law compliance.', example: 'EPFO Code MH/THN/104592; all monthly contributions deposited.', optional: true },
-    { name: 'factory_license', label: 'Factory License Details & Validity', type: 'text', placeholder: 'License number and expiry date', why: 'Required for operational legality of plants.', example: 'Factory License # 45920-THN valid through Dec 2028.', optional: true },
-    { name: 'pollution_noc', label: 'Pollution Control Board Consent (NOC)', type: 'text', placeholder: 'Consent to Operate (CTO) status', why: 'Environmental compliance certificate.', example: 'MPCB Consent to Operate (Orange Category) valid till March 2029.', optional: true },
+    { name: 'roc_compliance', label: 'ROC & MCA Filings Status', type: 'text', placeholder: 'e.g. All annual returns filed up to FY25', why: 'Confirms corporate compliance with Registrar of Companies.', example: 'All annual returns and financial statements filed up to FY25.' },
+    { name: 'gst_compliance', label: 'GST Filings & Returns Status', type: 'text', placeholder: 'e.g. GSTR-3B & GSTR-1 regular', why: 'Proves statutory indirect tax compliance.', example: 'GSTR-3B and GSTR-1 filed up to date with zero tax defaults.' },
+    { name: 'pf_esi_compliance', label: 'PF & ESI Registrations & Dues', type: 'text', placeholder: 'PF/ESI code and remittance status', why: 'Confirms labor law compliance.', example: 'EPFO Code MH/THN/104592; all monthly contributions deposited.' },
+    { name: 'factory_license', label: 'Factory License Details & Validity', type: 'text', placeholder: 'License number and expiry date', why: 'Required for operational legality of plants.', example: 'Factory License # 45920-THN valid through Dec 2028.' },
+    { name: 'pollution_noc', label: 'Pollution Control Board Consent (NOC)', type: 'text', placeholder: 'Consent to Operate (CTO) status', why: 'Environmental compliance certificate.', example: 'MPCB Consent to Operate (Orange Category) valid till March 2029.' },
     { name: 'fire_noc', label: 'Fire Safety NOC', type: 'text', placeholder: 'Fire NOC reference & validity', why: 'Industrial safety compliance.', example: 'Thane Municipal Fire NOC # 112/2025 valid till Oct 2027.', optional: true },
-    { name: 'auditor_details', label: 'Statutory Auditor Details', type: 'textarea', placeholder: 'Firm Name, FRN, Partner Name, Membership No', why: 'Independent auditor details required in DRHP.', example: 'M/s Shah & Associates, Chartered Accountants (FRN: 104920W), Partner: CA Rajesh Shah (M.No: 045912).', optional: true },
-    { name: 'merchant_banker_details', label: 'Lead Merchant Banker / Lead Manager', type: 'text', placeholder: 'Name of SEBI registered Banker', why: 'Lead manager underwriting the SME IPO.', example: 'Apex Capital Advisors Pvt Ltd (SEBI Reg: INM000012490)', optional: true }
+    { name: 'auditor_details', label: 'Statutory Auditor Details', type: 'textarea', placeholder: 'Firm Name, FRN, Partner Name, Membership No', why: 'Independent auditor details required in DRHP.', example: 'M/s Shah & Associates, Chartered Accountants (FRN: 104920W), Partner: CA Rajesh Shah (M.No: 045912).' },
+    { name: 'merchant_banker_details', label: 'Lead Merchant Banker / Lead Manager', type: 'text', placeholder: 'Name of SEBI registered Banker', why: 'Lead manager underwriting the SME IPO.', example: 'Apex Capital Advisors Pvt Ltd (SEBI Reg: INM000012490)' }
   ],
 
   risk_information: [
@@ -170,16 +170,45 @@ export const stepQuestions = {
   ],
 
   other_disclosures: [
-    { name: 'dividend_policy', label: 'Dividend Policy Summary', type: 'textarea', placeholder: 'Describe dividend payout policy...', why: 'Informs prospective investors about dividend history and policy.', example: 'The Company has not declared dividends in the last 3 fiscal years to retain profits for capital expansion.', optional: true },
+    { name: 'material_contracts', label: 'Material Contracts & Agreements', type: 'textarea', placeholder: 'Key long-term supply/vendor contracts...', why: 'Significant commercial agreements disclosure.', example: 'Long-term component supply agreement with Sterling Auto Components valid through 2029.' },
+    { name: 'has_defaults', label: 'Any Defaults or Financial Non-Compliances?', type: 'select', options: [{ value: 'no', label: 'No' }, { value: 'yes', label: 'Yes' }], why: 'Mandatory SEBI disclosure regarding statutory or financial defaults.', example: 'no' },
+    { name: 'intellectual_property_summary', label: 'Trademarks, Patents & IP Rights', type: 'textarea', placeholder: 'Registered trademarks and patents...', why: 'Proprietary IP asset protection.', example: 'Registered Trademark "AARAV PRECISION" under Class 7 (# 3940192).' },
+    { name: 'insurance_coverage', label: 'Insurance Policy Coverage', type: 'textarea', placeholder: 'Plant & machinery insurance policies...', why: 'Risk mitigation coverage for assets.', example: 'Standard Fire & Special Perils policy # 459102 covering plant & machinery up to INR 80,000,000.' },
+    { name: 'government_approvals', label: 'Key Government & Regulatory Approvals', type: 'textarea', placeholder: 'Licenses and permits list...', why: 'Confirms operational legitimacy.', example: 'All required licenses from MIDC, MPCB, DIC, and Inspector of Factories are active.' },
+    { name: 'dividend_policy', label: 'Dividend Policy Summary', type: 'textarea', placeholder: 'Describe dividend payout policy...', why: 'Informs prospective investors about dividend history and policy.', example: 'The Company has not declared dividends in the last 3 fiscal years to retain profits for capital expansion.' },
     { name: 'csr_initiatives', label: 'CSR Activities & Expenditure', type: 'textarea', placeholder: 'Describe CSR projects...', why: 'Section 135 Companies Act compliance.', example: 'CSR activities focused on local vocational skill training in Thane industrial belt.', optional: true },
     { name: 'employee_benefits', label: 'Employee Benefits & ESOP Scheme', type: 'textarea', placeholder: 'PF, gratuity, ESOP trust details...', why: 'Staff welfare and retention scheme disclosures.', example: 'Gratuity trust maintained with LIC of India; ESOP Scheme 2024 covering 50,000 pool shares.', optional: true },
-    { name: 'material_contracts', label: 'Material Contracts & Agreements', type: 'textarea', placeholder: 'Key long-term supply/vendor contracts...', why: 'Significant commercial agreements disclosure.', example: 'Long-term component supply agreement with Sterling Auto Components valid through 2029.', optional: true },
-    { name: 'insurance_coverage', label: 'Insurance Policy Coverage', type: 'textarea', placeholder: 'Plant & machinery insurance policies...', why: 'Risk mitigation coverage for assets.', example: 'Standard Fire & Special Perils policy # 459102 covering plant & machinery up to INR 80,000,000.', optional: true },
-    { name: 'property_details', label: 'Properties Owned / Leased', type: 'textarea', placeholder: 'Land and factory premises ownership details...', why: 'Real estate asset disclosures.', example: 'Industrial plot W-45 leased from MIDC for 99 years commencing 2012.', optional: true },
-    { name: 'intellectual_property_summary', label: 'Trademarks, Patents & IP Rights', type: 'textarea', placeholder: 'Registered trademarks and patents...', why: 'Proprietary IP asset protection.', example: 'Registered Trademark "AARAV PRECISION" under Class 7 (# 3940192).', optional: true },
-    { name: 'government_approvals', label: 'Key Government & Regulatory Approvals', type: 'textarea', placeholder: 'Licenses and permits list...', why: 'Confirms operational legitimacy.', example: 'All required licenses from MIDC, MPCB, DIC, and Inspector of Factories are active.', optional: true }
+    { name: 'property_details', label: 'Properties Owned / Leased', type: 'textarea', placeholder: 'Land and factory premises ownership details...', why: 'Real estate asset disclosures.', example: 'Industrial plot W-45 leased from MIDC for 99 years commencing 2012.', optional: true }
   ]
 };
+
+// Global helper for section completion status evaluation
+export function getSectionModuleStatus(stepKey, intakeData = {}, documents = []) {
+  const data = (intakeData && typeof intakeData === 'object' && intakeData[stepKey]) ? intakeData[stepKey] : (intakeData || {});
+  const qs = getAdaptiveStepQuestions(stepKey, intakeData);
+  const req = qs.filter((q) => !q.optional && (!q.dependsOn || data[q.dependsOn] === 'yes'));
+
+  if (!req.length) return 'empty';
+
+  const filledCount = req.filter((q) => {
+    const val = data[q.name];
+    if (val !== undefined && val !== null) {
+      if (typeof val === 'string' && val.trim() !== '') return true;
+      if (typeof val === 'number') return true;
+      if (Array.isArray(val) && val.length > 0) return true;
+      if (typeof val === 'boolean') return true;
+    }
+    const sectionUploadSlots = SECTION_UPLOADS[stepKey] || [];
+    const hasDoc = sectionUploadSlots.some(slot => 
+      (documents || []).some(d => d.doc_type === slot.docType && (d.status === 'confirmed' || d.ocr_status === 'completed'))
+    );
+    return hasDoc;
+  }).length;
+
+  if (filledCount === 0) return 'empty';
+  if (filledCount === req.length) return 'complete';
+  return 'partial';
+}
 
 // Returns adaptive questions for a step based on the loaded Industry Profile configuration
 export function getAdaptiveStepQuestions(stepKey, data = {}) {

@@ -29,6 +29,8 @@ import {
   ArrowUpRight
 } from 'lucide-react';
 
+import { getSectionModuleStatus } from '../data/intakeSchema';
+
 export default function Dashboard() {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -123,12 +125,9 @@ export default function Dashboard() {
 
   // Stage 2: Intake Form
   const mandatoryIntakeSections = ['company_details', 'business_overview', 'promoters', 'capital_structure', 'financials', 'objects', 'rpt', 'litigation', 'legal_compliance', 'risk_information', 'other_disclosures'];
-  const filledMandatorySteps = mandatoryIntakeSections.filter(k => {
-    const section = intakeData[k];
-    return section && typeof section === 'object' && Object.values(section).some(v => v !== undefined && v !== null && String(v).trim() !== '' && (!Array.isArray(v) || v.length > 0));
-  });
+  const filledMandatorySteps = mandatoryIntakeSections.filter(k => getSectionModuleStatus(k, intakeData, documents) === 'complete');
   const intakeIsComplete = filledMandatorySteps.length >= mandatoryIntakeSections.length;
-  const intakeStatus = intakeIsComplete ? 'Completed' : 'In Progress';
+  const intakeStatus = intakeIsComplete ? 'Completed' : (filledMandatorySteps.length > 0 ? 'In Progress' : 'Not Started');
 
   // Stage 3: Compliance Checklist
   const docList = documents || [];
