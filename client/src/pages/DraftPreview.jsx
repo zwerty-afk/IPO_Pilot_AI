@@ -804,131 +804,139 @@ export default function DraftPreview() {
               </div>
             )}
 
-            {/* ── COVER PAGES VIEW (Pages 1-3 Template) ───────────────── */}
-            {isCoverPages ? (
-              <div className="-m-8 md:-m-14">
-                <FrontMatterTemplate
-                  company={intakeCache?.company_details || {}}
-                  issueDetails={{}}
-                  intake={intakeCache}
-                />
-              </div>
-            ) : (
-              <>
-                {/* Formal Main Chapter Document Header */}
-                <div id={activeNode.section.id} className="border-b-2 border-slate-900 pb-4 space-y-2 font-serif text-center drhp-section-anchor">
-                  <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest font-mono">
-                    BEFORE THE SECURITIES AND EXCHANGE BOARD OF INDIA
-                  </p>
-                  <input
-                    type="text"
-                    defaultValue={activeNode.section.title}
-                    className="text-xl md:text-2xl font-black text-slate-900 tracking-wide uppercase text-center w-full bg-transparent focus:bg-slate-50 border-b border-transparent focus:border-indigo-500 focus:outline-none"
-                  />
-                  <p className="text-xs text-slate-500 italic font-sans">
-                    Official Draft Red Herring Prospectus Disclosure Output — Continuous Document View
-                  </p>
-                </div>
+            {/* ── COMPLETE CONTINUOUS DRHP DOCUMENT CANVAS ───────────────── */}
+            <div className="-m-8 md:-m-14 space-y-12">
+              {/* PART 1: Front Matter (Pages 1, 2, and Page 3 Dynamic Interactive Table of Contents) */}
+              <FrontMatterTemplate
+                company={intakeCache?.company_details || {}}
+                issueDetails={{}}
+                intake={intakeCache}
+                drafts={drafts}
+                onNavigateSection={(secKey, targetId) => {
+                  setActiveTocId(targetId);
+                  const elem = document.getElementById(`drhp-sub-${targetId}`) || document.getElementById(`drhp-sec-${targetId}`) || document.getElementById(targetId);
+                  if (elem) elem.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }}
+              />
 
-                {/* Subsections Rendered Sequentially */}
-                <div className="space-y-10 z-10 relative">
-                  {chapterSubsections.map((sub, sIdx) => {
-                    const subKey = sub.key;
-                    const subBlocks = getBlocksForSubsection(sub.id, subKey, drafts, intakeCache);
-                    const subCitations = subBlocks.flatMap(b => b.citations || []);
-                    const uniqueSubCitations = Array.from(new Set(subCitations));
+              {/* PART 2: All SEBI DRHP Chapters Rendered Sequentially in Continuous Document Order */}
+              <div className="px-8 md:px-14 pb-14 space-y-16">
+                {DRHP_HIERARCHY.map((sec, secIdx) => {
+                  const romanNumerals = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X', 'XI'];
+                  const romanTitle = `SECTION ${romanNumerals[secIdx] || (secIdx + 1)}: ${sec.title}`;
+                  const subsections = sec.subsections && sec.subsections.length > 0
+                    ? sec.subsections
+                    : [{ id: sec.id, title: sec.title, key: sec.key }];
 
-                    return (
-                      <div key={sub.id} id={sub.id} data-toc-id={sub.id} className="drhp-subsection-anchor space-y-5 pt-2">
-                        {/* Subsection Header (Inline Editable) */}
-                        <div className="flex items-center justify-between border-b border-slate-200 pb-2">
-                          <div className="flex items-center gap-2 flex-1">
-                            <span className="text-indigo-600 font-mono font-bold text-xs shrink-0">
-                              {activeNode.section.id === sub.id ? `${sIdx + 1}.0` : `${sIdx + 1}.${sIdx + 1}`}
-                            </span>
-                            <input
-                              type="text"
-                              defaultValue={sub.title}
-                              className="text-base font-bold text-slate-900 tracking-tight uppercase font-serif w-full bg-transparent focus:bg-slate-50 border-b border-transparent focus:border-indigo-500 focus:outline-none"
-                            />
-                          </div>
-                          <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-slate-100 text-slate-600 border border-slate-200 uppercase font-sans shrink-0">
-                            {subKey.replace(/_/g, ' ')}
-                          </span>
-                        </div>
-
-                        {/* Multi-Format Composition Blocks */}
-                        <div className="space-y-5 font-sans">
-                          {subBlocks && subBlocks.length > 0 ? (
-                            subBlocks.map((blk, bIdx) => (
-                              <DrhpBlockRenderer key={blk.id || bIdx} block={blk} onCitationClick={handleSourceClick} />
-                            ))
-                          ) : (
-                            <p className="text-xs text-slate-500 italic font-sans">
-                              Disclosure text pending generation for {sub.title}. Click "Regenerate" to compose output.
-                            </p>
-                          )}
-                        </div>
-
-                        {/* Inline Narrative Editor per subsection */}
-                        <div className="space-y-1.5 pt-3 border-t border-slate-100 font-sans">
-                          <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400 font-mono flex items-center justify-between">
-                            <span>SEBI Disclosure Narrative</span>
-                            <span className="text-slate-400 font-sans font-normal text-[10px]">Real-time Auto-Save Editor</span>
-                          </label>
-                          <textarea
-                            value={subBlocks.map(b => b.text).join('\n\n')}
-                            onChange={(e) => {
-                              const val = e.target.value;
-                              setEditorText(val);
-                              triggerAutoSave(val);
-                            }}
-                            placeholder={`Enter disclosure narrative for ${sub.title}...`}
-                            className="w-full p-4 border border-slate-200 rounded-xl bg-slate-50/50 focus:bg-white text-xs leading-relaxed font-sans text-slate-800 focus:ring-2 focus:ring-indigo-500 focus:outline-none min-h-[140px] resize-y transition-all"
-                          />
-                        </div>
-
-                        {/* Grounding Citations */}
-                        {uniqueSubCitations.length > 0 && (
-                          <div className="flex items-center gap-1.5 pt-2 border-t border-slate-100 text-[10px] font-sans">
-                            <span className="text-slate-400 font-mono uppercase font-bold">Grounding Citations:</span>
-                            <div className="flex flex-wrap gap-1">
-                              {uniqueSubCitations.map((cite, cidx) => (
-                                <button
-                                  key={cidx}
-                                  onClick={() => handleSourceClick(cite)}
-                                  className="px-2 py-0.5 rounded bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-medium border border-indigo-100 flex items-center gap-1 transition-colors cursor-pointer"
-                                  title="Click to trace evidence source"
-                                >
-                                  <Bookmark className="w-2.5 h-2.5 text-indigo-400" />
-                                  <span>{cite.split(': ').pop()}</span>
-                                  <ExternalLink className="w-2.5 h-2.5 text-indigo-400" />
-                                </button>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-
-                        {/* Page Break Boundary Divider */}
-                        {sIdx < chapterSubsections.length - 1 && (
-                          <div className="pt-8 pb-4 flex items-center justify-center font-mono text-[10px] text-slate-400 select-none">
-                            <div className="w-full border-t border-dashed border-slate-300" />
-                            <span className="px-3 py-0.5 bg-slate-100 text-slate-500 rounded-full border border-slate-200 text-[9px] uppercase tracking-widest font-bold shrink-0 mx-2">
-                              Page Break — SEBI DRHP Document
-                            </span>
-                            <div className="w-full border-t border-dashed border-slate-300" />
-                          </div>
-                        )}
+                  return (
+                    <div key={sec.id} id={`drhp-sec-${sec.id}`} className="space-y-10 border-t-4 border-slate-900 pt-10 font-serif">
+                      {/* Section Title Banner */}
+                      <div className="border-b-2 border-slate-900 pb-3 text-center space-y-1">
+                        <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest font-mono">
+                          SECURITIES AND EXCHANGE BOARD OF INDIA — REGULATION COMPLIANT DISCLOSURE
+                        </p>
+                        <h2 className="text-xl md:text-2xl font-black text-slate-900 tracking-wide uppercase">
+                          {romanTitle}
+                        </h2>
                       </div>
-                    );
-                  })}
-                </div>
+
+                      {/* Subsections Rendered Sequentially */}
+                      <div className="space-y-12">
+                        {subsections.map((sub, subIdx) => {
+                          const subKey = sub.key;
+                          const subNumber = sec.subsections && sec.subsections.length > 0 ? `${secIdx + 1}.${subIdx + 1}` : `${secIdx + 1}.0`;
+                          const subBlocks = getBlocksForSubsection(sub.id, subKey, drafts, intakeCache);
+                          const subCitations = subBlocks.flatMap(b => b.citations || []);
+                          const uniqueSubCitations = Array.from(new Set(subCitations));
+
+                          return (
+                            <div key={sub.id} id={`drhp-sub-${sub.id}`} data-toc-id={sub.id} className="drhp-subsection-anchor space-y-5 pt-4 border-t border-slate-200">
+                              {/* Subsection Header */}
+                              <div className="flex items-center justify-between border-b border-slate-300 pb-2">
+                                <div className="flex items-center gap-2 flex-1">
+                                  <span className="text-indigo-700 font-mono font-bold text-xs shrink-0">
+                                    {subNumber}
+                                  </span>
+                                  <h3 className="text-base font-bold text-slate-900 tracking-tight uppercase font-serif">
+                                    {sub.title}
+                                  </h3>
+                                </div>
+                                <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-slate-100 text-slate-600 border border-slate-200 uppercase font-sans shrink-0">
+                                  {subKey.replace(/_/g, ' ')}
+                                </span>
+                              </div>
+
+                              {/* Multi-Format Composition Blocks */}
+                              <div className="space-y-5 font-sans">
+                                {subBlocks && subBlocks.length > 0 ? (
+                                  subBlocks.map((blk, bIdx) => (
+                                    <DrhpBlockRenderer key={blk.id || bIdx} block={blk} onCitationClick={handleSourceClick} />
+                                  ))
+                                ) : (
+                                  <p className="text-xs text-slate-500 italic font-sans">
+                                    Disclosure text pending generation for {sub.title}.
+                                  </p>
+                                )}
+                              </div>
+
+                              {/* Inline Narrative Editor per subsection */}
+                              <div className="space-y-1.5 pt-3 border-t border-slate-100 font-sans">
+                                <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400 font-mono flex items-center justify-between">
+                                  <span>SEBI Disclosure Narrative</span>
+                                  <span className="text-slate-400 font-sans font-normal text-[10px]">Real-time Auto-Save Editor</span>
+                                </label>
+                                <textarea
+                                  value={subBlocks.map(b => b.text).join('\n\n')}
+                                  onChange={(e) => {
+                                    const val = e.target.value;
+                                    setEditorText(val);
+                                    triggerAutoSave(val);
+                                  }}
+                                  placeholder={`Enter disclosure narrative for ${sub.title}...`}
+                                  className="w-full p-4 border border-slate-200 rounded-xl bg-slate-50/50 focus:bg-white text-xs leading-relaxed font-sans text-slate-800 focus:ring-2 focus:ring-indigo-500 focus:outline-none min-h-[120px] resize-y transition-all"
+                                />
+                              </div>
+
+                              {/* Grounding Citations */}
+                              {uniqueSubCitations.length > 0 && (
+                                <div className="flex items-center gap-1.5 pt-2 border-t border-slate-100 text-[10px] font-sans">
+                                  <span className="text-slate-400 font-mono uppercase font-bold">Grounding Citations:</span>
+                                  <div className="flex flex-wrap gap-1">
+                                    {uniqueSubCitations.map((cite, cidx) => (
+                                      <button
+                                        key={cidx}
+                                        onClick={() => handleSourceClick(cite)}
+                                        className="px-2 py-0.5 rounded bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-medium border border-indigo-100 flex items-center gap-1 transition-colors cursor-pointer"
+                                      >
+                                        <Bookmark className="w-2.5 h-2.5 text-indigo-400" />
+                                        <span>{cite.split(': ').pop()}</span>
+                                      </button>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* Page Break Boundary Divider */}
+                              <div className="pt-8 pb-4 flex items-center justify-center font-mono text-[10px] text-slate-400 select-none">
+                                <div className="w-full border-t border-dashed border-slate-300" />
+                                <span className="px-3 py-0.5 bg-slate-100 text-slate-500 rounded-full border border-slate-200 text-[9px] uppercase tracking-widest font-bold shrink-0 mx-2">
+                                  Page Break — SEBI DRHP Continuous Document View
+                                </span>
+                                <div className="w-full border-t border-dashed border-slate-300" />
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })}
 
                 <div className="mt-8 pt-4 border-t border-slate-200 text-[11px] text-slate-400 text-center font-serif italic">
-                  This document represents the continuous assembled output for inclusion in the Draft Red Herring Prospectus.
+                  This document represents the complete, continuous assembled Draft Red Herring Prospectus.
                 </div>
-              </>
-            )}
+              </div>
+            </div>
           </div>
         </div>
       </div>

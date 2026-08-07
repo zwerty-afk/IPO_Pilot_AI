@@ -93,7 +93,7 @@ export default function ChapterHealthSidebar({
       onNavigateSection(backendKey, sec.id);
     }
     setTimeout(() => {
-      const elem = document.getElementById(sec.id);
+      const elem = document.getElementById(`drhp-sec-${sec.id}`) || document.getElementById(sec.id);
       if (elem) {
         elem.scrollIntoView({ behavior: 'smooth', block: 'start' });
       }
@@ -107,7 +107,7 @@ export default function ChapterHealthSidebar({
       onNavigateSection(backendKey, subId);
     }
     setTimeout(() => {
-      const elem = document.getElementById(subId);
+      const elem = document.getElementById(`drhp-sub-${subId}`) || document.getElementById(subId);
       if (elem) {
         elem.scrollIntoView({ behavior: 'smooth', block: 'start' });
       }
