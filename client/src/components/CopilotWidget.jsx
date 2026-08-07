@@ -774,7 +774,7 @@ export default function CopilotWidget() {
           <div className="bg-indigo-50/80 border-b border-indigo-100 px-4 py-2 flex items-center justify-between text-xs text-indigo-900 font-medium shrink-0">
             <div className="flex items-center gap-1.5 truncate">
               <Compass className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
-              <span className="truncate">Grounded in <strong>Aarav Precision Engineering</strong> filings & SEBI regulations</span>
+              <span className="truncate">Grounded in <strong>company filings</strong> & SEBI regulations</span>
             </div>
             <span className="text-[10px] font-mono font-bold bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded shrink-0">
               No Hallucination

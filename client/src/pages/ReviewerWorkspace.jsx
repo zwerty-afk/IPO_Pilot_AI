@@ -42,104 +42,23 @@ import {
 function getBlocksForSubsection(subId, subKey, drafts, intakeCache = {}) {
   const sectionDraft = drafts[subKey] || { blocks: [] };
   const allBlocks = sectionDraft.blocks || [];
+  if (!allBlocks || allBlocks.length === 0) return [];
 
   switch (subId) {
-    case 'industry_overview':
-      return [
-        {
-          id: 'io-1',
-          type: 'narrative',
-          text: `Industry Overview: The Indian precision engineering & manufacturing sector is projected to grow at 12.5% CAGR driven by Make in India initiatives, defense localization mandates, and global supply chain diversification. Demand for CNC machined components in Tier-1 automotive and industrial hydraulics continues to expand rapidly.`,
-          citations: ['Intake: Business Overview: industry_analysis']
-        },
-        {
-          id: 'io-2',
-          type: 'stat_cards',
-          stats: [
-            { label: 'Sector CAGR Projection', value: '12.5%', subtext: 'FY24 - FY30' },
-            { label: 'Domestic Opportunity', value: '₹45,000 Cr', subtext: 'SME Machining Market' },
-            { label: 'Export Share Growth', value: '18.2%', subtext: 'Annual Growth Rate' },
-            { label: 'Primary Market Driver', value: 'Make in India', subtext: 'Auto & Defense OEM' }
-          ],
-          citations: ['Intake: Business Overview: industry_analysis']
-        }
-      ];
-
     case 'our_business':
       return allBlocks.filter(b => ['bo-1', 'bo-3', 'bo-4', 'bo-5', 'bo-6'].includes(b.id)).length > 0
         ? allBlocks.filter(b => ['bo-1', 'bo-3', 'bo-4', 'bo-5', 'bo-6'].includes(b.id))
         : allBlocks;
-
-    case 'key_regulations_and_policies':
-      return [
-        {
-          id: 'kr-1',
-          type: 'compliance_matrix',
-          title: 'Key Regulations & Statutory Compliance Matrix',
-          items: [
-            { name: 'Factory License', authority: 'Inspector of Factories, MH', refNo: '45920-THN', validity: 'Valid till Dec 2028' },
-            { name: 'MPCB Consent to Operate', authority: 'MH Pollution Control Board', refNo: 'MPCB-2024-092', validity: 'Valid till March 2029' },
-            { name: 'Fire NOC', authority: 'Thane Municipal Fire Dept', refNo: 'NOC-112-2025', validity: 'Valid till Oct 2027' },
-            { name: 'GSTIN Registration', authority: 'Central Board of Indirect Taxes', refNo: '27AABCA1234F1Z5', validity: 'Active / Statutory' }
-          ],
-          citations: ['Intake: Legal Compliance: factory_license', 'Intake: Legal Compliance: pollution_noc']
-        }
-      ];
-
-    case 'history_and_certain_corporate_matters':
-      return [
-        {
-          id: 'hc-1',
-          type: 'timeline',
-          title: 'History & Corporate Milestones',
-          milestones: [
-            { year: '2015', event: 'Company Incorporation', detail: 'Incorporated under Companies Act as a private limited entity.' },
-            { year: '2018', event: 'MIDC Dombivli Plant Setup', detail: 'Setup primary 25,000 sq ft CNC manufacturing plant.' },
-            { year: '2022', event: 'AS9100D Certification', detail: 'Achieved quality certification for aerospace & defense supply chain.' },
-            { year: '2025', event: 'SME IPO Filing', detail: 'Initiated DRHP filing for listing on NSE Emerge / BSE SME.' }
-          ],
-          citations: ['Intake: Company Details: incorporation_date']
-        }
-      ];
-
     case 'our_management':
       return allBlocks.filter(b => b.id === 'prom-2' || b.id === 'prom-3' || b.type === 'org_chart').length > 0
         ? allBlocks.filter(b => b.id === 'prom-2' || b.id === 'prom-3' || b.type === 'org_chart')
         : allBlocks;
-
     case 'our_promoters_and_promoter_group':
       return allBlocks.filter(b => b.id === 'prom-1').length > 0
         ? allBlocks.filter(b => b.id === 'prom-1')
         : allBlocks;
-
-    case 'our_group_companies':
-      return [
-        {
-          id: 'gc-1',
-          type: 'table',
-          title: 'Details of Group Companies & Sister Entities',
-          headers: ['Entity Name', 'Nature of Business', 'Promoter Shareholding %', 'Registered Location'],
-          rows: [
-            ['Mehta Industrial Properties', 'Industrial Property Leasing', '100.00%', 'Dombivli East, Thane'],
-            ['Mehta CNC Tooling Solutions', 'Tooling Distribution', '60.00%', 'Pune, Maharashtra']
-          ],
-          citations: ['Intake: Promoters: promoters_list']
-        }
-      ];
-
-    case 'dividend_policy':
-      return [
-        {
-          id: 'dp-1',
-          type: 'callout',
-          title: 'Dividend Policy Declaration',
-          text: `Dividend Policy: The Company has not declared dividends during the last 3 fiscal years (FY23, FY24, FY25) in order to retain internal accruals for expansion of 5-axis CNC machining capacity. Future dividend payments will depend upon net profits, capital expenditure needs, working capital requirements, and applicable statutory reserves under Section 123 of the Companies Act.`,
-          citations: ['Intake: Other Disclosures: dividend_policy']
-        }
-      ];
-
     default:
-      return allBlocks.length > 0 ? allBlocks : [{ id: `${subId}-def`, type: 'narrative', text: `Disclosure content for ${subId.replace(/_/g, ' ')}. Standard compliance narrative grounded in promoter filings.`, citations: [`Intake: ${subKey}`] }];
+      return allBlocks;
   }
 }
 
@@ -184,8 +103,10 @@ export default function ReviewerWorkspace() {
     dueDate: new Date(Date.now() + 3 * 86400000).toISOString().split('T')[0]
   });
 
+  const companyId = localStorage.getItem('ipo_company_id') || 'aarav-precision';
+
   // STRUCTURED ISSUES ENGINE DATA
-  const [issuesList, setIssuesList] = useState([
+  const [issuesList, setIssuesList] = useState(companyId === 'aarav-precision' ? [
     {
       id: 'ISSUE-001',
       title: 'Restated Financial Revenue Data Discrepancy',
@@ -231,16 +152,14 @@ export default function ReviewerWorkspace() {
       supportingEvidence: 'Intake: Litigation: tax_demands',
       createdAt: '2026-08-07 14:30 UTC'
     }
-  ]);
+  ] : []);
 
   // IMMUTABLE REVIEW AUDIT TRAIL LOG
-  const [auditLog, setAuditLog] = useState([
+  const [auditLog, setAuditLog] = useState(companyId === 'aarav-precision' ? [
     { id: 'LOG-001', action: 'Draft Prospectus Loaded', actor: 'System', timestamp: '2026-08-07 13:45 UTC', detail: 'Loaded exact DRHP chapter composition.' },
     { id: 'LOG-002', action: 'Review Mode Opened', actor: 'Merchant Banker Lead Manager', timestamp: '2026-08-07 14:00 UTC', detail: 'Initiated legal & statutory audit review.' },
     { id: 'LOG-003', action: 'Issue Raised', actor: 'Merchant Banker Lead Manager', timestamp: '2026-08-07 14:15 UTC', detail: 'Raised ISSUE-001: Revenue Data Discrepancy.' }
-  ]);
-
-  const companyId = localStorage.getItem('ipo_company_id') || 'aarav-precision';
+  ] : []);
 
   const isCoverPages = activeTocId === 'cover_pages' || activeTocId === 'draft_preview';
   const activeNode = isCoverPages

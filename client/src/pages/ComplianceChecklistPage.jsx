@@ -64,8 +64,10 @@ export default function ComplianceChecklistPage() {
   const uploadedDocTypes = new Set((documents || []).map(d => d.doc_type));
   const timestamp = new Date().toISOString().replace('T', ' ').substring(0, 16) + ' UTC';
 
+  const hasIntakeCompleted = Object.keys(intakeData || {}).some(k => intakeData[k] && Object.keys(intakeData[k]).length > 0);
+
   // ─── MASTER COMPLIANCE RULE VALIDATION MATRIX ───────────────────────────────
-  const rulesList = [
+  const rulesList = (hasIntakeCompleted || (documents || []).length > 0) ? [
     {
       id: 'RULE-001',
       requirementName: 'Articles of Association (AOA) Upload',
@@ -93,10 +95,10 @@ export default function ComplianceChecklistPage() {
       requirementName: '3-Year Restated Financial Statements (FY23–FY25)',
       applicableRule: 'SEBI (ICDR) Regulations 2018 — Schedule VI Part A Item (11)',
       category: 'Financial Eligibility',
-      status: documents.filter(d => d.doc_type === 'financial_statements').length >= 3 ? 'Pass' : documents.filter(d => d.doc_type === 'financial_statements').length > 0 ? 'Warning' : 'Fail',
-      evidenceUsed: `${documents.filter(d => d.doc_type === 'financial_statements').length} of 3 required annual audit statements present.`,
+      status: documents.filter(d => d.doc_type === 'financial_statements' || d.doc_type === 'audited_financials').length >= 3 ? 'Pass' : documents.filter(d => d.doc_type === 'financial_statements' || d.doc_type === 'audited_financials').length > 0 ? 'Warning' : 'Fail',
+      evidenceUsed: `${documents.filter(d => d.doc_type === 'financial_statements' || d.doc_type === 'audited_financials').length} of 3 required annual audit statements present.`,
       sourceDocument: 'Audited Financial Statements (PDF)',
-      validationResult: documents.filter(d => d.doc_type === 'financial_statements').length >= 3 
+      validationResult: documents.filter(d => d.doc_type === 'financial_statements' || d.doc_type === 'audited_financials').length >= 3 
         ? 'Satisfied: Full 3-year restated financial audit trail present.' 
         : 'Incomplete: Requires 3 consecutive years of audited restated accounts.',
       timestamp
@@ -117,10 +119,10 @@ export default function ComplianceChecklistPage() {
       requirementName: 'Shareholding Pattern Statement',
       applicableRule: 'SEBI (LODR) Regulations 2015 Reg 31 & ICDR Reg 14',
       category: 'Promoters & Capital',
-      status: uploadedDocTypes.has('shareholding_pattern') ? 'Pass' : 'Fail',
-      evidenceUsed: uploadedDocTypes.has('shareholding_pattern') ? 'Shareholding equity breakdown pattern verified.' : 'No shareholding pattern document on record.',
-      sourceDocument: documents.find(d => d.doc_type === 'shareholding_pattern')?.name || 'Shareholding_Pattern.pdf (Missing)',
-      validationResult: uploadedDocTypes.has('shareholding_pattern') ? 'Satisfied: Equity distribution verified.' : 'Failed: Pre-issue equity breakdown unverified.',
+      status: uploadedDocTypes.has('shareholding_pattern') || uploadedDocTypes.has('cap_table') ? 'Pass' : 'Fail',
+      evidenceUsed: uploadedDocTypes.has('shareholding_pattern') || uploadedDocTypes.has('cap_table') ? 'Shareholding equity breakdown pattern verified.' : 'No shareholding pattern document on record.',
+      sourceDocument: documents.find(d => d.doc_type === 'shareholding_pattern' || d.doc_type === 'cap_table')?.name || 'Shareholding_Pattern.pdf (Missing)',
+      validationResult: uploadedDocTypes.has('shareholding_pattern') || uploadedDocTypes.has('cap_table') ? 'Satisfied: Equity distribution verified.' : 'Failed: Pre-issue equity breakdown unverified.',
       timestamp
     },
     {
@@ -128,10 +130,10 @@ export default function ComplianceChecklistPage() {
       requirementName: 'Promoter Minimum Contribution Lock-In (20%)',
       applicableRule: 'SEBI ICDR Regulations 2018 — Regulations 14 & 16',
       category: 'Promoters & Capital',
-      status: (intakeData.promoters?.promoter_holding || 0) >= 20 ? 'Pass' : 'Warning',
-      evidenceUsed: `Promoter equity holding recorded at ${intakeData.promoters?.promoter_holding || 78.5}%.`,
+      status: Number(intakeData.capital_structure?.promoter_holding_pct || intakeData.promoters?.promoter_holding || 0) >= 20 ? 'Pass' : 'Warning',
+      evidenceUsed: `Promoter equity holding recorded at ${intakeData.capital_structure?.promoter_holding_pct || intakeData.promoters?.promoter_holding || 0}%.`,
       sourceDocument: 'Promoter Intake Questionnaire & Cap Table',
-      validationResult: (intakeData.promoters?.promoter_holding || 0) >= 20 ? 'Satisfied: Exceeds 20% minimum lock-in mandate.' : 'Warning: Promoter lock-in equity share below statutory threshold.',
+      validationResult: Number(intakeData.capital_structure?.promoter_holding_pct || intakeData.promoters?.promoter_holding || 0) >= 20 ? 'Satisfied: Exceeds 20% minimum lock-in mandate.' : 'Warning: Promoter lock-in equity share below statutory threshold.',
       timestamp
     },
     {
@@ -139,10 +141,10 @@ export default function ComplianceChecklistPage() {
       requirementName: 'Net Tangible Assets & Operating Profit Test',
       applicableRule: 'SEBI ICDR Regulations 2018 — Regulation 6(1)',
       category: 'Financial Eligibility',
-      status: intakeData.company_details?.paid_up_capital ? 'Pass' : 'Pass',
-      evidenceUsed: 'Net Tangible Assets > ₹3 Crores; Operating Profit recorded in pre-issue audit.',
+      status: (intakeData.financials?.revenue_fy25 || intakeData.financials?.profit_fy25) ? 'Pass' : 'Warning',
+      evidenceUsed: (intakeData.financials?.revenue_fy25 || intakeData.financials?.profit_fy25) ? 'Financial disclosures recorded in pre-issue audit.' : 'Financial disclosures pending completion.',
       sourceDocument: 'Financial Statement Intake & Balance Sheet',
-      validationResult: 'Satisfied: Quantitative eligibility test passed under SEBI ICDR Reg 6(1).',
+      validationResult: (intakeData.financials?.revenue_fy25 || intakeData.financials?.profit_fy25) ? 'Satisfied: Quantitative eligibility test passed under SEBI ICDR Reg 6(1).' : 'Warning: Financial eligibility pending data verification.',
       timestamp
     },
     {
@@ -161,8 +163,8 @@ export default function ComplianceChecklistPage() {
       requirementName: 'Litigation & Material Claims Register',
       applicableRule: 'SEBI ICDR Regulations 2018 — Schedule VI Part A Section VII',
       category: 'Legal & Statutory',
-      status: intakeData.rpt?.litigation_declared !== undefined || uploadedDocTypes.has('litigation_documents') ? 'Pass' : 'Warning',
-      evidenceUsed: 'Litigation register disclosure submitted in Intake Step 7.',
+      status: intakeData.litigation?.has_litigation !== undefined || uploadedDocTypes.has('litigation_documents') || uploadedDocTypes.has('litigation_records') ? 'Pass' : 'Warning',
+      evidenceUsed: 'Litigation register disclosure submitted in Intake Form.',
       sourceDocument: 'Legal Disclosure Intake Form',
       validationResult: 'Satisfied: Material litigation disclosures recorded.',
       timestamp
@@ -172,10 +174,10 @@ export default function ComplianceChecklistPage() {
       requirementName: 'Merchant Banker Lead Manager Appointment',
       applicableRule: 'SEBI ICDR Regulations 2018 — Regulation 23',
       category: 'Issue Structure',
-      status: intakeData.company_details?.merchant_banker ? 'Pass' : 'Pass',
-      evidenceUsed: 'SEBI registered Category-I Merchant Banker lead manager appointed.',
+      status: intakeData.legal_compliance?.merchant_banker_details ? 'Pass' : 'Warning',
+      evidenceUsed: intakeData.legal_compliance?.merchant_banker_details ? 'SEBI registered Category-I Merchant Banker lead manager appointed.' : 'Merchant banker appointment pending disclosure.',
       sourceDocument: 'Lead Manager Engagement Agreement',
-      validationResult: 'Satisfied: Appointed SEBI registered Merchant Banker.',
+      validationResult: intakeData.legal_compliance?.merchant_banker_details ? 'Satisfied: Appointed SEBI registered Merchant Banker.' : 'Warning: Merchant Banker appointment pending.',
       timestamp
     },
     {
@@ -200,7 +202,7 @@ export default function ComplianceChecklistPage() {
       validationResult: uploadedDocTypes.has('material_contracts') ? 'Satisfied: Inspection list verified.' : 'Not Applicable: Optional for initial SME draft filing.',
       timestamp
     }
-  ];
+  ] : [];
 
   // Filtering
   const categories = ['all', 'Corporate & Governance', 'Financial Eligibility', 'Promoters & Capital', 'Legal & Statutory', 'Issue Structure'];

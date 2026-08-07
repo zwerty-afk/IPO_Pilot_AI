@@ -94,9 +94,11 @@ export default function GapAnalysisPage() {
   ];
 
   const allGapsList = [];
+  const hasIntakeCompleted = Object.keys(intakeData || {}).some(k => intakeData[k] && Object.keys(intakeData[k]).length > 0);
 
-  // 1. Critical Gap: Articles of Association (AOA) Missing
-  if (!uploadedDocTypes.has('aoa')) {
+  if (hasIntakeCompleted) {
+    // 1. Critical Gap: Articles of Association (AOA) Missing
+    if (!uploadedDocTypes.has('aoa')) {
     allGapsList.push({
       id: 'GAP-CRIT-AOA',
       title: 'Articles of Association (AOA) Missing',
@@ -233,6 +235,7 @@ export default function GapAnalysisPage() {
       intakeStep: 'company_details',
       intakeField: 'merchant_banker'
     });
+  }
   }
 
   // Filtering

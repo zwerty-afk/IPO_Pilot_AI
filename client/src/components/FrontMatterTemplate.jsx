@@ -34,17 +34,17 @@ export default function FrontMatterTemplate({ company = {}, issueDetails = {}, i
   const prom = intake?.promoters || {};
   const od = intake?.other_disclosures || {};
 
-  const compName = cd.legal_name || company.name || company.legal_name || 'AARAV PRECISION ENGINEERING LIMITED';
-  const formerName = cd.former_name || company.formerName || 'Aarav Precision Engineering Private Limited';
-  const cin = cd.cin || company.cin || 'U29220MH2015PTC263456';
-  const regOffice = cd.registered_office || company.address || 'Plot W-42, MIDC Industrial Area, Dombivli East, Thane - 421203, Maharashtra, India';
-  const complianceOfficer = cd.compliance_officer || company.complianceOfficer || 'Rohan Sharma, Company Secretary & Compliance Officer';
-  const telephone = cd.telephone || company.contactNo || '+91 251 287 4400';
-  const email = cd.email || company.email || 'investors@aaravprecision.com';
-  const website = cd.website || company.website || 'www.aaravprecision.com';
-  const promoters = prom.promoters_list || company.promoters || 'Aarav Mehta & Sunita Mehta';
+  const compName = cd.legal_name || company.name || company.legal_name || '';
+  const formerName = cd.former_name || company.formerName || '';
+  const cin = cd.cin || company.cin || '';
+  const regOffice = cd.registered_office || company.address || '';
+  const complianceOfficer = cd.compliance_officer || company.complianceOfficer || '';
+  const telephone = cd.telephone || company.contactNo || '';
+  const email = cd.email || company.email || '';
+  const website = cd.website || company.website || '';
+  const promoters = prom.promoters_list || company.promoters || '';
   const companyAct = cd.company_act || '2013';
-  const incDate = cd.incorporation_date || company.incorporation_date || '2015';
+  const incDate = cd.incorporation_date || company.incorporation_date || '';
   const incYear = incDate.substring(0, 4);
   const freshIssueShares = cap.fresh_issue_shares || issueDetails.freshIssueShares || '[•]';
   const freshIssueAmt = obj.amount_to_raise || issueDetails.freshIssueAmt || '[•]';

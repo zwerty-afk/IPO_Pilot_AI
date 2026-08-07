@@ -670,8 +670,9 @@ if (!process.env.VERCEL) {
 
 // ─── Draft Generator ──────────────────────────────────────────────────────────
 
-function computeGapReport(companyId, intake, docs) {
+function computeGapReport(companyId, intake, docs = []) {
   const gaps = [];
+  if (!intake || Object.keys(intake).length === 0) return gaps;
   const intakeRev = intake.financials?.revenue_fy25;
   const finDoc = docs.find(d => d.doc_type === 'audited_financials');
   if (intakeRev && finDoc) {
@@ -743,26 +744,33 @@ function generateDraftData(companyId, sectionKey = null) {
   const company = currentDb.getCompany(companyId) || {};
   const intake = currentDb.getIntake(companyId) || {};
   const docs = currentDb.getDocuments(companyId) || [];
-  const gapReport = computeGapReport(companyId, intake, docs);
   const currentDrafts = currentDb.getDrafts(companyId) || {};
+
+  const hasIntakeData = Object.keys(intake).some(k => intake[k] && Object.keys(intake[k]).length > 0);
+  if (!hasIntakeData && docs.length === 0) {
+    db.saveDrafts(companyId, currentDrafts);
+    return currentDrafts;
+  }
+
+  const gapReport = computeGapReport(companyId, intake, docs);
 
   const generateCompanyProfile = () => {
     const cd = intake.company_details || {};
     const incDoc = docs.find(d => d.doc_type === 'incorporation_certificate');
-    const legal_name = cd.legal_name || company.legal_name || company.name || 'Aarav Precision Engineering Pvt Ltd';
-    const cin = cd.cin || company.cin || 'U29220MH2015PTC263456';
-    const pan = cd.pan || 'AABCA1234F';
-    const gstin = cd.gstin || '27AABCA1234F1Z5';
-    const inc_date = cd.incorporation_date || company.incorporation_date || '2015-04-12';
-    const reg_office = cd.registered_office || 'W-45, MIDC Industrial Area, Phase II, Dombivli East, Thane, Maharashtra - 421204';
-    const industry = cd.industry_type || 'Precision Engineering & Manufacturing';
-    const sub_industry = cd.sub_industry || 'CNC Machine Components & Precision Assemblies';
-    const company_type = cd.company_type || 'Private Limited Company';
-    const auth_cap = cd.authorized_capital || company.authorized_capital || '20,000,000 INR (2,000,000 Equity Shares of Rs 10 each)';
-    const paid_cap = cd.paid_up_capital || company.paid_up_capital || '10,000,000 INR (1,000,000 Equity Shares of Rs 10 each)';
-    const issue_size = cd.proposed_issue_size || intake.objects?.amount_to_raise || '50,000,000 INR';
+    const legal_name = cd.legal_name || company.legal_name || company.name || '';
+    const cin = cd.cin || company.cin || '';
+    const pan = cd.pan || '';
+    const gstin = cd.gstin || '';
+    const inc_date = cd.incorporation_date || company.incorporation_date || '';
+    const reg_office = cd.registered_office || '';
+    const industry = cd.industry_type || '';
+    const sub_industry = cd.sub_industry || '';
+    const company_type = cd.company_type || '';
+    const auth_cap = cd.authorized_capital || company.authorized_capital || '';
+    const paid_cap = cd.paid_up_capital || company.paid_up_capital || '';
+    const issue_size = cd.proposed_issue_size || intake.objects?.amount_to_raise || '';
     const exchange = cd.proposed_exchange || 'NSE Emerge / BSE SME';
-    const branches = cd.branches || 'Primary manufacturing facility in Dombivli (Thane); regional office in Pune';
+    const branches = cd.branches || '';
 
     const blocks = [
       {
@@ -1440,11 +1448,6 @@ app.post('/api/auth/register', (req, res) => {
       const cleanCompName = String(companyName).trim();
       const company = db.addCompany({ name: cleanCompName, legal_name: cleanCompName });
       companyId = company.id;
-      try {
-        generateDraftData(companyId);
-      } catch (e) {
-        console.warn('[auth/register] Draft generation warning:', e.message);
-      }
     }
 
     const user = {
