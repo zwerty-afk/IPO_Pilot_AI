@@ -2,6 +2,7 @@ import React from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, ProtectedRoute } from './context/AuthContext';
 import Layout from './components/Layout';
+import ErrorBoundary from './components/ErrorBoundary';
 
 // Import Pages
 import LandingPage from './pages/LandingPage';
@@ -19,44 +20,46 @@ import IpoReadinessPage from './pages/IpoReadinessPage';
 
 export default function App() {
   return (
-    <AuthProvider>
-      <Routes>
-        {/* Public Routes */}
-        <Route path="/" element={<LandingPage />} />
-        <Route path="/login" element={<LoginPage />} />
+    <ErrorBoundary>
+      <AuthProvider>
+        <Routes>
+          {/* Public Routes */}
+          <Route path="/" element={<LandingPage />} />
+          <Route path="/login" element={<LoginPage />} />
 
-        {/* Protected Application Routes */}
-        <Route
-          path="/*"
-          element={
-            <ProtectedRoute>
-              <Layout>
-                <Routes>
-                  <Route path="/dashboard" element={<Dashboard />} />
-                  <Route path="/intake" element={<IntakeForm />} />
-                  <Route path="/draft" element={<DraftPreview initialMode="chapter" />} />
-                  <Route path="/draft-preview" element={<DraftPreview initialMode="preview" />} />
-                  <Route path="/compliance-checklist" element={<ComplianceChecklistPage />} />
-                  <Route path="/gap-analysis" element={<GapAnalysisPage />} />
-                  <Route path="/readiness" element={<IpoReadinessPage />} />
-                  <Route
-                    path="/reviewer"
-                    element={
-                      <ProtectedRoute requiredRole="reviewer">
-                        <ReviewerWorkspace />
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route path="/export" element={<Navigate to="/draft-preview" replace />} />
-                  <Route path="/sebi-updates" element={<SebiUpdatesPage />} />
-                  <Route path="/invitations" element={<InvitationsPage />} />
-                  <Route path="*" element={<Dashboard />} />
-                </Routes>
-              </Layout>
-            </ProtectedRoute>
-          }
-        />
-      </Routes>
-    </AuthProvider>
+          {/* Protected Application Routes */}
+          <Route
+            path="/*"
+            element={
+              <ProtectedRoute>
+                <Layout>
+                  <Routes>
+                    <Route path="/dashboard" element={<Dashboard />} />
+                    <Route path="/intake" element={<IntakeForm />} />
+                    <Route path="/draft" element={<DraftPreview initialMode="chapter" />} />
+                    <Route path="/draft-preview" element={<DraftPreview initialMode="preview" />} />
+                    <Route path="/compliance-checklist" element={<ComplianceChecklistPage />} />
+                    <Route path="/gap-analysis" element={<GapAnalysisPage />} />
+                    <Route path="/readiness" element={<IpoReadinessPage />} />
+                    <Route
+                      path="/reviewer"
+                      element={
+                        <ProtectedRoute requiredRole="reviewer">
+                          <ReviewerWorkspace />
+                        </ProtectedRoute>
+                      }
+                    />
+                    <Route path="/export" element={<Navigate to="/draft-preview" replace />} />
+                    <Route path="/sebi-updates" element={<SebiUpdatesPage />} />
+                    <Route path="/invitations" element={<InvitationsPage />} />
+                    <Route path="*" element={<Dashboard />} />
+                  </Routes>
+                </Layout>
+              </ProtectedRoute>
+            }
+          />
+        </Routes>
+      </AuthProvider>
+    </ErrorBoundary>
   );
 }

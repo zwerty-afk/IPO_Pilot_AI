@@ -11,7 +11,8 @@ import {
   resolveComment, 
   getIntake, 
   getDocuments,
-  downloadPdf
+  downloadPdf,
+  getAuditLogs
 } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import FrontMatterTemplate from '../components/FrontMatterTemplate';
@@ -312,6 +313,11 @@ export default function DraftPreview({ initialMode = 'chapter' }) {
   const [copyingSection, setCopyingSection] = useState(false);
   const [exportNotice, setExportNotice] = useState(null);
 
+  // Review sidebar state
+  const [auditLogs, setAuditLogs] = useState([]);
+  const [textSelectionTooltip, setTextSelectionTooltip] = useState(null);
+  const documentCanvasRef = useRef(null);
+
   const companyId = localStorage.getItem('ipo_company_id') || 'aarav-precision';
 
   useEffect(() => {
@@ -350,8 +356,21 @@ export default function DraftPreview({ initialMode = 'chapter' }) {
     }
   };
 
+  // Load audit logs for the review sidebar
+  const loadAuditLogs = useCallback(async () => {
+    try {
+      const res = await getAuditLogs(companyId, 1, 50);
+      const payload = res.data || res || {};
+      setAuditLogs(payload.logs || payload.data || (Array.isArray(payload) ? payload : []));
+    } catch (err) {
+      console.error('Failed to load audit logs:', err);
+      setAuditLogs([]);
+    }
+  }, [companyId]);
+
   useEffect(() => {
     loadDraftData();
+    loadAuditLogs();
   }, [companyId, selectedSectionKey]);
 
   const currentSection = drafts[selectedSectionKey] || { status: 'draft', blocks: [] };
@@ -657,6 +676,158 @@ export default function DraftPreview({ initialMode = 'chapter' }) {
     }
   };
 
+  // ── Review sidebar handlers ──────────────────────────────────────────────
+  const handleReviewCommentClick = (comm) => {
+    // Scroll to the linked subsection
+    const targetId = comm.block_id || comm.subsectionId || activeTocId;
+    const elem = document.getElementById(`drhp-sub-${targetId}`) ||
+                 document.getElementById(targetId) ||
+                 document.querySelector(`[data-sub-id="${targetId}"]`);
+    if (elem) {
+      elem.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      // Brief highlight
+      elem.style.outline = '2px solid #6366f1';
+      elem.style.outlineOffset = '4px';
+      setTimeout(() => { elem.style.outline = ''; elem.style.outlineOffset = ''; }, 2500);
+    }
+  };
+
+  const handleReviewIssueClick = (issue) => {
+    const fieldName = issue.fieldName || '';
+    const parts = fieldName.split('.');
+    if (parts.length > 0) {
+      navigate(`/compliance-checklist`);
+    }
+  };
+
+  const handleReviewAcceptSuggestion = (sug) => {
+    const text = sug.suggestion || sug.description || 'AI-suggested disclosure content.';
+    const updated = editorText + '\n\n' + text;
+    setEditorText(updated);
+    triggerAutoSave(updated);
+    setDismissedSuggestions(prev => ({ ...prev, [sug.id || sug.fieldName]: true }));
+  };
+
+  const handleReviewDismissSuggestion = (sug) => {
+    setDismissedSuggestions(prev => ({ ...prev, [sug.id || sug.fieldName]: true }));
+  };
+
+  const handleReviewConvertToComment = async (sug) => {
+    try {
+      const text = `[AI] ${sug.description || sug.text || 'Review suggestion'}`;
+      const res = await addComment(selectedSectionKey, text, 'note');
+      setComments(prev => [...prev, res.data || res]);
+      setDismissedSuggestions(prev => ({ ...prev, [sug.id || sug.fieldName]: true }));
+    } catch (err) {
+      console.error('Failed to convert suggestion to comment:', err);
+    }
+  };
+
+  const handleReviewVersionClick = (ver) => {
+    if (ver.id === 'original') {
+      setActiveVersion('original');
+    } else {
+      setActiveVersion('current');
+    }
+  };
+
+  const handleSidebarAddComment = async (text) => {
+    if (!text.trim()) return;
+    try {
+      const res = await addComment(selectedSectionKey, text, 'note');
+      setComments(prev => [...prev, res.data || res]);
+    } catch (err) {
+      console.error('Failed to add comment:', err);
+    }
+  };
+
+  const handleSidebarResolveComment = async (commId) => {
+    try {
+      await resolveComment(commId);
+      setComments(prev => prev.map(c => c.id === commId ? { ...c, status: 'resolved' } : c));
+    } catch (err) {
+      console.error('Failed to resolve comment:', err);
+    }
+  };
+
+  // ── Text selection floating "Add Comment" tooltip ────────────────────────
+  useEffect(() => {
+    const canvasEl = documentCanvasRef.current;
+    if (!canvasEl) return;
+
+    const handleMouseUp = () => {
+      const selection = window.getSelection();
+      if (!selection || selection.isCollapsed || !selection.toString().trim()) {
+        setTextSelectionTooltip(null);
+        return;
+      }
+
+      // Check if selection is within the document canvas
+      const range = selection.getRangeAt(0);
+      if (!canvasEl.contains(range.commonAncestorContainer)) {
+        setTextSelectionTooltip(null);
+        return;
+      }
+
+      const rect = range.getBoundingClientRect();
+      const canvasRect = canvasEl.getBoundingClientRect();
+      const selectedText = selection.toString().trim().substring(0, 120);
+
+      // Find the nearest subsection anchor
+      let node = range.commonAncestorContainer;
+      let subsectionId = activeTocId;
+      while (node && node !== canvasEl) {
+        if (node.nodeType === 1) {
+          const subId = node.getAttribute?.('data-sub-id') || node.getAttribute?.('data-toc-id');
+          if (subId) { subsectionId = subId; break; }
+        }
+        node = node.parentNode;
+      }
+
+      setTextSelectionTooltip({
+        x: rect.left + rect.width / 2 - canvasRect.left,
+        y: rect.top - canvasRect.top - 6,
+        text: selectedText,
+        subsectionId
+      });
+    };
+
+    const handleMouseDown = (e) => {
+      // If clicking on the tooltip itself, don't dismiss it
+      if (e.target.closest('.text-selection-tooltip')) return;
+      setTextSelectionTooltip(null);
+    };
+
+    canvasEl.addEventListener('mouseup', handleMouseUp);
+    document.addEventListener('mousedown', handleMouseDown);
+
+    return () => {
+      canvasEl.removeEventListener('mouseup', handleMouseUp);
+      document.removeEventListener('mousedown', handleMouseDown);
+    };
+  }, [activeTocId]);
+
+  const handleTextSelectionComment = async () => {
+    if (!textSelectionTooltip) return;
+    const commentText = `"${textSelectionTooltip.text}" — [highlighted text]`;
+    try {
+      const res = await addComment(
+        selectedSectionKey,
+        commentText,
+        'note',
+        textSelectionTooltip.subsectionId
+      );
+      const newComment = res.data || res;
+      newComment.linkedText = textSelectionTooltip.text;
+      newComment.subsectionId = textSelectionTooltip.subsectionId;
+      setComments(prev => [...prev, newComment]);
+      setTextSelectionTooltip(null);
+      window.getSelection()?.removeAllRanges();
+    } catch (err) {
+      console.error('Failed to add selection comment:', err);
+    }
+  };
+
   // Metadata Calculations for Source Side Panel Drawer
   const sectionIntake = getIntakeForSection(selectedSectionKey, intakeCache);
   const intakeFieldsList = Object.entries(sectionIntake).map(([fKey, fVal]) => ({
@@ -677,6 +848,32 @@ export default function DraftPreview({ initialMode = 'chapter' }) {
     const field = g.fieldName || '';
     return field.startsWith(selectedSectionKey) || field.startsWith(targetKey);
   });
+
+  // ── Review sidebar derived data ─────────────────────────────────────────
+  const reviewAiSuggestions = subsectionIssues
+    .filter(g => !dismissedSuggestions[g.id || g.fieldName])
+    .map(g => ({
+      id: g.id || g.fieldName,
+      severity: g.category || 'warning',
+      description: g.description || `Missing or inconsistent: ${g.fieldName}`,
+      fieldName: g.fieldName,
+      suggestion: g.suggestion || `Add required disclosure for ${(g.fieldName || '').replace(/_/g, ' ')}.`
+    }));
+
+  const reviewOpenIssues = subsectionIssues.map(g => ({
+    id: g.id || g.fieldName,
+    severity: g.category || 'warning',
+    section: SECTION_KEYS[selectedSectionKey] || selectedSectionKey,
+    fieldName: g.fieldName,
+    description: g.description || 'Missing or inconsistent disclosure data.',
+    assignedUser: user?.name || 'Unassigned',
+    status: 'Open'
+  }));
+
+  const reviewVersions = [
+    ...(originalDraftText ? [{ id: 'original', label: 'Version 1 (Generated)', timestamp: null, isCurrent: false }] : []),
+    { id: 'current', label: `Version ${originalDraftText ? '2' : '1'} (Current)`, timestamp: lastSavedTime.toISOString(), isCurrent: true }
+  ];
 
   // ----------------------------------------------------
   // SECTION-SPECIFIC COMPOSITION DATA BLUEPRINTS
@@ -747,7 +944,7 @@ export default function DraftPreview({ initialMode = 'chapter' }) {
   };
 
   return (
-    <div className="grid grid-cols-1 xl:grid-cols-4 gap-6 animate-fade-in relative">
+    <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 animate-fade-in relative">
 
       {/* View Sources Side Drawer */}
       {showSourceDrawer && (
@@ -857,7 +1054,7 @@ export default function DraftPreview({ initialMode = 'chapter' }) {
         </div>
       )}
 
-      {/* Secondary Left Navigation Panel: DRHP Table of Contents (Draft Prospectus Mode) */}
+      {/* Secondary Left Navigation Panel: DRHP Table of Contents + Review Tools (Draft Prospectus Mode) */}
       {viewMode === 'chapter' && (
         <div className="xl:col-span-1">
           <ChapterHealthSidebar
@@ -869,12 +1066,25 @@ export default function DraftPreview({ initialMode = 'chapter' }) {
             }}
             drafts={drafts}
             gapReport={gapReport}
+            comments={comments}
+            auditLogs={auditLogs}
+            aiSuggestions={reviewAiSuggestions}
+            openIssues={reviewOpenIssues}
+            versions={reviewVersions}
+            onCommentClick={handleReviewCommentClick}
+            onIssueClick={handleReviewIssueClick}
+            onAcceptSuggestion={handleReviewAcceptSuggestion}
+            onDismissSuggestion={handleReviewDismissSuggestion}
+            onConvertSuggestionToComment={handleReviewConvertToComment}
+            onVersionClick={handleReviewVersionClick}
+            onAddComment={handleSidebarAddComment}
+            onResolveComment={handleSidebarResolveComment}
           />
         </div>
       )}
 
       {/* Main DRHP Subsection Composition Pane (Center Workspace) */}
-      <div className={`${viewMode === 'chapter' ? 'xl:col-span-2' : 'xl:col-span-3'} space-y-4`}>
+      <div className={`${viewMode === 'chapter' ? 'xl:col-span-2' : 'xl:col-span-3'} space-y-4`} ref={documentCanvasRef}>
 
         {/* Global Toolbar for Chapter Document */}
         <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs flex items-center justify-between gap-4 flex-wrap font-sans">
@@ -1204,119 +1414,29 @@ export default function DraftPreview({ initialMode = 'chapter' }) {
           </div>
         </div>
       </div>
-    </div>
 
-      {/* Right Sidebar: Annotations & AI Composition Recommendations */}
-      <div className="xl:col-span-1 space-y-4 sticky top-6 h-fit font-sans">
-
-        {/* 1. Subsection Annotations */}
-        <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-4 flex flex-col">
-          <h3 className="font-bold text-slate-800 text-xs uppercase tracking-wider flex items-center gap-1.5 font-mono">
-            <MessageSquare className="w-4 h-4 text-indigo-600" />
-            <span>Subsection Annotations</span>
-          </h3>
-
-          {/* Comment list */}
-          <div className="space-y-3 max-h-[300px] overflow-y-auto pr-1">
-            {comments.length === 0 ? (
-              <div className="text-center py-6 text-slate-400 text-xs italic">
-                No reviewer notes or comments on this subsection.
-              </div>
-            ) : (
-              comments.map((comm) => (
-                <div
-                  key={comm.id}
-                  className={`p-3 rounded-xl border space-y-2 text-xs ${
-                    comm.status === 'resolved'
-                      ? 'bg-slate-50/50 border-slate-200 opacity-60'
-                      : comm.type === 'clarification_requested'
-                      ? 'bg-amber-50 border-amber-200'
-                      : 'bg-indigo-50/50 border-indigo-100'
-                  }`}
-                >
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <span className="font-bold text-slate-800 block">{comm.author}</span>
-                      <span className="text-[10px] text-slate-400 capitalize">{comm.role}</span>
-                    </div>
-                    {comm.status === 'active' ? (
-                      <button
-                        onClick={() => handleResolve(comm.id)}
-                        className="text-[10px] font-bold text-emerald-600 hover:text-emerald-800 flex items-center gap-0.5 border border-emerald-200 hover:border-emerald-300 px-1.5 py-0.5 rounded bg-emerald-50/20 transition-all shrink-0"
-                      >
-                        <CheckCircle className="w-3 h-3" /> Resolve
-                      </button>
-                    ) : (
-                      <span className="text-[10px] font-bold text-slate-400 flex items-center gap-0.5 uppercase shrink-0">
-                        Resolved
-                      </span>
-                    )}
-                  </div>
-                  <p className="text-slate-700 leading-normal font-sans">{comm.content}</p>
-                </div>
-              ))
-            )}
-          </div>
-
-          {/* Add Comment Form */}
-          <form onSubmit={handleAddComment} className="border-t border-slate-100 pt-3">
-            <div className="relative">
-              <textarea
-                value={newCommentText}
-                onChange={(e) => setNewCommentText(e.target.value)}
-                placeholder="Leave annotation or reviewer note..."
-                className="w-full pl-3 pr-10 py-2 border border-slate-200 rounded-xl bg-slate-50 focus:bg-white text-xs outline-none focus:border-indigo-500 resize-none h-16 transition-all"
-              />
-              <button
-                type="submit"
-                className="absolute right-2 bottom-3 p-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition-colors"
-              >
-                <Send className="w-3.5 h-3.5" />
-              </button>
-            </div>
-          </form>
+      {/* Floating text-selection "Add Comment" tooltip */}
+      {textSelectionTooltip && (
+        <div
+          className="text-selection-tooltip absolute z-50 animate-fade-in"
+          style={{
+            left: `${textSelectionTooltip.x}px`,
+            top: `${textSelectionTooltip.y}px`,
+            transform: 'translate(-50%, -100%)'
+          }}
+        >
+          <button
+            type="button"
+            onClick={handleTextSelectionComment}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-lg shadow-lg shadow-indigo-600/30 transition-all whitespace-nowrap"
+          >
+            <MessageSquare className="w-3.5 h-3.5" />
+            Add Comment
+          </button>
+          <div className="w-2.5 h-2.5 bg-indigo-600 rotate-45 mx-auto -mt-1.5" />
         </div>
-
-        {/* 2. AI Composition Recommendation (Right Sidebar) */}
-        {!dismissedSuggestions[activeTocId] && (
-          <div className="bg-indigo-50/80 border border-indigo-100 p-4 rounded-2xl space-y-3 shadow-sm">
-            <div className="flex items-center justify-between">
-              <h4 className="text-xs font-bold text-indigo-900 uppercase tracking-wider font-mono flex items-center gap-1.5">
-                <Sparkles className="w-4 h-4 text-indigo-600" />
-                <span>AI Composition Recommendation</span>
-              </h4>
-              <button
-                onClick={handleDismissSuggestion}
-                className="text-[10px] text-slate-400 hover:text-slate-600 font-semibold"
-              >
-                Dismiss
-              </button>
-            </div>
-
-            <div className="bg-white p-3.5 rounded-xl border border-indigo-100 text-xs space-y-2">
-              <p className="text-slate-800 font-medium leading-relaxed">
-                Composition Tip: Include a 3-year capacity utilization trend table and financial ratio analysis to align with SEBI ICDR Schedule VI disclosure standards.
-              </p>
-
-              <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
-                <button
-                  onClick={() => handleAcceptSuggestion("Capacity Utilization Summary: Operating capacity reached 78.5% in FY25 across primary 5-axis CNC manufacturing units.")}
-                  className="px-3 py-1 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-lg text-xs shadow-sm transition-all flex items-center gap-1"
-                >
-                  <Check className="w-3.5 h-3.5" /> Accept
-                </button>
-                <button
-                  onClick={handleDismissSuggestion}
-                  className="px-3 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded-lg text-xs transition-all"
-                >
-                  Dismiss
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
-      </div>
+      )}
+    </div>
     </div>
   );
 }
