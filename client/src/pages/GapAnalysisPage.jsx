@@ -1,8 +1,8 @@
-import { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { getCompanyStatus, getIntake, getDocuments, getDrafts } from '../services/api';
-import { SECTION_KEYS, computeChapterHealth } from '../components/ChapterHealthSidebar';
-import { stepQuestions, checkFieldAgainstDocuments, parseCitation } from '../data/intakeSchema';
+import { SECTION_KEYS } from '../components/ChapterHealthSidebar';
+import { stepQuestions, checkFieldAgainstDocuments } from '../data/intakeSchema';
 import { classifyCompany, getIpoProfile } from '../data/companyClassifier';
 import { 
   AlertTriangle, 
@@ -10,15 +10,21 @@ import {
   ArrowUpRight, 
   CheckCircle2, 
   Loader2, 
+  Filter, 
   Search,
-  Filter,
-  ArrowRight,
   Sparkles,
-  Layers,
   ShieldAlert,
-  HelpCircle,
+  ArrowRight,
   Bookmark,
-  Check
+  Check,
+  Clock,
+  Layers,
+  FileText,
+  UploadCloud,
+  Eye,
+  RefreshCw,
+  XCircle,
+  MinusCircle
 } from 'lucide-react';
 
 export default function GapAnalysisPage() {
@@ -30,28 +36,13 @@ export default function GapAnalysisPage() {
   const [documents, setDocuments] = useState([]);
   const [drafts, setDrafts] = useState({});
 
-  // Interactive grouping state: 'chapter', 'severity', 'category', 'confidence'
-  const [groupBy, setGroupBy] = useState('chapter');
-  const [filterSeverity, setFilterSeverity] = useState('all');
-  const [selectedChapter, setSelectedChapter] = useState('all');
+  // Category & Priority Filters
+  const [selectedCategory, setSelectedCategory] = useState('all');
+  const [selectedPriority, setSelectedPriority] = useState('all');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [revalidating, setRevalidating] = useState(false);
 
-  const chapterRefs = useRef({});
   const companyId = localStorage.getItem('ipo_company_id') || 'aarav-precision';
-
-  // Read URL search param for direct chapter focusing
-  useEffect(() => {
-    const params = new URLSearchParams(location.search);
-    const sec = params.get('chapter') || params.get('section');
-    if (sec && (sec === 'all' || SECTION_KEYS[sec])) {
-      setSelectedChapter(sec);
-      setGroupBy('chapter');
-      if (sec !== 'all' && chapterRefs.current[sec]) {
-        setTimeout(() => {
-          chapterRefs.current[sec]?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        }, 150);
-      }
-    }
-  }, [location.search]);
 
   const loadData = async () => {
     try {
@@ -79,417 +70,434 @@ export default function GapAnalysisPage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-[50vh]">
-        <Loader2 className="w-8 h-8 text-indigo-600 animate-spin" />
+      <div className="flex flex-col items-center justify-center min-h-[50vh] space-y-3">
+        <Loader2 className="w-8 h-8 text-amber-500 animate-spin" />
+        <span className="text-xs text-slate-500 font-medium">Analyzing IPO Readiness & DRHP Consequence Impact...</span>
       </div>
     );
   }
 
-  // 1. Run AI Company Classification & Dynamic Profile Engine
   const classification = classifyCompany({ name: stats?.companyName }, intakeData, documents);
-  const ipoProfile = getIpoProfile(classification);
+  const uploadedDocTypes = new Set((documents || []).map(d => d.doc_type));
 
-  // Combine server gap report with client cross-document & AI validation rules
-  const serverGaps = stats?.gapReport || [];
-  const rawGaps = [...serverGaps];
-  const existingIds = new Set(rawGaps.map(g => g.id || g.fieldName));
+  // ─── BUILD DYNAMIC IMPACT & CONSEQUENCE GAPS MATRIX ───────────────────────────
+  const gapCategories = [
+    'all',
+    'Critical Gaps',
+    'Financial Gaps',
+    'Legal Gaps',
+    'Governance Gaps',
+    'Documentation Gaps',
+    'Disclosure Gaps',
+    'Data Quality Gaps',
+    'Chapter Readiness Gaps'
+  ];
 
-  Object.entries(SECTION_KEYS).forEach(([secKey, secLabel]) => {
-    const intakeKey = secKey === 'risk_factors' ? 'risk_information' : 
-                      secKey === 'related_party' ? 'rpt' : 
-                      secKey === 'promoter_details' ? 'promoters' : secKey;
+  const allGapsList = [];
 
-    const secIntake = intakeData[intakeKey] || intakeData[secKey] || {};
-    const questions = stepQuestions[intakeKey] || [];
-
-    questions.forEach(q => {
-      const val = secIntake[q.name];
-      if (val !== undefined && val !== null && String(val).trim() !== '') {
-        const issue = checkFieldAgainstDocuments(intakeKey, q.name, val, documents);
-        if (issue && !existingIds.has(`${intakeKey}.${q.name}`)) {
-          rawGaps.push({
-            id: `dyn-mismatch-${intakeKey}-${q.name}`,
-            severity: 'high',
-            category: 'consistency',
-            fieldName: `${intakeKey}.${q.name}`,
-            message: `Discrepancy in ${q.label}: Intake states "${issue.enteredDisplay}", but document (${issue.docName}) records "${issue.docDisplay}".`,
-            explanation: `Cross-document mismatch detected between promoter intake input and statutory PDF extraction for ${classification.businessCategory}. SEBI regulations require strict consistency before DRHP submission.`,
-            recommendation: `Verify the true value with legal counsel and update either the intake field or replace the uploaded document.`,
-            intakeValue: issue.enteredDisplay,
-            docValue: issue.docDisplay,
-            docName: issue.docName,
-            chapterKey: secKey,
-            chapterLabel: secLabel,
-            confidence: 'high'
-          });
-        }
-      }
+  // 1. Critical Gap: Articles of Association (AOA) Missing
+  if (!uploadedDocTypes.has('aoa')) {
+    allGapsList.push({
+      id: 'GAP-CRIT-AOA',
+      title: 'Articles of Association (AOA) Missing',
+      category: 'Critical Gaps',
+      priority: 'Critical',
+      description: 'The statutory Articles of Association charter document has not been uploaded to the repository.',
+      whyGap: 'SEBI ICDR Regulations Schedule VI Part A mandates that the AOA must be attached to verify pre-emption rights, borrowing powers, and equity share restrictions prior to DRHP filing.',
+      affectedChapters: ['Section V: About Our Company', 'Section VII: Legal and Other Information'],
+      affectedSubsections: ['History and Certain Corporate Matters', 'Other Regulatory and Statutory Disclosures'],
+      readinessImpact: '-8% IPO Readiness',
+      generationImpact: 'Blocked',
+      requiredDocs: ['Articles of Association (AOA.pdf)'],
+      recommendedResolution: 'Upload the latest certified Articles of Association containing standard pre-emption clauses.',
+      estimatedTime: '15 minutes',
+      status: 'Unresolved',
+      owner: 'Company Secretary',
+      intakeStep: 'company_details',
+      intakeField: 'aoa'
     });
-  });
+  }
 
-  // Filter out any gap items that are exempted for this company's industry profile
-  const validGaps = rawGaps.filter(g => {
-    const fn = g.fieldName || '';
-    const fieldShortName = fn.split('.')[1] || fn;
-    if (ipoProfile.exemptedFields?.[fieldShortName]) return false;
+  // 2. Financial Gap: 3-Year Financial Statements
+  const finCount = documents.filter(d => d.doc_type === 'financial_statements').length;
+  if (finCount < 3) {
+    allGapsList.push({
+      id: 'GAP-FIN-AUDIT',
+      title: '3-Year Audited Financial Statements Omitted',
+      category: 'Financial Gaps',
+      priority: 'Critical',
+      description: `Only ${finCount} of 3 required annual audited financial statements are uploaded.`,
+      whyGap: 'SEBI ICDR Schedule VI Part A Item (11) requires 3 consecutive years of audited restated accounts (FY23, FY24, FY25) certified by Statutory Auditors.',
+      affectedChapters: ['Section VI: Financial Information', 'Section III: Introduction'],
+      affectedSubsections: ['Restated Financial Information', 'Summary of Restated Financial Information', "Management's Discussion & Analysis"],
+      readinessImpact: '-12% IPO Readiness',
+      generationImpact: 'Incomplete',
+      requiredDocs: ['Audited Financial Reports (FY23, FY24, FY25)'],
+      recommendedResolution: 'Upload complete 3-year restated financial audit report certified by Statutory Auditors.',
+      estimatedTime: '1 business day',
+      status: 'In Progress',
+      owner: 'CFO',
+      intakeStep: 'financials',
+      intakeField: 'financial_statements'
+    });
+  }
+
+  // 3. Governance Gap: Board Resolution
+  if (!uploadedDocTypes.has('board_resolution')) {
+    allGapsList.push({
+      id: 'GAP-GOV-BOARD',
+      title: 'Certified Board Resolution Approving IPO Omitted',
+      category: 'Governance Gaps',
+      priority: 'High',
+      description: 'Certified extract of the Board Resolution approving the IPO issue and appointing Lead Manager is unverified.',
+      whyGap: 'Companies Act 2013 Sec 179(3) mandates explicit board resolution for fresh equity capital issuance.',
+      affectedChapters: ['Section I: General Information'],
+      affectedSubsections: ['Certain Corporate Matters', 'Details of the Offer'],
+      readinessImpact: '-6% IPO Readiness',
+      generationImpact: 'Warning',
+      requiredDocs: ['Board Resolution Extract'],
+      recommendedResolution: 'Upload certified copy of signed Board Resolution passed on or after Jan 1, 2025.',
+      estimatedTime: '30 minutes',
+      status: 'Unresolved',
+      owner: 'Legal Team',
+      intakeStep: 'company_details',
+      intakeField: 'board_resolution'
+    });
+  }
+
+  // 4. Legal Gap: Outstanding Material Litigation Disclosures
+  if (!intakeData.rpt?.litigation_declared && !uploadedDocTypes.has('litigation_documents')) {
+    allGapsList.push({
+      id: 'GAP-LEG-LITIG',
+      title: 'Material Litigation Register & Tax Demands Unverified',
+      category: 'Legal Gaps',
+      priority: 'High',
+      description: 'Material civil/tax litigation register disclosures require explicit confirmation or supporting court filings.',
+      whyGap: 'SEBI ICDR Schedule VI Part A Section VII mandates full disclosure of material civil, criminal, and tax proceedings against company & promoters.',
+      affectedChapters: ['Section VII: Legal and Other Information'],
+      affectedSubsections: ['Outstanding Litigation and Material Developments'],
+      readinessImpact: '-7% IPO Readiness',
+      generationImpact: 'Incomplete',
+      requiredDocs: ['Litigation Affidavit / Legal Register'],
+      recommendedResolution: 'Complete Legal Litigation Disclosure in Intake Step 7 or upload Legal Auditor opinion.',
+      estimatedTime: '1 hour',
+      status: 'Unresolved',
+      owner: 'Legal Counsel',
+      intakeStep: 'rpt',
+      intakeField: 'litigation_declared'
+    });
+  }
+
+  // 5. Documentation Gap: Shareholding Pattern Statement
+  if (!uploadedDocTypes.has('shareholding_pattern')) {
+    allGapsList.push({
+      id: 'GAP-DOC-SHARE',
+      title: 'Pre-Issue Equity Shareholding Pattern Document Omitted',
+      category: 'Documentation Gaps',
+      priority: 'Medium',
+      description: 'Pre-issue capital structure breakdown and shareholding pattern statement are pending file upload.',
+      whyGap: 'SEBI (LODR) Regulations 2015 Reg 31 & ICDR Reg 14 require certified pre-issue shareholding pattern statement.',
+      affectedChapters: ['Section III: Capital Structure'],
+      affectedSubsections: ['Capital Structure', 'Shareholding Pattern'],
+      readinessImpact: '-4% IPO Readiness',
+      generationImpact: 'Warning',
+      requiredDocs: ['Shareholding Pattern Statement (PDF)'],
+      recommendedResolution: 'Upload latest shareholding pattern statement certified by Company Secretary.',
+      estimatedTime: '20 minutes',
+      status: 'Unresolved',
+      owner: 'Company Secretary',
+      intakeStep: 'promoters',
+      intakeField: 'shareholding_pattern'
+    });
+  }
+
+  // 6. Chapter Readiness Gap: Uncertified DRHP Chapters
+  const uncertifiedCount = Object.values(drafts).filter(d => d.status !== 'certified').length;
+  if (uncertifiedCount > 0) {
+    allGapsList.push({
+      id: 'GAP-CHAP-CERT',
+      title: 'Merchant Banker Chapter Narrative Certification Pending',
+      category: 'Chapter Readiness Gaps',
+      priority: 'Medium',
+      description: `${uncertifiedCount} DRHP SEBI chapters remain in draft composition mode and require lead manager signoff.`,
+      whyGap: 'Merchant Banker must review and certify narrative disclosure compliance before filing DRHP with SEBI.',
+      affectedChapters: ['Section VI: Financial Information', 'Section V: About Our Company'],
+      affectedSubsections: ['Restated Financial Information', 'Our Business'],
+      readinessImpact: '-5% IPO Readiness',
+      generationImpact: 'Incomplete',
+      requiredDocs: ['Lead Manager Due Diligence Certificate'],
+      recommendedResolution: 'Review SEBI disclosure narrative in Chapter Editor and click "Certify Chapter".',
+      estimatedTime: '1 hour',
+      status: 'Unresolved',
+      owner: 'Merchant Banker',
+      intakeStep: 'company_details',
+      intakeField: 'merchant_banker'
+    });
+  }
+
+  // Filtering
+  const filteredGaps = allGapsList.filter(g => {
+    if (selectedCategory !== 'all' && g.category !== selectedCategory) return false;
+    if (selectedPriority !== 'all' && g.priority !== selectedPriority) return false;
+    if (searchQuery.trim() !== '') {
+      const q = searchQuery.toLowerCase();
+      return g.title.toLowerCase().includes(q) ||
+             g.description.toLowerCase().includes(q) ||
+             g.whyGap.toLowerCase().includes(q) ||
+             g.affectedChapters.some(c => c.toLowerCase().includes(q));
+    }
     return true;
   });
 
-  // Enrich remaining valid gaps with AI explanations and recommendations
-  const enrichedGaps = validGaps.map(g => {
-    const fn = g.fieldName || '';
-    const parts = fn.split('.');
-    const intakeKey = parts[0] || 'general';
-    const secKey = intakeKey === 'risk_information' ? 'risk_factors' :
-                   intakeKey === 'rpt' ? 'related_party' :
-                   intakeKey === 'promoters' ? 'promoter_details' : intakeKey;
-    const chapterLabel = SECTION_KEYS[secKey] || g.chapterLabel || 'General Disclosure';
-
-    return {
-      ...g,
-      chapterKey: secKey,
-      chapterLabel,
-      severity: g.severity || 'medium',
-      category: g.category || 'consistency',
-      confidence: g.confidence || (g.severity === 'high' ? 'high' : 'medium'),
-      explanation: g.explanation || (
-        g.category === 'consistency' 
-          ? `Cross-document validation mismatch between promoter intake data and verified source document for ${classification.businessCategory}.` 
-          : `Mandatory SEBI ICDR disclosure item for ${classification.businessCategory} is missing or incomplete.`
-      ),
-      recommendation: g.recommendation || (
-        g.category === 'consistency'
-          ? `Review source document values and update intake entry.`
-          : `Complete the required intake field to resolve this disclosure gap.`
-      )
-    };
-  });
-
-  // Filter by chapter & severity
-  const filteredGaps = enrichedGaps.filter(g => {
-    if (selectedChapter !== 'all' && g.chapterKey !== selectedChapter) return false;
-    if (filterSeverity !== 'all' && g.severity !== filterSeverity) return false;
-    return true;
-  });
-
-  // Grouping logic
-  const groupGaps = () => {
-    const groups = {};
-    filteredGaps.forEach(g => {
-      let key = 'Other';
-      if (groupBy === 'chapter') key = g.chapterLabel;
-      else if (groupBy === 'severity') key = `${g.severity.toUpperCase()} SEVERITY`;
-      else if (groupBy === 'category') key = g.category === 'consistency' ? 'Cross-Document Inconsistencies' : 'Disclosure Gaps';
-      else if (groupBy === 'confidence') key = `AI Confidence: ${g.confidence.toUpperCase()}`;
-
-      if (!groups[key]) groups[key] = [];
-      groups[key].push(g);
-    });
-    return groups;
+  const handleRevalidate = async () => {
+    setRevalidating(true);
+    await loadData();
+    setTimeout(() => setRevalidating(false), 800);
   };
 
-  const groupedData = groupGaps();
-
-  const handleSelectChapterSection = (secKey) => {
-    setSelectedChapter(secKey);
-    setGroupBy('chapter');
-    navigate(`/gap-analysis?chapter=${secKey}`, { replace: true });
-    if (secKey !== 'all' && chapterRefs.current[secKey]) {
-      chapterRefs.current[secKey]?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }
+  const handleResolveNow = (gap) => {
+    navigate(`/intake?step=${gap.intakeStep}&field=${gap.intakeField}`);
   };
 
-  const handleResolveNavigation = (item) => {
-    const fn = item.fieldName || '';
-    const parts = fn.split('.');
-    if (parts.length === 2) {
-      navigate(`/intake?step=${parts[0]}&field=${parts[1]}`);
-    } else {
-      navigate('/intake');
-    }
-  };
+  const criticalCount = allGapsList.filter(g => g.priority === 'Critical').length;
+  const highCount = allGapsList.filter(g => g.priority === 'High').length;
+  const warnCount = allGapsList.filter(g => g.priority === 'Medium' || g.priority === 'Low' || g.priority === 'Warning').length;
+  const blockedCount = allGapsList.filter(g => g.generationImpact === 'Blocked').length;
+  const totalPenalty = criticalCount * 8 + highCount * 5;
 
   return (
-    <div className="space-y-6 animate-fade-in">
+    <div className="space-y-6 animate-fade-in font-sans">
       
-      {/* Top Banner Card with AI Classification */}
-      <div className="bg-gradient-to-br from-slate-900 via-navy-900 to-indigo-950 text-white p-6 rounded-2xl shadow-xl border border-slate-800 space-y-4">
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
-          <div className="space-y-1.5">
-            <div className="flex items-center gap-2.5">
-              <div className="w-10 h-10 rounded-xl bg-amber-500/20 border border-amber-400/30 flex items-center justify-center text-amber-300">
-                <ShieldAlert className="w-5 h-5" />
-              </div>
-              <div>
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-[10px] font-mono uppercase tracking-wider bg-amber-500/30 text-amber-200 px-2 py-0.5 rounded-full border border-amber-400/30 font-bold">
-                    AI Industry Gap Analysis
-                  </span>
-                  <h2 className="text-xl font-bold text-white">{classification.businessCategory}</h2>
-                </div>
-                <p className="text-slate-300 text-xs mt-0.5">
-                  AI Due Diligence tailored to <strong className="text-amber-300">{classification.operationalType}</strong> operations and <strong className="text-amber-300">{classification.businessModel}</strong> requirements
-                </p>
-              </div>
+      {/* Page Title & Readiness Analysis Header (Identical design to Compliance Checklist) */}
+      <div className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm space-y-4">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-indigo-600 text-white flex items-center justify-center shadow-md shadow-indigo-600/20 shrink-0">
+              <ShieldAlert className="w-5 h-5" />
             </div>
-          </div>
-
-          {/* Global Summary Pills & Next Action */}
-          <div className="flex flex-wrap items-center gap-3">
-            <div className="bg-white/10 p-3 rounded-2xl border border-white/10 text-center min-w-[110px]">
-              <span className="text-[10px] text-red-300 font-mono font-bold uppercase block">High Severity</span>
-              <span className="text-2xl font-extrabold text-red-400">
-                {enrichedGaps.filter(g => g.severity === 'high').length}
-              </span>
-            </div>
-
-            <div className="bg-white/10 p-3 rounded-2xl border border-white/10 text-center min-w-[110px]">
-              <span className="text-[10px] text-amber-300 font-mono font-bold uppercase block">Medium Severity</span>
-              <span className="text-2xl font-extrabold text-amber-300">
-                {enrichedGaps.filter(g => g.severity === 'medium').length}
-              </span>
-            </div>
-
-            <button
-              type="button"
-              onClick={() => navigate('/readiness')}
-              className="btn-primary text-xs font-bold py-3 px-4 rounded-xl shadow-indigo-600/10 flex items-center gap-1.5 shrink-0"
-            >
-              <span>Proceed to IPO Readiness</span>
-              <ArrowRight className="w-4 h-4" />
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* In-Page Chapter Subsections Navigation Bar */}
-      <div className="bg-white p-3 rounded-2xl border border-slate-200/80 shadow-sm space-y-2">
-        <div className="flex items-center justify-between px-2">
-          <span className="text-xs font-bold text-slate-400 uppercase tracking-wider font-mono flex items-center gap-1.5">
-            <Layers className="w-3.5 h-3.5 text-indigo-600" />
-            Gap Analysis Chapter Subsections (In-Page Navigation):
-          </span>
-          {selectedChapter !== 'all' && (
-            <button
-              type="button"
-              onClick={() => handleSelectChapterSection('all')}
-              className="text-xs font-bold text-indigo-600 hover:text-indigo-800 underline"
-            >
-              Show All Chapters
-            </button>
-          )}
-        </div>
-
-        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 pt-1 no-scrollbar px-1">
-          <button
-            type="button"
-            onClick={() => handleSelectChapterSection('all')}
-            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap border shrink-0 ${
-              selectedChapter === 'all'
-                ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm'
-                : 'bg-slate-50 text-slate-600 hover:bg-slate-100 border-slate-200'
-            }`}
-          >
-            All Gap Sections ({enrichedGaps.length})
-          </button>
-
-          {Object.entries(SECTION_KEYS).map(([secKey, secLabel]) => {
-            const chGapsCount = enrichedGaps.filter(g => g.chapterKey === secKey).length;
-            const isActive = selectedChapter === secKey;
-            return (
-              <button
-                key={secKey}
-                type="button"
-                onClick={() => handleSelectChapterSection(secKey)}
-                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap border shrink-0 flex items-center gap-1.5 ${
-                  isActive
-                    ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm'
-                    : 'bg-slate-50 text-slate-700 hover:bg-slate-100 border-slate-200'
-                }`}
-              >
-                <span>{secLabel}</span>
-                <span className={`px-1.5 py-0.2 text-[10px] font-mono rounded-full ${chGapsCount > 0 ? 'bg-amber-100 text-amber-900 font-bold' : 'bg-slate-200 text-slate-600'}`}>
-                  {chGapsCount}
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] font-mono font-bold uppercase tracking-wider bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded border border-indigo-100">
+                  Readiness & Consequence Engine
                 </span>
-              </button>
-            );
-          })}
+                <h1 className="text-xl font-bold text-slate-900">Gap Analysis</h1>
+              </div>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Identifying disclosure, documentation, legal, financial and governance gaps before DRHP generation.
+              </p>
+            </div>
+          </div>
+
+          <button
+            onClick={handleRevalidate}
+            disabled={revalidating}
+            className="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-xl transition-all flex items-center gap-1.5 shrink-0 self-start md:self-auto cursor-pointer disabled:opacity-50"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${revalidating ? 'animate-spin' : ''}`} />
+            <span>Re-validate Gap Analysis</span>
+          </button>
+        </div>
+
+        {/* Stats Metrics Cards (Identical layout to Compliance Checklist) */}
+        <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 pt-2">
+          <div className="bg-red-50/60 p-3.5 rounded-xl border border-red-100">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-red-700 font-mono block">Critical Gaps</span>
+            <span className="text-xl font-extrabold text-red-600">{criticalCount}</span>
+            <span className="text-[10px] text-red-600/70 block mt-0.5">Mandatory Resolution Required</span>
+          </div>
+
+          <div className="bg-amber-50/60 p-3.5 rounded-xl border border-amber-100">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-amber-700 font-mono block">High Priority</span>
+            <span className="text-xl font-extrabold text-amber-600">{highCount}</span>
+            <span className="text-[10px] text-amber-600/70 block mt-0.5">Needs Attention</span>
+          </div>
+
+          <div className="bg-blue-50/60 p-3.5 rounded-xl border border-blue-100">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-blue-700 font-mono block">Warnings</span>
+            <span className="text-xl font-extrabold text-blue-600">{warnCount}</span>
+            <span className="text-[10px] text-blue-600/70 block mt-0.5">Review Recommended</span>
+          </div>
+
+          <div className="bg-rose-50/60 p-3.5 rounded-xl border border-rose-100">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-rose-700 font-mono block">Blocked DRHP Chapters</span>
+            <span className="text-xl font-extrabold text-rose-600">{blockedCount}</span>
+            <span className="text-[10px] text-rose-600/70 block mt-0.5">Draft Generation Blocked</span>
+          </div>
+
+          <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200/70">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 font-mono block">Readiness Impact</span>
+            <span className="text-xl font-extrabold text-indigo-600">-{totalPenalty}%</span>
+            <span className="text-[10px] text-slate-400 block mt-0.5">Estimated Readiness Impact</span>
+          </div>
         </div>
       </div>
 
-      {/* Interactive Grouping & Filter Controls Bar */}
-      <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col md:flex-row items-center justify-between gap-4">
-        
-        {/* Group By Controls */}
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="text-xs font-bold text-slate-400 uppercase tracking-wider font-mono mr-1 flex items-center gap-1">
-            <Filter className="w-3.5 h-3.5" /> Grouping:
+      {/* Filter Bar & Search (Identical to Compliance Checklist) */}
+      <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
+        {/* Category Filter Pills */}
+        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 md:pb-0 scrollbar-none">
+          <span className="text-xs font-bold text-slate-400 uppercase tracking-wider font-mono mr-1 shrink-0 flex items-center gap-1">
+            <Filter className="w-3.5 h-3.5" /> Filter:
           </span>
-
-          <button
-            type="button"
-            onClick={() => setGroupBy('chapter')}
-            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
-              groupBy === 'chapter' ? 'bg-indigo-600 text-white shadow-sm' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-            }`}
-          >
-            By Chapter
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setGroupBy('severity')}
-            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
-              groupBy === 'severity' ? 'bg-indigo-600 text-white shadow-sm' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-            }`}
-          >
-            By Severity
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setGroupBy('category')}
-            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
-              groupBy === 'category' ? 'bg-indigo-600 text-white shadow-sm' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-            }`}
-          >
-            By Type
-          </button>
+          {gapCategories.map((cat) => (
+            <button
+              key={cat}
+              onClick={() => setSelectedCategory(cat)}
+              className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${
+                selectedCategory === cat
+                  ? 'bg-indigo-600 text-white shadow-sm'
+                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+              }`}
+            >
+              {cat === 'all' ? 'All Gap Categories' : cat}
+            </button>
+          ))}
         </div>
 
-        {/* Severity Filter */}
-        <div className="flex items-center gap-2">
-          <span className="text-xs font-bold text-slate-400 uppercase tracking-wider font-mono">Severity:</span>
+        {/* Priority Filter & Search */}
+        <div className="flex items-center gap-2 flex-wrap">
           <select
-            value={filterSeverity}
-            onChange={(e) => setFilterSeverity(e.target.value)}
-            className="px-3 py-1.5 rounded-xl border border-slate-200 bg-slate-50 text-xs font-semibold text-slate-800 outline-none focus:border-indigo-500 cursor-pointer"
+            value={selectedPriority}
+            onChange={(e) => setSelectedPriority(e.target.value)}
+            className="px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 outline-none focus:border-indigo-500"
           >
-            <option value="all">All Severities</option>
-            <option value="high">High Severity Only</option>
-            <option value="medium">Medium Severity Only</option>
+            <option value="all">All Priorities</option>
+            <option value="Critical">Critical Only</option>
+            <option value="High">High Only</option>
+            <option value="Medium">Medium Only</option>
           </select>
-        </div>
 
+          <div className="relative flex-1 md:w-56">
+            <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-2.5" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search gap title, chapter, doc..."
+              className="w-full pl-8 pr-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs outline-none focus:border-indigo-500 font-sans"
+            />
+          </div>
+        </div>
       </div>
 
-      {/* Grouped Gap Cards List */}
-      <div className="space-y-6">
-        {Object.keys(groupedData).length === 0 ? (
-          <div className="bg-white p-12 rounded-2xl border border-slate-200/80 shadow-sm text-center space-y-3">
-            <div className="w-12 h-12 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center mx-auto">
-              <CheckCircle2 className="w-6 h-6" />
-            </div>
-            <h3 className="text-base font-bold text-slate-800">Zero Industry Due Diligence Gaps</h3>
-            <p className="text-xs text-slate-500 max-w-md mx-auto">
-              All entered intake values match source documents cleanly for {classification.businessCategory}.
-            </p>
-          </div>
-        ) : (
-          Object.entries(groupedData).map(([groupTitle, groupItems]) => (
-            <div 
-              key={groupTitle} 
-              ref={(el) => {
-                const matchedSecKey = Object.keys(SECTION_KEYS).find(k => SECTION_KEYS[k] === groupTitle);
-                if (matchedSecKey) chapterRefs.current[matchedSecKey] = el;
-              }}
-              className="space-y-3 scroll-mt-6"
-            >
-              {/* Group Section Header */}
-              <div className="flex items-center justify-between border-b border-slate-200/80 pb-2">
-                <h3 className="text-xs font-extrabold uppercase tracking-wider text-slate-700 font-mono flex items-center gap-2">
-                  <span className="w-2 h-2 rounded-full bg-indigo-600" />
-                  <span>{groupTitle} Section Gaps</span>
-                </h3>
-                <span className="text-[11px] font-bold text-slate-500 font-mono">
-                  {groupItems.length} {groupItems.length === 1 ? 'Issue' : 'Issues'}
-                </span>
-              </div>
+      {/* GAP ANALYSIS TABLE MATRIX (Matching Compliance Checklist Table) */}
+      <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden font-sans">
+        <div className="overflow-x-auto">
+          <table className="w-full text-left border-collapse">
+            <thead>
+              <tr className="bg-slate-50/80 border-b border-slate-200 text-[11px] font-bold text-slate-500 uppercase tracking-wider font-mono">
+                <th className="py-3.5 px-4">Gap ID & Priority</th>
+                <th className="py-3.5 px-4">Gap Name & Category</th>
+                <th className="py-3.5 px-4">Affected DRHP Chapters</th>
+                <th className="py-3.5 px-4">Readiness Impact</th>
+                <th className="py-3.5 px-4">Owner & Time</th>
+                <th className="py-3.5 px-4">DRHP Assembly</th>
+                <th className="py-3.5 px-4 text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100 text-xs">
+              {filteredGaps.length === 0 ? (
+                <tr>
+                  <td colSpan={7} className="py-8 text-center text-slate-400 italic">
+                    No gaps match the selected filter query. All statutory items in this category are clear.
+                  </td>
+                </tr>
+              ) : (
+                filteredGaps.map((gap) => (
+                  <tr key={gap.id} className="hover:bg-slate-50/60 transition-colors">
+                    {/* Gap ID & Priority */}
+                    <td className="py-3.5 px-4 space-y-1 align-top">
+                      <span className="font-mono font-bold text-indigo-700 block">
+                        {gap.id}
+                      </span>
+                      <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold font-mono uppercase ${
+                        gap.priority === 'Critical'
+                          ? 'bg-red-50 text-red-700 border border-red-200'
+                          : gap.priority === 'High'
+                          ? 'bg-amber-50 text-amber-800 border border-amber-200'
+                          : 'bg-indigo-50 text-indigo-700 border border-indigo-200'
+                      }`}>
+                        {gap.priority}
+                      </span>
+                    </td>
 
-              {/* Gap Cards in Group */}
-              <div className="space-y-3">
-                {groupItems.map((item, idx) => {
-                  const isHigh = item.severity === 'high';
-
-                  return (
-                    <div 
-                      key={item.id || idx}
-                      className={`bg-white p-5 rounded-2xl border shadow-sm transition-all space-y-3 ${
-                        isHigh ? 'border-red-200/90 bg-red-50/20' : 'border-amber-200/90 bg-amber-50/20'
-                      }`}
-                    >
-                      {/* Card Header Row */}
-                      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-2.5">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase font-mono bg-slate-100 text-slate-700 border border-slate-200">
-                            {item.chapterLabel}
-                          </span>
-                          <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
-                            isHigh ? 'bg-red-100 text-red-800 border border-red-200' : 'bg-amber-100 text-amber-800 border border-amber-200'
-                          }`}>
-                            {item.severity} severity
-                          </span>
-                          <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-indigo-50 text-indigo-700 border border-indigo-200/50 font-mono">
-                            {item.category}
-                          </span>
-                        </div>
-
-                        <div className="flex items-center gap-2">
-                          <span className="text-[10px] font-mono text-slate-400">AI Grounding: <strong className="text-emerald-700 font-bold uppercase">{item.confidence}</strong></span>
-                        </div>
+                    {/* Gap Title & Category */}
+                    <td className="py-3.5 px-4 space-y-1 max-w-xs align-top">
+                      <div className="font-bold text-slate-900 flex items-start gap-1.5">
+                        <AlertTriangle className={`w-3.5 h-3.5 shrink-0 mt-0.5 ${gap.priority === 'Critical' ? 'text-red-500' : 'text-amber-500'}`} />
+                        <span>{gap.title}</span>
                       </div>
+                      <p className="text-[11px] text-slate-600 leading-normal">
+                        {gap.description}
+                      </p>
+                      <span className="inline-block text-[9px] text-slate-500 font-mono bg-slate-100 px-1.5 py-0.2 rounded border border-slate-200 uppercase">
+                        {gap.category}
+                      </span>
+                    </td>
 
-                      {/* Description & AI Explanation */}
-                      <div className="space-y-1.5">
-                        <h4 className="text-sm font-bold text-slate-900 leading-snug">{item.message}</h4>
-                        <div className="p-3 bg-slate-50 border border-slate-200/60 rounded-xl space-y-1">
-                          <p className="text-xs text-slate-700 leading-relaxed font-sans">
-                            <strong className="text-indigo-700">AI Explanation:</strong> {item.explanation}
-                          </p>
-                        </div>
+                    {/* Affected DRHP Chapters */}
+                    <td className="py-3.5 px-4 max-w-xs align-top space-y-1">
+                      <div className="flex flex-wrap gap-1">
+                        {gap.affectedChapters.map((ch, cidx) => (
+                          <span key={cidx} className="px-2 py-0.5 bg-indigo-50 text-indigo-800 text-[10px] font-medium rounded border border-indigo-100 block truncate">
+                            {ch}
+                          </span>
+                        ))}
                       </div>
+                    </td>
 
-                      {/* Source Evidence Grid */}
-                      {item.intakeValue && item.docValue && item.docValue !== 'N/A' && (
-                        <div className="p-3 bg-white border border-slate-200/80 rounded-xl grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
-                          <div className="space-y-0.5">
-                            <span className="text-[10px] font-mono text-slate-400 font-bold uppercase block">Promoter Intake Value</span>
-                            <span className="font-semibold text-slate-800 text-[11px] block">{item.intakeValue}</span>
-                          </div>
-                          <div className="space-y-0.5">
-                            <span className="text-[10px] font-mono text-slate-400 font-bold uppercase block">Extracted Document ({item.docName})</span>
-                            <span className="font-semibold text-indigo-700 text-[11px] block">{item.docValue}</span>
-                          </div>
-                        </div>
-                      )}
+                    {/* Readiness Impact */}
+                    <td className="py-3.5 px-4 font-mono font-bold text-red-600 align-top">
+                      {gap.readinessImpact}
+                    </td>
 
-                      {/* Actionable Recommendation & Resolve Button Row */}
-                      <div className="pt-2 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                        <div className="flex items-center gap-1.5 text-xs text-slate-600">
-                          <Sparkles className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
-                          <span className="italic text-[11px]"><strong className="text-slate-700 not-italic font-bold">Industry Recommendation:</strong> {item.recommendation}</span>
-                        </div>
+                    {/* Owner & Time */}
+                    <td className="py-3.5 px-4 font-mono align-top space-y-0.5">
+                      <span className="font-bold text-slate-700 block">{gap.owner}</span>
+                      <span className="text-[10px] text-slate-400 flex items-center gap-0.5">
+                        <Clock className="w-3 h-3 text-slate-400" /> {gap.estimatedTime}
+                      </span>
+                    </td>
+
+                    {/* DRHP Assembly Impact */}
+                    <td className="py-3.5 px-4 font-mono align-top">
+                      <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
+                        gap.generationImpact === 'Blocked'
+                          ? 'bg-red-100 text-red-800 font-extrabold'
+                          : gap.generationImpact === 'Incomplete'
+                          ? 'bg-amber-100 text-amber-900'
+                          : 'bg-blue-50 text-blue-700'
+                      }`}>
+                        {gap.generationImpact}
+                      </span>
+                    </td>
+
+                    {/* Actions */}
+                    <td className="py-3.5 px-4 text-right align-top shrink-0">
+                      <div className="flex items-center justify-end gap-1.5 flex-wrap">
+                        <button
+                          onClick={() => handleResolveNow(gap)}
+                          className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl text-xs transition-all shadow-xs cursor-pointer flex items-center gap-1"
+                        >
+                          <span>Open Intake</span>
+                          <ArrowRight className="w-3 h-3" />
+                        </button>
 
                         <button
-                          type="button"
-                          onClick={() => handleResolveNavigation(item)}
-                          className="shrink-0 inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-xl transition-all shadow-sm self-end sm:self-auto"
+                          onClick={() => navigate(`/intake?step=${gap.intakeStep}`)}
+                          className="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded-xl text-xs transition-all cursor-pointer"
                         >
-                          <span>Resolve Issue</span>
-                          <ArrowRight className="w-3.5 h-3.5" />
+                          View Evidence
                         </button>
                       </div>
-
-                    </div>
-                  );
-                })}
-              </div>
-
-            </div>
-          ))
-        )}
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
-
     </div>
   );
 }
