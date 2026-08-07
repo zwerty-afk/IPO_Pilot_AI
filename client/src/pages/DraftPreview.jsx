@@ -880,58 +880,47 @@ export default function DraftPreview({ initialMode = 'chapter' }) {
         {/* Workspace Top Header Bar */}
         <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-4 font-sans">
 
-          {/* Breadcrumbs & Status Bar */}
-          <div className="flex items-center justify-between border-b pb-3 flex-wrap gap-2">
-            <div className="flex items-center gap-1.5 text-xs text-slate-500 font-medium">
-              <span>SEBI DRHP</span>
-              <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
-              <span className="font-semibold text-slate-700">{isCoverPages ? 'Draft Preview' : activeNode.section.title}</span>
-              <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
-              <span className="font-bold text-indigo-600">{isCoverPages ? 'Pages 1–3' : activeNode.number}</span>
-            </div>
-
-            {/* Auto-Save & Status Badge */}
-            <div className="flex items-center gap-3">
-              <div className="flex items-center gap-1.5 text-xs font-mono">
-                {autoSaveStatus === 'saving' ? (
-                  <span className="text-blue-600 flex items-center gap-1">
-                    <Loader2 className="w-3.5 h-3.5 animate-spin" /> Saving...
-                  </span>
-                ) : autoSaveStatus === 'saved' ? (
-                  <span className="text-emerald-600 flex items-center gap-1 font-semibold">
-                    <Check className="w-3.5 h-3.5" /> Saved
-                  </span>
-                ) : (
-                  <span className="text-amber-600 flex items-center gap-1">
-                    <Save className="w-3.5 h-3.5" /> Unsaved
-                  </span>
-                )}
-                <span className="text-[10px] text-slate-400">
-                  ({lastSavedTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })})
-                </span>
-              </div>
-
-              {currentSection.status === 'certified' ? (
-                <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center gap-1">
-                  <ShieldCheck className="w-3 h-3" /> Certified
-                </span>
-              ) : (
-                <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-600 border border-slate-200">
-                  Document Composition Mode
-                </span>
-              )}
-            </div>
-          </div>
-
           {/* Focused Subsection Title & Toolbar */}
           <div className="flex items-center justify-between gap-4 flex-wrap">
             <div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 <h2 className="text-lg font-bold text-slate-900">
                   {viewMode === 'chapter'
                     ? (isCoverPages ? 'Draft Prospectus — Pages 1–3 (Front Matter)' : activeNode.fullTitle)
                     : 'Draft Preview — Merged DRHP Document'}
                 </h2>
+
+                {/* Auto-Save & Status Badge */}
+                <div className="flex items-center gap-2 pl-2 border-l border-slate-200">
+                  <div className="flex items-center gap-1.5 text-xs font-mono">
+                    {autoSaveStatus === 'saving' ? (
+                      <span className="text-blue-600 flex items-center gap-1">
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" /> Saving...
+                      </span>
+                    ) : autoSaveStatus === 'saved' ? (
+                      <span className="text-emerald-600 flex items-center gap-1 font-semibold">
+                        <Check className="w-3.5 h-3.5" /> Saved
+                      </span>
+                    ) : (
+                      <span className="text-amber-600 flex items-center gap-1">
+                        <Save className="w-3.5 h-3.5" /> Unsaved
+                      </span>
+                    )}
+                    <span className="text-[10px] text-slate-400">
+                      ({lastSavedTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })})
+                    </span>
+                  </div>
+
+                  {currentSection.status === 'certified' ? (
+                    <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center gap-1">
+                      <ShieldCheck className="w-3 h-3" /> Certified
+                    </span>
+                  ) : (
+                    <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-600 border border-slate-200">
+                      Document Composition Mode
+                    </span>
+                  )}
+                </div>
               </div>
               <p className="text-xs text-slate-500 mt-0.5">
                 {viewMode === 'chapter'
