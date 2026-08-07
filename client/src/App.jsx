@@ -34,7 +34,8 @@ export default function App() {
                 <Routes>
                   <Route path="/dashboard" element={<Dashboard />} />
                   <Route path="/intake" element={<IntakeForm />} />
-                  <Route path="/draft" element={<DraftPreview />} />
+                  <Route path="/draft" element={<DraftPreview initialMode="chapter" />} />
+                  <Route path="/draft-preview" element={<DraftPreview initialMode="preview" />} />
                   <Route path="/compliance-checklist" element={<ComplianceChecklistPage />} />
                   <Route path="/gap-analysis" element={<GapAnalysisPage />} />
                   <Route path="/readiness" element={<IpoReadinessPage />} />
@@ -46,7 +47,7 @@ export default function App() {
                       </ProtectedRoute>
                     }
                   />
-                  <Route path="/export" element={<ExportPage />} />
+                  <Route path="/export" element={<Navigate to="/draft-preview" replace />} />
                   <Route path="/sebi-updates" element={<SebiUpdatesPage />} />
                   <Route path="/invitations" element={<InvitationsPage />} />
                   <Route path="*" element={<Dashboard />} />

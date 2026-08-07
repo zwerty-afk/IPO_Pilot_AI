@@ -6,14 +6,12 @@ import {
   Shield, LayoutDashboard, ClipboardList,
   FileCheck2, UserCheck, Download, LogOut, Building2,
   ChevronRight, Newspaper, TrendingUp, FolderOpen, Mail,
-  Menu, X, ListChecks, AlertTriangle
+  Menu, X, ListChecks, AlertTriangle, Edit3, Eye
 } from 'lucide-react';
 import NotificationBell from './NotificationBell';
 import CopilotWidget from './CopilotWidget';
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
-
-
 
 function readinessColor(score) {
   if (score >= 100) return { bar: 'bg-emerald-500', text: 'text-emerald-400', label: 'Ready for IPO filing review' };
@@ -30,9 +28,9 @@ const BASE_NAV = [
   { to: '/compliance-checklist', icon: ListChecks,      label: 'Compliance Checklist' },
   { to: '/gap-analysis',         icon: AlertTriangle,   label: 'Gap Analysis' },
   { to: '/readiness',            icon: TrendingUp,      label: 'IPO Readiness' },
-  { to: '/draft',                icon: FileCheck2,      label: 'Draft Prospectus' },
+  { to: '/draft',                icon: Edit3,           label: 'Draft Prospectus' },
+  { to: '/draft-preview',        icon: Eye,             label: 'Draft Preview' },
   { to: '/reviewer',             icon: UserCheck,       label: 'Reviewer Workspace', reviewerOnly: true },
-  { to: '/export',               icon: Download,        label: 'Export' },
 ];
 
 // ─── component ────────────────────────────────────────────────────────────────
@@ -189,7 +187,7 @@ export default function Layout({ children }) {
       </div>
 
       {/* ── Nav items ───────────────────────────────────────────────────── */}
-      <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto" onClick={() => setMobileOpen(false)}>
+      <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto font-sans" onClick={() => setMobileOpen(false)}>
         {BASE_NAV
           .filter((item) => !item.reviewerOnly || user?.role === 'reviewer')
           .map((item) => (

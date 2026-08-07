@@ -63,7 +63,8 @@ export default function ChapterHealthSidebar({
   setActiveId,
   onNavigateSection,
   drafts = {},
-  gapReport = []
+  gapReport = [],
+  variant = 'light' // 'light' | 'dark'
 }) {
   // Find which parent section contains activeId
   const getParentSectionId = (targetId) => {
@@ -87,31 +88,23 @@ export default function ChapterHealthSidebar({
   }, [activeId]);
 
   const handleParentClick = (sec, backendKey) => {
-    setExpandedSectionId(prev => (prev === sec.id ? null : sec.id));
-    if (setActiveId) setActiveId(sec.id);
-    if (onNavigateSection && backendKey) {
-      onNavigateSection(backendKey, sec.id);
+    setExpandedSectionId(sec.id);
+    const targetId = (sec.subsections && sec.subsections.length > 0)
+      ? sec.subsections[0].id
+      : sec.id;
+
+    if (setActiveId) setActiveId(targetId);
+    if (onNavigateSection) {
+      onNavigateSection(backendKey || sec.key, targetId);
     }
-    setTimeout(() => {
-      const elem = document.getElementById(`drhp-sec-${sec.id}`) || document.getElementById(sec.id);
-      if (elem) {
-        elem.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      }
-    }, 50);
   };
 
   const handleSubClick = (subId, backendKey, e) => {
     e.stopPropagation();
     if (setActiveId) setActiveId(subId);
-    if (onNavigateSection && backendKey) {
+    if (onNavigateSection) {
       onNavigateSection(backendKey, subId);
     }
-    setTimeout(() => {
-      const elem = document.getElementById(`drhp-sub-${subId}`) || document.getElementById(subId);
-      if (elem) {
-        elem.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      }
-    }, 50);
   };
 
   const hasUnresolvedGap = (key) => {
@@ -124,9 +117,13 @@ export default function ChapterHealthSidebar({
     });
   };
 
+  const isDark = variant === 'dark';
+
   return (
-    <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm h-fit space-y-2 sticky top-6 max-h-[90vh] overflow-y-auto font-sans">
-      <h3 className="font-bold text-slate-800 text-sm px-3 mb-4">DRHP Table of Contents</h3>
+    <div className={isDark ? "space-y-1 font-sans" : "bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm h-fit space-y-2 sticky top-6 max-h-[90vh] overflow-y-auto font-sans"}>
+      {!isDark && (
+        <h3 className="font-bold text-slate-800 text-sm px-3 mb-4">DRHP Table of Contents</h3>
+      )}
 
       <div className="space-y-1">
         {DRHP_HIERARCHY.map((sec, secIdx) => {
@@ -145,9 +142,11 @@ export default function ChapterHealthSidebar({
               <button
                 type="button"
                 onClick={() => handleParentClick(sec, sec.key)}
-                className={`w-full flex items-center justify-between gap-3 px-3 py-2.5 rounded-xl text-left text-xs font-semibold transition-all duration-200 ${
+                className={`w-full flex items-center justify-between gap-3 px-3 py-2 rounded-xl text-left text-xs font-semibold transition-all duration-200 cursor-pointer ${
                   isSecActive
                     ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/10'
+                    : isDark
+                    ? 'text-slate-300 hover:text-white hover:bg-white/5'
                     : 'text-slate-500 hover:bg-slate-50 hover:text-slate-800'
                 }`}
               >
@@ -155,13 +154,13 @@ export default function ChapterHealthSidebar({
 
                 <div className="flex items-center gap-1.5 shrink-0">
                   {isCertified ? (
-                    <Check className={`w-3.5 h-3.5 shrink-0 ${isSecActive ? 'text-white' : 'text-emerald-500'}`} title="Section certified" />
+                    <Check className={`w-3.5 h-3.5 shrink-0 ${isSecActive ? 'text-white' : 'text-emerald-400'}`} title="Section certified" />
                   ) : secGap ? (
                     <span className={`w-2 h-2 rounded-full shrink-0 ${isSecActive ? 'bg-white/70' : 'bg-amber-400'}`} title="Contains unresolved gap" />
                   ) : null}
 
                   {hasSub && (
-                    <span className={isSecActive ? 'text-white' : 'text-slate-400'}>
+                    <span className={isSecActive ? 'text-white' : isDark ? 'text-slate-400' : 'text-slate-400'}>
                       {isExpanded ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
                     </span>
                   )}
@@ -170,7 +169,7 @@ export default function ChapterHealthSidebar({
 
               {/* Subsections Accordion List */}
               {hasSub && isExpanded && (
-                <div className="ml-4 pl-2 border-l border-slate-200/80 space-y-1 my-1">
+                <div className={`ml-3 pl-2 border-l space-y-1 my-1 ${isDark ? 'border-white/10' : 'border-slate-200/80'}`}>
                   {sec.subsections.map((sub, subIdx) => {
                     const subNum = `${secNum}.${subIdx + 1}`;
                     const isSubActive = activeId === sub.id;
@@ -184,15 +183,17 @@ export default function ChapterHealthSidebar({
                         key={sub.id}
                         type="button"
                         onClick={(e) => handleSubClick(sub.id, sub.key, e)}
-                        className={`w-full flex items-center justify-between gap-2 px-3 py-2 rounded-lg text-left text-xs font-medium transition-all duration-200 ${
+                        className={`w-full flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-lg text-left text-xs font-medium transition-all duration-200 cursor-pointer ${
                           isSubActive
                             ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/10 font-semibold'
+                            : isDark
+                            ? 'text-slate-400 hover:text-white hover:bg-white/5'
                             : 'text-slate-500 hover:bg-slate-50 hover:text-slate-800'
                         }`}
                       >
                         <span className="truncate flex-1">{subTitleText}</span>
                         {isSubCertified ? (
-                          <Check className={`w-3.5 h-3.5 shrink-0 ${isSubActive ? 'text-white' : 'text-emerald-500'}`} title="Subsection certified" />
+                          <Check className={`w-3.5 h-3.5 shrink-0 ${isSubActive ? 'text-white' : 'text-emerald-400'}`} title="Subsection certified" />
                         ) : subGap ? (
                           <span className={`w-2 h-2 rounded-full shrink-0 ${isSubActive ? 'bg-white/70' : 'bg-amber-400'}`} title="Contains unresolved gap" />
                         ) : null}
@@ -204,27 +205,6 @@ export default function ChapterHealthSidebar({
             </div>
           );
         })}
-
-        {/* ── Last Item: Draft Preview (Fixed Template Pages 1–3) ─────────────── */}
-        <div className="pt-2 border-t border-slate-200/80 mt-2">
-          <button
-            type="button"
-            onClick={() => {
-              if (setActiveId) setActiveId('draft_preview');
-              if (onNavigateSection) onNavigateSection('draft_preview', 'draft_preview');
-            }}
-            className={`w-full flex items-center gap-2 px-3 py-2.5 rounded-xl text-left text-xs font-bold transition-all duration-200 border ${
-              activeId === 'draft_preview' || activeId === 'cover_pages'
-                ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/10 border-indigo-600'
-                : 'text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border-indigo-200'
-            }`}
-          >
-            <span className="shrink-0 text-[9px] font-black uppercase tracking-wider bg-indigo-200/60 text-indigo-800 px-1.5 py-0.5 rounded font-mono">
-              PREVIEW
-            </span>
-            <span className="truncate flex-1">Draft Preview</span>
-          </button>
-        </div>
       </div>
     </div>
   );

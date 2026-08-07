@@ -159,14 +159,30 @@ function getBlocksForSubsection(subId, subKey, drafts, intakeCache = {}) {
   }
 }
 
-export default function DraftPreview() {
+export default function DraftPreview({ initialMode = 'chapter' }) {
   const { user } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
 
-  // Focused active TOC subitem: default to "definitions_and_abbreviations"
+  // Mode: 'chapter' (Draft Prospectus - Chapter-by-chapter editing) vs 'preview' (Draft Preview - Merged DRHP document)
+  const [viewMode, setViewMode] = useState(
+    location.pathname === '/draft-preview' ? 'preview' : initialMode
+  );
+
+  useEffect(() => {
+    if (location.pathname === '/draft-preview') {
+      setViewMode('preview');
+    } else if (location.pathname === '/draft') {
+      setViewMode('chapter');
+    }
+  }, [location.pathname]);
+
+  // Focused active TOC subitem: default to "definitions_and_abbreviations" (Chapter 1, Subsection 1.1)
   // Special sentinel: 'draft_preview' / 'cover_pages' renders the FrontMatterTemplate (Pages 1-3)
-  const [activeTocId, setActiveTocId] = useState('cover_pages');
+  const [activeTocId, setActiveTocId] = useState(() => {
+    const params = new URLSearchParams(location.search);
+    return params.get('sub') || params.get('section') || params.get('chapter') || 'definitions_and_abbreviations';
+  });
   const isCoverPages = activeTocId === 'cover_pages' || activeTocId === 'draft_preview';
   const activeNode = isCoverPages
     ? { section: { id: 'draft_preview', title: 'Draft Preview (Pages 1–3)', key: 'draft_preview', subsections: [] }, key: 'draft_preview', number: '0', fullTitle: 'Draft Preview (Fixed Template — Pages 1–3)' }
@@ -175,20 +191,41 @@ export default function DraftPreview() {
 
   const [drafts, setDrafts] = useState({});
   const [gapReport, setGapReport] = useState([]);
+  const isProgrammaticScrollingRef = useRef(false);
 
-  // Scroll Observer for Continuous Document Navigation
+  const scrollToSubsection = useCallback((targetId) => {
+    isProgrammaticScrollingRef.current = true;
+    const performScroll = () => {
+      const elem = document.getElementById(`drhp-sub-${targetId}`) ||
+                   document.getElementById(targetId) ||
+                   document.querySelector(`[data-sub-id="${targetId}"]`);
+      if (elem) {
+        elem.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    };
+
+    performScroll();
+    setTimeout(performScroll, 60);
+
+    setTimeout(() => {
+      isProgrammaticScrollingRef.current = false;
+    }, 800);
+  }, []);
+
+  // Scroll Observer for Subsection Navigation & Table of Contents Active Highlight Sync
   useEffect(() => {
     const observerOptions = {
       root: null,
-      rootMargin: '-10% 0px -70% 0px',
+      rootMargin: '-10% 0px -60% 0px',
       threshold: 0.1
     };
     const handleIntersect = (entries) => {
+      if (isProgrammaticScrollingRef.current) return;
       entries.forEach(entry => {
         if (entry.isIntersecting) {
-          const id = entry.target.getAttribute('id');
-          if (id) {
-            setActiveTocId(id);
+          const subId = entry.target.getAttribute('data-sub-id') || entry.target.getAttribute('id')?.replace('drhp-sub-', '');
+          if (subId && subId !== 'cover_pages' && subId !== 'draft_preview') {
+            setActiveTocId(subId);
           }
         }
       });
@@ -201,7 +238,7 @@ export default function DraftPreview() {
       elements.forEach(el => observer.unobserve(el));
       observer.disconnect();
     };
-  }, [activeNode.section.id, drafts]);
+  }, [activeNode.section.id, drafts, viewMode]);
 
   const chapterSubsections = (!isCoverPages && activeNode.section.subsections && activeNode.section.subsections.length > 0)
     ? activeNode.section.subsections
@@ -234,6 +271,12 @@ export default function DraftPreview() {
   // Caches for metadata calculation
   const [intakeCache, setIntakeCache] = useState({});
   const [docsCache, setDocsCache] = useState([]);
+
+  // Section Export & Copy States
+  const [exportingSectionPdf, setExportingSectionPdf] = useState(false);
+  const [exportingSectionDocx, setExportingSectionDocx] = useState(false);
+  const [copyingSection, setCopyingSection] = useState(false);
+  const [exportNotice, setExportNotice] = useState(null);
 
   const companyId = localStorage.getItem('ipo_company_id') || 'aarav-precision';
 
@@ -353,21 +396,234 @@ export default function DraftPreview() {
     }
   };
 
-  const handleCopySection = () => {
-    navigator.clipboard.writeText(editorText);
-    alert(`Copied "${activeNode.fullTitle}" disclosure to clipboard.`);
+  const getActiveSectionContent = () => {
+    let element = null;
+    
+    if (isCoverPages) {
+      element = document.querySelector('.front-matter-container') || document.querySelector('.font-serif');
+    } else {
+      element = document.getElementById(`drhp-sub-${activeTocId}`) || 
+                document.getElementById(`drhp-sec-${activeNode?.section?.id}`) ||
+                document.querySelector(`[data-toc-id="${activeTocId}"]`) ||
+                document.querySelector('.drhp-subsection-anchor');
+    }
+
+    const title = isCoverPages ? 'Draft Prospectus — Pages 1–3 (Fixed Front Matter)' : (activeNode?.fullTitle || 'DRHP Disclosure');
+    
+    if (!element) {
+      const textContent = editorText || `Disclosure content for ${title}`;
+      const htmlContent = `<div style="font-family: Arial, sans-serif; padding: 16px;"><h2>${title}</h2><p style="white-space: pre-wrap;">${textContent}</p></div>`;
+      return { title, htmlContent, plainText: `${title}\n\n${textContent}` };
+    }
+
+    const clone = element.cloneNode(true);
+    
+    // Remove interactive buttons, citation tags, page break dividers, labels
+    clone.querySelectorAll('button, .page-break-divider, label').forEach(el => el.remove());
+    
+    // Convert textareas into clean formatted text elements
+    clone.querySelectorAll('textarea').forEach(ta => {
+      const val = ta.value;
+      if (val && val.trim()) {
+        const div = document.createElement('div');
+        div.style.whiteSpace = 'pre-wrap';
+        div.style.marginTop = '8px';
+        div.style.marginBottom = '12px';
+        div.style.fontSize = '11pt';
+        div.style.lineHeight = '1.6';
+        div.style.color = '#1e293b';
+        div.textContent = val;
+        ta.parentNode.replaceChild(div, ta);
+      } else {
+        ta.remove();
+      }
+    });
+
+    const htmlContent = clone.innerHTML;
+    const plainText = `${title}\n\n${clone.innerText || clone.textContent}`;
+
+    return { title, htmlContent, plainText, rawElement: element };
   };
 
-  const handleExportSection = (format) => {
-    const title = activeNode.fullTitle;
-    const text = editorText;
-    const blob = new Blob([`${title}\n\n${text}`], { type: format === 'pdf' ? 'application/pdf' : 'text/plain' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${activeTocId}_drhp.${format === 'pdf' ? 'pdf' : 'txt'}`;
-    a.click();
-    URL.revokeObjectURL(url);
+  const handleCopySection = async () => {
+    try {
+      setCopyingSection(true);
+      setExportNotice(null);
+
+      const { title, htmlContent, plainText } = getActiveSectionContent();
+
+      if (navigator.clipboard && window.ClipboardItem) {
+        const fullRichHtml = `<div style="font-family: Arial, sans-serif;"><h2>${title}</h2>${htmlContent}</div>`;
+        const data = [
+          new ClipboardItem({
+            'text/html': new Blob([fullRichHtml], { type: 'text/html' }),
+            'text/plain': new Blob([plainText], { type: 'text/plain' })
+          })
+        ];
+        await navigator.clipboard.write(data);
+      } else {
+        await navigator.clipboard.writeText(plainText);
+      }
+
+      setExportNotice({
+        type: 'success',
+        message: `Copied "${title}" to clipboard with formatted structure!`
+      });
+      setTimeout(() => setExportNotice(null), 4000);
+    } catch (err) {
+      console.error("Copy section failed:", err);
+      try {
+        const { plainText } = getActiveSectionContent();
+        await navigator.clipboard.writeText(plainText);
+        setExportNotice({
+          type: 'success',
+          message: `Copied text for "${activeNode?.fullTitle || 'Section'}" to clipboard!`
+        });
+        setTimeout(() => setExportNotice(null), 4000);
+      } catch (fallbackErr) {
+        setExportNotice({
+          type: 'error',
+          message: 'Failed to copy section text to clipboard.'
+        });
+        setTimeout(() => setExportNotice(null), 5000);
+      }
+    } finally {
+      setCopyingSection(false);
+    }
+  };
+
+  const handleExportSection = async (format) => {
+    const { title, htmlContent } = getActiveSectionContent();
+    const sanitizedTitle = (activeTocId || 'drhp_section').replace(/[^a-z0-9_-]/gi, '_');
+
+    if (format === 'pdf') {
+      try {
+        setExportingSectionPdf(true);
+        setExportNotice(null);
+
+        const printWindow = window.open('', '_blank', 'width=900,height=1100');
+        if (!printWindow) {
+          throw new Error('Pop-up blocked. Please allow pop-ups to export PDF.');
+        }
+
+        printWindow.document.write(`
+          <!DOCTYPE html>
+          <html>
+            <head>
+              <meta charset="utf-8"/>
+              <title>${title}</title>
+              <style>
+                @media print {
+                  @page { size: A4; margin: 15mm; }
+                  body { font-family: 'Times New Roman', serif; color: #0f172a; font-size: 11pt; line-height: 1.6; background: #fff; }
+                  h1, h2, h3, h4 { font-family: Arial, Helvetica, sans-serif; color: #0f172a; font-weight: bold; page-break-after: avoid; }
+                  h1 { font-size: 16pt; border-bottom: 2pt solid #0f172a; margin-bottom: 12pt; padding-bottom: 4pt; text-transform: uppercase; }
+                  h2 { font-size: 14pt; margin-top: 14pt; margin-bottom: 6pt; text-transform: uppercase; }
+                  h3 { font-size: 12pt; margin-top: 10pt; margin-bottom: 4pt; color: #1e293b; }
+                  p { margin-bottom: 8pt; text-align: justify; }
+                  table { width: 100%; border-collapse: collapse; margin: 12pt 0; page-break-inside: avoid; }
+                  th, td { border: 1px solid #cbd5e1; padding: 6pt 8pt; text-align: left; font-size: 10pt; }
+                  th { background-color: #f1f5f9 !important; font-weight: bold; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+                  .stat-card, .callout, .bg-slate-50, .bg-indigo-50 { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+                  button, textarea, .page-break-divider, label { display: none !important; }
+                }
+                body { font-family: Arial, Helvetica, sans-serif; padding: 24px; color: #0f172a; line-height: 1.6; }
+                h1 { font-size: 16pt; border-bottom: 2px solid #0f172a; padding-bottom: 6px; }
+                h2 { font-size: 14pt; color: #0f172a; margin-top: 16px; }
+                h3 { font-size: 12pt; color: #1e293b; margin-top: 12px; }
+                p { margin-bottom: 8px; }
+                table { width: 100%; border-collapse: collapse; margin: 12px 0; }
+                th, td { border: 1px solid #cbd5e1; padding: 6px 8px; font-size: 10pt; }
+                th { background-color: #f1f5f9; font-weight: bold; }
+              </style>
+            </head>
+            <body>
+              <h1 style="text-align: center;">SEBI SME DRHP — DISCLOSURE SECTION</h1>
+              <h2 style="text-align: center; color: #4338ca; margin-bottom: 20px;">${title}</h2>
+              <div>${htmlContent}</div>
+              <script>
+                window.onload = function() {
+                  setTimeout(function() {
+                    window.print();
+                  }, 250);
+                };
+              </script>
+            </body>
+          </html>
+        `);
+        printWindow.document.close();
+
+        setExportNotice({
+          type: 'success',
+          message: `PDF export window opened for "${title}".`
+        });
+        setTimeout(() => setExportNotice(null), 4000);
+      } catch (err) {
+        console.error("PDF export failed:", err);
+        setExportNotice({
+          type: 'error',
+          message: err.message || 'Failed to export section as PDF.'
+        });
+        setTimeout(() => setExportNotice(null), 5000);
+      } finally {
+        setExportingSectionPdf(false);
+      }
+    } else if (format === 'docx') {
+      try {
+        setExportingSectionDocx(true);
+        setExportNotice(null);
+
+        const docxHeader = `<html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
+        <head>
+          <meta charset='utf-8'>
+          <title>${title}</title>
+          <style>
+            body { font-family: 'Times New Roman', serif; font-size: 11pt; line-height: 1.5; color: #000000; }
+            h1 { font-family: Arial, sans-serif; font-size: 18pt; font-weight: bold; color: #0f172a; border-bottom: 2pt solid #0f172a; padding-bottom: 4pt; }
+            h2 { font-family: Arial, sans-serif; font-size: 14pt; font-weight: bold; color: #0f172a; margin-top: 14pt; }
+            h3 { font-family: Arial, sans-serif; font-size: 12pt; font-weight: bold; color: #1e293b; margin-top: 10pt; }
+            p { margin-bottom: 8pt; text-align: justify; }
+            table { border-collapse: collapse; width: 100%; margin: 12pt 0; }
+            th, td { border: 1pt solid #cbd5e1; padding: 6pt 8pt; text-align: left; font-size: 10pt; }
+            th { background-color: #f1f5f9; font-weight: bold; }
+          </style>
+        </head>
+        <body>
+          <h1>SEBI SME DRHP — DISCLOSURE SECTION</h1>
+          <h2>${title}</h2>
+          ${htmlContent}
+        </body>
+        </html>`;
+
+        const blob = new Blob(['\ufeff' + docxHeader], {
+          type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+        });
+
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${sanitizedTitle}_prospectus.docx`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+
+        setExportNotice({
+          type: 'success',
+          message: `DOCX exported successfully for "${title}".`
+        });
+        setTimeout(() => setExportNotice(null), 4000);
+      } catch (err) {
+        console.error("DOCX export failed:", err);
+        setExportNotice({
+          type: 'error',
+          message: err.message || 'Failed to export section as DOCX.'
+        });
+        setTimeout(() => setExportNotice(null), 5000);
+      } finally {
+        setExportingSectionDocx(false);
+      }
+    }
   };
 
   const handleAcceptSuggestion = (suggestionText) => {
@@ -602,21 +858,24 @@ export default function DraftPreview() {
         </div>
       )}
 
-      {/* Chapters Table of Contents Navigation (Left Sidebar) */}
-      <div className="xl:col-span-1">
-        <ChapterHealthSidebar
-          activeId={activeTocId}
-          setActiveId={setActiveTocId}
-          onNavigateSection={(backendKey, subId) => {
-            setActiveTocId(subId);
-          }}
-          drafts={drafts}
-          gapReport={gapReport}
-        />
-      </div>
+      {/* Secondary Left Navigation Panel: DRHP Table of Contents (Draft Prospectus Mode) */}
+      {viewMode === 'chapter' && (
+        <div className="xl:col-span-1">
+          <ChapterHealthSidebar
+            activeId={activeTocId}
+            setActiveId={setActiveTocId}
+            onNavigateSection={(backendKey, subId) => {
+              setActiveTocId(subId);
+              scrollToSubsection(subId);
+            }}
+            drafts={drafts}
+            gapReport={gapReport}
+          />
+        </div>
+      )}
 
       {/* Main DRHP Subsection Composition Pane (Center Workspace) */}
-      <div className="xl:col-span-2 space-y-4">
+      <div className={`${viewMode === 'chapter' ? 'xl:col-span-2' : 'xl:col-span-3'} space-y-4`}>
 
         {/* Workspace Top Header Bar */}
         <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-4 font-sans">
@@ -667,15 +926,23 @@ export default function DraftPreview() {
           {/* Focused Subsection Title & Toolbar */}
           <div className="flex items-center justify-between gap-4 flex-wrap">
             <div>
-              <h2 className="text-lg font-bold text-slate-900">{isCoverPages ? 'Draft Preview — Pages 1–3 (Fixed Template)' : activeNode.fullTitle}</h2>
+              <div className="flex items-center gap-2">
+                <h2 className="text-lg font-bold text-slate-900">
+                  {viewMode === 'chapter'
+                    ? (isCoverPages ? 'Draft Prospectus — Pages 1–3 (Front Matter)' : activeNode.fullTitle)
+                    : 'Draft Preview — Merged DRHP Document'}
+                </h2>
+              </div>
               <p className="text-xs text-slate-500 mt-0.5">
-                {isCoverPages
-                  ? 'SEBI-compliant front matter template: Cover Page, Issue Details & Table of Contents. Populated with your intake data.'
-                  : 'Intelligent disclosure composition combining structured tables, legal narrative, and visual analytics.'}
+                {viewMode === 'chapter'
+                  ? (isCoverPages
+                      ? 'Editing independent chapter: Front Matter (Pages 1–3). Only content belonging to this chapter is displayed.'
+                      : `Editing independent chapter: ${activeNode.section.title}. Only content belonging to this chapter is displayed.`)
+                  : 'Complete merged DRHP document assembling Front Matter, Table of Contents, and all 10 SEBI sections.'}
               </p>
             </div>
 
-            {/* Action Buttons: View Sources, Regenerate, Subsection Exports */}
+            {/* Action Buttons: View Sources, Regenerate, Export Actions */}
             <div className="flex items-center gap-2 flex-wrap">
               <button
                 onClick={() => setShowSourceDrawer(true)}
@@ -699,25 +966,69 @@ export default function DraftPreview() {
               <div className="flex items-center gap-1 pl-2 border-l border-slate-200">
                 <button
                   onClick={() => handleExportSection('pdf')}
-                  className="px-2.5 py-1.5 bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-xl font-medium text-xs transition-all flex items-center gap-1"
+                  disabled={exportingSectionPdf || exportingSectionDocx || copyingSection}
+                  className="px-2.5 py-1.5 bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-xl font-medium text-xs transition-all flex items-center gap-1 cursor-pointer disabled:opacity-50"
+                  title="Export current section as PDF"
                 >
-                  <FileText className="w-3.5 h-3.5 text-red-500" /> PDF
+                  {exportingSectionPdf ? (
+                    <Loader2 className="w-3.5 h-3.5 text-red-500 animate-spin" />
+                  ) : (
+                    <FileText className="w-3.5 h-3.5 text-red-500" />
+                  )}
+                  <span>PDF</span>
                 </button>
+
                 <button
                   onClick={() => handleExportSection('docx')}
-                  className="px-2.5 py-1.5 bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-xl font-medium text-xs transition-all flex items-center gap-1"
+                  disabled={exportingSectionPdf || exportingSectionDocx || copyingSection}
+                  className="px-2.5 py-1.5 bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-xl font-medium text-xs transition-all flex items-center gap-1 cursor-pointer disabled:opacity-50"
+                  title="Export current section as DOCX"
                 >
-                  <FileSpreadsheet className="w-3.5 h-3.5 text-blue-500" /> DOCX
+                  {exportingSectionDocx ? (
+                    <Loader2 className="w-3.5 h-3.5 text-blue-500 animate-spin" />
+                  ) : (
+                    <FileSpreadsheet className="w-3.5 h-3.5 text-blue-500" />
+                  )}
+                  <span>DOCX</span>
                 </button>
+
                 <button
                   onClick={handleCopySection}
-                  className="px-2.5 py-1.5 bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-xl font-medium text-xs transition-all flex items-center gap-1"
+                  disabled={exportingSectionPdf || exportingSectionDocx || copyingSection}
+                  className="px-2.5 py-1.5 bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-xl font-medium text-xs transition-all flex items-center gap-1 cursor-pointer disabled:opacity-50"
+                  title="Copy current section content with formatting"
                 >
-                  <Copy className="w-3.5 h-3.5 text-indigo-500" /> Copy Text
+                  {copyingSection ? (
+                    <Loader2 className="w-3.5 h-3.5 text-indigo-500 animate-spin" />
+                  ) : (
+                    <Copy className="w-3.5 h-3.5 text-indigo-500" />
+                  )}
+                  <span>Copy Text</span>
                 </button>
               </div>
             </div>
           </div>
+
+          {/* Export Notification Toast Banner */}
+          {exportNotice && (
+            <div className={`p-3 rounded-xl border flex items-center justify-between text-xs font-medium animate-fade-in ${
+              exportNotice.type === 'success'
+                ? 'bg-emerald-50 border-emerald-200 text-emerald-900'
+                : 'bg-red-50 border-red-200 text-red-900'
+            }`}>
+              <div className="flex items-center gap-2">
+                {exportNotice.type === 'success' ? (
+                  <CheckCircle className="w-4 h-4 text-emerald-600 shrink-0" />
+                ) : (
+                  <AlertTriangle className="w-4 h-4 text-red-600 shrink-0" />
+                )}
+                <span>{exportNotice.message}</span>
+              </div>
+              <button onClick={() => setExportNotice(null)} className="p-1 hover:opacity-75 cursor-pointer">
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          )}
 
           {/* Merchant Banker Certify Action */}
           {user?.role === 'reviewer' && (
@@ -804,138 +1115,264 @@ export default function DraftPreview() {
               </div>
             )}
 
-            {/* ── COMPLETE CONTINUOUS DRHP DOCUMENT CANVAS ───────────────── */}
+            {/* ── DRHP DOCUMENT CANVAS (CHAPTER MODE VS MERGED PREVIEW MODE) ───────────────── */}
             <div className="-m-8 md:-m-14 space-y-12">
-              {/* PART 1: Front Matter (Pages 1, 2, and Page 3 Dynamic Interactive Table of Contents) */}
-              <FrontMatterTemplate
-                company={intakeCache?.company_details || {}}
-                issueDetails={{}}
-                intake={intakeCache}
-                drafts={drafts}
-                onNavigateSection={(secKey, targetId) => {
-                  setActiveTocId(targetId);
-                  const elem = document.getElementById(`drhp-sub-${targetId}`) || document.getElementById(`drhp-sec-${targetId}`) || document.getElementById(targetId);
-                  if (elem) elem.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                }}
-              />
 
-              {/* PART 2: All SEBI DRHP Chapters Rendered Sequentially in Continuous Document Order */}
-              <div className="px-8 md:px-14 pb-14 space-y-16">
-                {DRHP_HIERARCHY.map((sec, secIdx) => {
-                  const romanNumerals = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X', 'XI'];
-                  const romanTitle = `SECTION ${romanNumerals[secIdx] || (secIdx + 1)}: ${sec.title}`;
-                  const subsections = sec.subsections && sec.subsections.length > 0
-                    ? sec.subsections
-                    : [{ id: sec.id, title: sec.title, key: sec.key }];
+              {viewMode === 'preview' ? (
+                /* DRAFT PREVIEW MODE: Entire DRHP Continuous Document */
+                <>
+                  {/* PART 1: Front Matter (Pages 1-3 & TOC) */}
+                  <FrontMatterTemplate
+                    company={intakeCache?.company_details || {}}
+                    issueDetails={{}}
+                    intake={intakeCache}
+                    drafts={drafts}
+                    onNavigateSection={(secKey, targetId) => {
+                      setActiveTocId(targetId);
+                      const elem = document.getElementById(`drhp-sub-${targetId}`) || document.getElementById(`drhp-sec-${targetId}`) || document.getElementById(targetId);
+                      if (elem) elem.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    }}
+                  />
 
-                  return (
-                    <div key={sec.id} id={`drhp-sec-${sec.id}`} className="space-y-10 border-t-4 border-slate-900 pt-10 font-serif">
-                      {/* Section Title Banner */}
-                      <div className="border-b-2 border-slate-900 pb-3 text-center space-y-1">
-                        <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest font-mono">
-                          SECURITIES AND EXCHANGE BOARD OF INDIA — REGULATION COMPLIANT DISCLOSURE
-                        </p>
-                        <h2 className="text-xl md:text-2xl font-black text-slate-900 tracking-wide uppercase">
-                          {romanTitle}
-                        </h2>
-                      </div>
+                  {/* PART 2: All SEBI DRHP Chapters Rendered Sequentially */}
+                  <div className="px-8 md:px-14 pb-14 space-y-16">
+                    {DRHP_HIERARCHY.map((sec, secIdx) => {
+                      const romanNumerals = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X', 'XI'];
+                      const romanTitle = `SECTION ${romanNumerals[secIdx] || (secIdx + 1)}: ${sec.title}`;
+                      const subsections = sec.subsections && sec.subsections.length > 0
+                        ? sec.subsections
+                        : [{ id: sec.id, title: sec.title, key: sec.key }];
 
-                      {/* Subsections Rendered Sequentially */}
-                      <div className="space-y-12">
-                        {subsections.map((sub, subIdx) => {
-                          const subKey = sub.key;
-                          const subNumber = sec.subsections && sec.subsections.length > 0 ? `${secIdx + 1}.${subIdx + 1}` : `${secIdx + 1}.0`;
-                          const subBlocks = getBlocksForSubsection(sub.id, subKey, drafts, intakeCache);
-                          const subCitations = subBlocks.flatMap(b => b.citations || []);
-                          const uniqueSubCitations = Array.from(new Set(subCitations));
+                      return (
+                        <div key={sec.id} id={`drhp-sec-${sec.id}`} className="space-y-10 border-t-4 border-slate-900 pt-10 font-serif">
+                          {/* Section Title Banner */}
+                          <div className="border-b-2 border-slate-900 pb-3 text-center space-y-1">
+                            <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest font-mono">
+                              SECURITIES AND EXCHANGE BOARD OF INDIA — REGULATION COMPLIANT DISCLOSURE
+                            </p>
+                            <h2 className="text-xl md:text-2xl font-black text-slate-900 tracking-wide uppercase">
+                              {romanTitle}
+                            </h2>
+                          </div>
 
-                          return (
-                            <div key={sub.id} id={`drhp-sub-${sub.id}`} data-toc-id={sub.id} className="drhp-subsection-anchor space-y-5 pt-4 border-t border-slate-200">
-                              {/* Subsection Header */}
-                              <div className="flex items-center justify-between border-b border-slate-300 pb-2">
-                                <div className="flex items-center gap-2 flex-1">
-                                  <span className="text-indigo-700 font-mono font-bold text-xs shrink-0">
-                                    {subNumber}
-                                  </span>
-                                  <h3 className="text-base font-bold text-slate-900 tracking-tight uppercase font-serif">
-                                    {sub.title}
-                                  </h3>
-                                </div>
-                                <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-slate-100 text-slate-600 border border-slate-200 uppercase font-sans shrink-0">
-                                  {subKey.replace(/_/g, ' ')}
-                                </span>
-                              </div>
+                          {/* Subsections Rendered Sequentially */}
+                          <div className="space-y-12">
+                            {subsections.map((sub, subIdx) => {
+                              const subKey = sub.key;
+                              const subNumber = sec.subsections && sec.subsections.length > 0 ? `${secIdx + 1}.${subIdx + 1}` : `${secIdx + 1}.0`;
+                              const subBlocks = getBlocksForSubsection(sub.id, subKey, drafts, intakeCache);
+                              const subCitations = subBlocks.flatMap(b => b.citations || []);
+                              const uniqueSubCitations = Array.from(new Set(subCitations));
 
-                              {/* Multi-Format Composition Blocks */}
-                              <div className="space-y-5 font-sans">
-                                {subBlocks && subBlocks.length > 0 ? (
-                                  subBlocks.map((blk, bIdx) => (
-                                    <DrhpBlockRenderer key={blk.id || bIdx} block={blk} onCitationClick={handleSourceClick} />
-                                  ))
-                                ) : (
-                                  <p className="text-xs text-slate-500 italic font-sans">
-                                    Disclosure text pending generation for {sub.title}.
-                                  </p>
-                                )}
-                              </div>
+                              return (
+                                <div key={sub.id} id={`drhp-sub-${sub.id}`} data-toc-id={sub.id} className="drhp-subsection-anchor space-y-5 pt-4 border-t border-slate-200">
+                                  {/* Subsection Header */}
+                                  <div className="flex items-center justify-between border-b border-slate-300 pb-2">
+                                    <div className="flex items-center gap-2 flex-1">
+                                      <span className="text-indigo-700 font-mono font-bold text-xs shrink-0">
+                                        {subNumber}
+                                      </span>
+                                      <h3 className="text-base font-bold text-slate-900 tracking-tight uppercase font-serif">
+                                        {sub.title}
+                                      </h3>
+                                    </div>
+                                    <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-slate-100 text-slate-600 border border-slate-200 uppercase font-sans shrink-0">
+                                      {subKey.replace(/_/g, ' ')}
+                                    </span>
+                                  </div>
 
-                              {/* Inline Narrative Editor per subsection */}
-                              <div className="space-y-1.5 pt-3 border-t border-slate-100 font-sans">
-                                <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400 font-mono flex items-center justify-between">
-                                  <span>SEBI Disclosure Narrative</span>
-                                  <span className="text-slate-400 font-sans font-normal text-[10px]">Real-time Auto-Save Editor</span>
-                                </label>
-                                <textarea
-                                  value={subBlocks.map(b => b.text).join('\n\n')}
-                                  onChange={(e) => {
-                                    const val = e.target.value;
-                                    setEditorText(val);
-                                    triggerAutoSave(val);
-                                  }}
-                                  placeholder={`Enter disclosure narrative for ${sub.title}...`}
-                                  className="w-full p-4 border border-slate-200 rounded-xl bg-slate-50/50 focus:bg-white text-xs leading-relaxed font-sans text-slate-800 focus:ring-2 focus:ring-indigo-500 focus:outline-none min-h-[120px] resize-y transition-all"
-                                />
-                              </div>
+                                  {/* Multi-Format Composition Blocks */}
+                                  <div className="space-y-5 font-sans">
+                                    {subBlocks && subBlocks.length > 0 ? (
+                                      subBlocks.map((blk, bIdx) => (
+                                        <DrhpBlockRenderer key={blk.id || bIdx} block={blk} onCitationClick={handleSourceClick} />
+                                      ))
+                                    ) : (
+                                      <p className="text-xs text-slate-500 italic font-sans">
+                                        Disclosure text pending generation for {sub.title}.
+                                      </p>
+                                    )}
+                                  </div>
 
-                              {/* Grounding Citations */}
-                              {uniqueSubCitations.length > 0 && (
-                                <div className="flex items-center gap-1.5 pt-2 border-t border-slate-100 text-[10px] font-sans">
-                                  <span className="text-slate-400 font-mono uppercase font-bold">Grounding Citations:</span>
-                                  <div className="flex flex-wrap gap-1">
-                                    {uniqueSubCitations.map((cite, cidx) => (
-                                      <button
-                                        key={cidx}
-                                        onClick={() => handleSourceClick(cite)}
-                                        className="px-2 py-0.5 rounded bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-medium border border-indigo-100 flex items-center gap-1 transition-colors cursor-pointer"
-                                      >
-                                        <Bookmark className="w-2.5 h-2.5 text-indigo-400" />
-                                        <span>{cite.split(': ').pop()}</span>
-                                      </button>
-                                    ))}
+                                  {/* Inline Narrative Editor per subsection */}
+                                  <div className="space-y-1.5 pt-3 border-t border-slate-100 font-sans">
+                                    <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400 font-mono flex items-center justify-between">
+                                      <span>SEBI Disclosure Narrative</span>
+                                      <span className="text-slate-400 font-sans font-normal text-[10px]">Real-time Auto-Save Editor</span>
+                                    </label>
+                                    <textarea
+                                      value={subBlocks.map(b => b.text).join('\n\n')}
+                                      onChange={(e) => {
+                                        const val = e.target.value;
+                                        setEditorText(val);
+                                        triggerAutoSave(val);
+                                      }}
+                                      placeholder={`Enter disclosure narrative for ${sub.title}...`}
+                                      className="w-full p-4 border border-slate-200 rounded-xl bg-slate-50/50 focus:bg-white text-xs leading-relaxed font-sans text-slate-800 focus:ring-2 focus:ring-indigo-500 focus:outline-none min-h-[120px] resize-y transition-all"
+                                    />
+                                  </div>
+
+                                  {/* Grounding Citations */}
+                                  {uniqueSubCitations.length > 0 && (
+                                    <div className="flex items-center gap-1.5 pt-2 border-t border-slate-100 text-[10px] font-sans">
+                                      <span className="text-slate-400 font-mono uppercase font-bold">Grounding Citations:</span>
+                                      <div className="flex flex-wrap gap-1">
+                                        {uniqueSubCitations.map((cite, cidx) => (
+                                          <button
+                                            key={cidx}
+                                            onClick={() => handleSourceClick(cite)}
+                                            className="px-2 py-0.5 rounded bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-medium border border-indigo-100 flex items-center gap-1 transition-colors cursor-pointer"
+                                          >
+                                            <Bookmark className="w-2.5 h-2.5 text-indigo-400" />
+                                            <span>{cite.split(': ').pop()}</span>
+                                          </button>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  )}
+
+                                  {/* Page Break Boundary Divider */}
+                                  <div className="pt-8 pb-4 flex items-center justify-center font-mono text-[10px] text-slate-400 select-none">
+                                    <div className="w-full border-t border-dashed border-slate-300" />
+                                    <span className="px-3 py-0.5 bg-slate-100 text-slate-500 rounded-full border border-slate-200 text-[9px] uppercase tracking-widest font-bold shrink-0 mx-2">
+                                      Page Break — SEBI DRHP Continuous Document View
+                                    </span>
+                                    <div className="w-full border-t border-dashed border-slate-300" />
                                   </div>
                                 </div>
-                              )}
+                              );
+                            })}
+                          </div>
+                        </div>
+                      );
+                    })}
 
-                              {/* Page Break Boundary Divider */}
-                              <div className="pt-8 pb-4 flex items-center justify-center font-mono text-[10px] text-slate-400 select-none">
-                                <div className="w-full border-t border-dashed border-slate-300" />
-                                <span className="px-3 py-0.5 bg-slate-100 text-slate-500 rounded-full border border-slate-200 text-[9px] uppercase tracking-widest font-bold shrink-0 mx-2">
-                                  Page Break — SEBI DRHP Continuous Document View
-                                </span>
-                                <div className="w-full border-t border-dashed border-slate-300" />
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
+                    <div className="mt-8 pt-4 border-t border-slate-200 text-[11px] text-slate-400 text-center font-serif italic">
+                      This document represents the complete, continuous assembled Draft Red Herring Prospectus.
                     </div>
-                  );
-                })}
+                  </div>
+                </>
+              ) : (
+                /* DRAFT PROSPECTUS MODE: Individual Editable Chapter Workspace Only */
+                <div className="px-8 md:px-14 py-10 space-y-12">
+                  {isCoverPages ? (
+                    <FrontMatterTemplate
+                      company={intakeCache?.company_details || {}}
+                      issueDetails={{}}
+                      intake={intakeCache}
+                      drafts={drafts}
+                      onNavigateSection={(secKey, targetId) => {
+                        setActiveTocId(targetId);
+                      }}
+                    />
+                  ) : (
+                    (() => {
+                      const sec = activeNode.section;
+                      const secIdx = DRHP_HIERARCHY.findIndex(s => s.id === sec.id);
+                      const romanNumerals = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X', 'XI'];
+                      const romanTitle = `SECTION ${romanNumerals[secIdx >= 0 ? secIdx : 0] || 'I'}: ${sec.title}`;
+                      const subsections = sec.subsections && sec.subsections.length > 0
+                        ? sec.subsections
+                        : [{ id: sec.id, title: sec.title, key: sec.key }];
 
-                <div className="mt-8 pt-4 border-t border-slate-200 text-[11px] text-slate-400 text-center font-serif italic">
-                  This document represents the complete, continuous assembled Draft Red Herring Prospectus.
+                      return (
+                        <div key={sec.id} id={`drhp-sec-${sec.id}`} className="space-y-10 font-serif">
+                          {/* Section Title Banner */}
+                          <div className="border-b-2 border-slate-900 pb-3 text-center space-y-1">
+                            <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest font-mono">
+                              SECURITIES AND EXCHANGE BOARD OF INDIA — INDEPENDENT CHAPTER WORKSPACE
+                            </p>
+                            <h2 className="text-xl md:text-2xl font-black text-slate-900 tracking-wide uppercase">
+                              {romanTitle}
+                            </h2>
+                          </div>
+
+                          {/* Subsections Rendered Sequentially for this Chapter Only */}
+                          <div className="space-y-12">
+                            {subsections.map((sub, subIdx) => {
+                              const subKey = sub.key;
+                              const subNumber = sec.subsections && sec.subsections.length > 0 ? `${secIdx + 1}.${subIdx + 1}` : `${secIdx + 1}.0`;
+                              const subBlocks = getBlocksForSubsection(sub.id, subKey, drafts, intakeCache);
+                              const subCitations = subBlocks.flatMap(b => b.citations || []);
+                              const uniqueSubCitations = Array.from(new Set(subCitations));
+
+                              return (
+                                <div key={sub.id} id={`drhp-sub-${sub.id}`} data-toc-id={sub.id} data-sub-id={sub.id} className="drhp-subsection-anchor space-y-5 pt-6 border-t border-slate-200 scroll-mt-20">
+                                  {/* Subsection Header */}
+                                  <div id={sub.id} className="flex items-center justify-between border-b border-slate-300 pb-2 scroll-mt-20">
+                                    <div className="flex items-center gap-2 flex-1">
+                                      <span className="text-indigo-700 font-mono font-bold text-xs shrink-0">
+                                        {subNumber}
+                                      </span>
+                                      <h3 className="text-base font-bold text-slate-900 tracking-tight uppercase font-serif">
+                                        {sub.title}
+                                      </h3>
+                                    </div>
+                                    <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-slate-100 text-slate-600 border border-slate-200 uppercase font-sans shrink-0">
+                                      {subKey.replace(/_/g, ' ')}
+                                    </span>
+                                  </div>
+
+                                  {/* Multi-Format Composition Blocks */}
+                                  <div className="space-y-5 font-sans">
+                                    {subBlocks && subBlocks.length > 0 ? (
+                                      subBlocks.map((blk, bIdx) => (
+                                        <DrhpBlockRenderer key={blk.id || bIdx} block={blk} onCitationClick={handleSourceClick} />
+                                      ))
+                                    ) : (
+                                      <p className="text-xs text-slate-500 italic font-sans">
+                                        Disclosure text pending generation for {sub.title}.
+                                      </p>
+                                    )}
+                                  </div>
+
+                                  {/* Inline Narrative Editor per subsection */}
+                                  <div className="space-y-1.5 pt-3 border-t border-slate-100 font-sans">
+                                    <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400 font-mono flex items-center justify-between">
+                                      <span>SEBI Disclosure Narrative</span>
+                                      <span className="text-slate-400 font-sans font-normal text-[10px]">Real-time Auto-Save Editor</span>
+                                    </label>
+                                    <textarea
+                                      value={subBlocks.map(b => b.text).join('\n\n')}
+                                      onChange={(e) => {
+                                        const val = e.target.value;
+                                        setEditorText(val);
+                                        triggerAutoSave(val);
+                                      }}
+                                      placeholder={`Enter disclosure narrative for ${sub.title}...`}
+                                      className="w-full p-4 border border-slate-200 rounded-xl bg-slate-50/50 focus:bg-white text-xs leading-relaxed font-sans text-slate-800 focus:ring-2 focus:ring-indigo-500 focus:outline-none min-h-[120px] resize-y transition-all"
+                                    />
+                                  </div>
+
+                                  {/* Grounding Citations */}
+                                  {uniqueSubCitations.length > 0 && (
+                                    <div className="flex items-center gap-1.5 pt-2 border-t border-slate-100 text-[10px] font-sans">
+                                      <span className="text-slate-400 font-mono uppercase font-bold">Grounding Citations:</span>
+                                      <div className="flex flex-wrap gap-1">
+                                        {uniqueSubCitations.map((cite, cidx) => (
+                                          <button
+                                            key={cidx}
+                                            onClick={() => handleSourceClick(cite)}
+                                            className="px-2 py-0.5 rounded bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-medium border border-indigo-100 flex items-center gap-1 transition-colors cursor-pointer"
+                                          >
+                                            <Bookmark className="w-2.5 h-2.5 text-indigo-400" />
+                                            <span>{cite.split(': ').pop()}</span>
+                                          </button>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      );
+                    })()
+                  )}
                 </div>
-              </div>
+              )}
+
             </div>
           </div>
         </div>
@@ -1053,7 +1490,6 @@ export default function DraftPreview() {
         )}
 
       </div>
-
     </div>
   );
 }
