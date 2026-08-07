@@ -6,9 +6,9 @@ export const DRHP_HIERARCHY = [
     title: "SECTION I – GENERAL",
     key: "company_details",
     subsections: [
-      { id: "definitions_and_abbreviations", title: "1.1 Definitions and Abbreviations", key: "company_details" },
-      { id: "certain_conventions_presentation", title: "1.2 Certain Conventions, Use of Financial Information & Market Data", key: "company_details" },
-      { id: "forward_looking_statements", title: "1.3 Forward Looking Statements", key: "company_details" }
+      { id: "definitions_and_abbreviations", title: "Definitions and Abbreviations", key: "company_details" },
+      { id: "certain_conventions_presentation", title: "Certain Conventions, Use of Financial Information & Market Data", key: "company_details" },
+      { id: "forward_looking_statements", title: "Forward Looking Statements", key: "company_details" }
     ]
   },
   {
@@ -104,27 +104,34 @@ export const DRHP_HIERARCHY = [
   }
 ];
 
+function cleanTitleText(t) {
+  return (t || '').replace(/^\d+(\.\d+)*\s*/, '').trim();
+}
+
 export function findDrhpNode(targetId) {
   if (!targetId) {
     const first = DRHP_HIERARCHY[0];
-    return { section: first, subsection: first.subsections[0], number: '1.1', fullTitle: `1.1 ${first.subsections[0].title}`, key: first.subsections[0].key };
+    const subClean = cleanTitleText(first.subsections[0].title);
+    return { section: first, subsection: first.subsections[0], number: '1.1', fullTitle: `1.1 ${subClean}`, key: first.subsections[0].key };
   }
   for (let secIdx = 0; secIdx < DRHP_HIERARCHY.length; secIdx++) {
     const sec = DRHP_HIERARCHY[secIdx];
     const secNumber = `${secIdx + 1}`;
     if (sec.id === targetId) {
-      return { section: sec, subsection: null, number: `${secNumber}.0`, fullTitle: `${secNumber}. ${sec.title}`, key: sec.key };
+      return { section: sec, subsection: null, number: `${secNumber}.0`, fullTitle: `${sec.title}`, key: sec.key };
     }
     if (sec.subsections) {
       for (let subIdx = 0; subIdx < sec.subsections.length; subIdx++) {
         const sub = sec.subsections[subIdx];
         const subNumber = `${secNumber}.${subIdx + 1}`;
         if (sub.id === targetId) {
-          return { section: sec, subsection: sub, number: subNumber, fullTitle: `${subNumber} ${sub.title}`, key: sub.key };
+          const subClean = cleanTitleText(sub.title);
+          return { section: sec, subsection: sub, number: subNumber, fullTitle: `${subNumber} ${subClean}`, key: sub.key };
         }
       }
     }
   }
   const first = DRHP_HIERARCHY[0];
-  return { section: first, subsection: first.subsections[0], number: '1.1', fullTitle: `1.1 ${first.subsections[0].title}`, key: first.subsections[0].key };
+  const subClean = cleanTitleText(first.subsections[0].title);
+  return { section: first, subsection: first.subsections[0], number: '1.1', fullTitle: `1.1 ${subClean}`, key: first.subsections[0].key };
 }

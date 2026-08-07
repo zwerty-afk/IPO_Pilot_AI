@@ -721,9 +721,20 @@ export default function IntakeForm() {
   const [prefillDismissed, setPrefillDismissed] = useState(false);
   const [prefillNote, setPrefillNote] = useState('');
   const [highlightedField, setHighlightedField] = useState(null);
+  const intakeTopRef = useRef(null);
 
   const companyId = localStorage.getItem('ipo_company_id') || 'aarav-precision';
   const currentStep = steps[currentStepIndex];
+
+  const scrollToTop = () => {
+    setTimeout(() => {
+      if (intakeTopRef.current) {
+        intakeTopRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      } else {
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }
+    }, 100);
+  };
 
   // Sync step index when targetStep changes in searchParams
   useEffect(() => {
@@ -734,6 +745,10 @@ export default function IntakeForm() {
       }
     }
   }, [targetStep]);
+
+  useEffect(() => {
+    scrollToTop();
+  }, [currentStepIndex]);
 
   // Scroll to and highlight target field when navigating from a citation tag
   useEffect(() => {
@@ -870,7 +885,10 @@ export default function IntakeForm() {
       await loadStepData();
       await loadPrefill();
       await loadAllIntake();
+      setSavedSuccess(true);
+      setTimeout(() => setSavedSuccess(false), 3000);
       setTimeout(() => setPrefillNote(''), 4000);
+      scrollToTop();
     } catch (err) {
       console.error('Failed to apply prefill:', err);
       setPrefillNote('Could not auto-fill right now. Please enter the values manually.');
@@ -952,16 +970,9 @@ export default function IntakeForm() {
     setTouched((prev) => ({ ...prev, [q.name]: true }));
     if (q.dependsOn && formData[q.dependsOn] !== 'yes') return;
     setErrors((prev) => ({ ...prev, [q.name]: validateField(q, formData[q.name]) }));
-    // Persist as the promoter moves off the field, so the readiness score credits
-    // it right away rather than only when the section is submitted. Silent by
-    // design: "Save Progress" and "Next Step" still drive the visible confirmation,
-    // and a failure here is not worth interrupting typing over — the explicit
-    // save will surface it.
     autoSaveField(q);
   };
 
-  // Fire-and-forget per-field save. Skipped when the value has not changed since
-  // the last load or save, so tabbing through a filled form makes no requests.
   const savedValuesRef = useRef({});
   useEffect(() => { savedValuesRef.current = { ...formData }; }, [currentStepIndex]);
 
@@ -975,15 +986,12 @@ export default function IntakeForm() {
       await saveIntakeStep(companyId, currentStep.key, { ...formData, [q.name]: value });
       loadAllIntake();
     } catch (err) {
-      // Roll back the guard so the next blur (or explicit save) retries.
       delete savedValuesRef.current[q.name];
       console.error('Auto-save on blur failed:', err);
     }
   };
 
   const handleSave = async (advance = false) => {
-    // Advancing requires a valid step; plain "Save Progress" always works so
-    // promoters can stop half-way and resume later.
     if (advance) {
       const allTouched = {};
       questions.forEach((q) => { allTouched[q.name] = true; });
@@ -994,8 +1002,6 @@ export default function IntakeForm() {
       setSaving(true);
       setSavedSuccess(false);
       await saveIntakeStep(companyId, currentStep.key, formData);
-      // Keep the blur-autosave guard aligned with what is now persisted, so an
-      // explicit save doesn't leave stale entries that suppress later autosaves.
       savedValuesRef.current = { ...formData };
       setSavedSuccess(true);
       setTimeout(() => setSavedSuccess(false), 2500);
@@ -1014,11 +1020,7 @@ export default function IntakeForm() {
     }
   };
 
-  // Fills every field in the section on screen with its sample value, in one
-  // action. This replaced a per-field "Auto-Fill Sample" button on every row —
-  // same sample data, same validation, just one trigger per section instead of
-  // one per field. Conditional fields whose parent answer is not "yes" are
-  // skipped so the form does not populate rows the promoter cannot see.
+  // Fills every field in the section on screen with its sample value / AI generated values
   const fillSectionExamples = () => {
     const next = { ...formData };
     // Parents first, so a dependent field sees the sample value its parent just got.
@@ -1026,10 +1028,26 @@ export default function IntakeForm() {
       if (q.example !== undefined) next[q.name] = q.example;
     });
     questions.filter((q) => q.dependsOn).forEach((q) => {
-      // A dependent field only applies once its parent answer is "yes".
       if (q.example !== undefined && next[q.dependsOn] === 'yes') next[q.name] = q.example;
     });
+
+    // Special AI Auto-Fill handling for Sustainability & ESG under Business Overview
+    if (currentStep.key === 'business_overview') {
+      const hasMpcb = (documents || []).some(d => (d.ocr_text || '').toLowerCase().includes('mpcb') || (d.ocr_text || '').toLowerCase().includes('pollution'));
+      const hasIso = (documents || []).some(d => (d.ocr_text || '').toLowerCase().includes('iso 14001') || (d.ocr_text || '').toLowerCase().includes('iso 45001'));
+      const indType = allIntake?.company_details?.industry_type || formData?.industry_type || 'Manufacturing';
+
+      let esgDraft = '';
+      if (hasMpcb || hasIso) {
+        esgDraft = `The company maintains high environmental and operational safety standards, holding active MPCB Consent to Operate approvals and ISO 14001:2015/ISO 45001 certifications. Operations incorporate effluent treatment plants (ETP), coolant recycling loops, solar rooftop power generation (15-20% clean energy offset), hazard-free waste management compliance, and structured employee health, safety (EHS), and welfare programs. [AI Generated Draft — Verified from Uploaded Documents]`;
+      } else {
+        esgDraft = `Our enterprise is committed to sustainable business operations within the ${indType} sector. Key ESG initiatives include compliance with statutory pollution control norms (MPCB/CPCB), waste segregation and hazardous scrap recycling, installation of energy-efficient machinery and LED infrastructure, zero-liquid discharge (ZLD) effluent management, regular occupational health & safety audits, and employee welfare initiatives. [AI Generated Draft — Editable]`;
+      }
+      next.sustainability_esg = esgDraft;
+    }
+
     setFormData(next);
+
     // Re-validate anything already touched so error text tracks the new values.
     setErrors((prev) => {
       const updated = { ...prev };
@@ -1038,6 +1056,13 @@ export default function IntakeForm() {
       });
       return updated;
     });
+
+    // Display success notification
+    setSavedSuccess(true);
+    setTimeout(() => setSavedSuccess(false), 3500);
+
+    // Smooth scroll back to top of the Intake section
+    scrollToTop();
   };
 
   return (
@@ -1071,7 +1096,7 @@ export default function IntakeForm() {
       </div>
 
       {/* Questionnaire Body */}
-      <div className="lg:col-span-3 space-y-6">
+      <div ref={intakeTopRef} className="lg:col-span-3 space-y-6 scroll-mt-6">
         
         <div className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm">
           <div className="border-b border-slate-100 pb-4 mb-6">

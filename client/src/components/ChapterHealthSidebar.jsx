@@ -134,7 +134,7 @@ export default function ChapterHealthSidebar({
           const secDraft = drafts[sec.key];
           const isCertified = secDraft && secDraft.status === 'certified';
           const secGap = hasUnresolvedGap(sec.key);
-          const titleText = `${secNum}. ${toTitleCase(sec.title)}`;
+          const titleText = toTitleCase(sec.title);
 
           return (
             <div key={sec.id} className="space-y-1">
@@ -176,7 +176,8 @@ export default function ChapterHealthSidebar({
                     const subGap = hasUnresolvedGap(sub.key);
                     const subDraft = drafts[sub.key];
                     const isSubCertified = subDraft && subDraft.status === 'certified';
-                    const subTitleText = `${subNum} ${toTitleCase(sub.title)}`;
+                    const cleanSubTitle = (sub.title || '').replace(/^\d+(\.\d+)*\s*/, '').trim();
+                    const subTitleText = `${subNum} ${toTitleCase(cleanSubTitle)}`;
 
                     return (
                       <button

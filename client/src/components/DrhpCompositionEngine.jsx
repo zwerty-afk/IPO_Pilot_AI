@@ -1466,296 +1466,49 @@ export function DrhpGlossarySection({ company = {}, intake = {}, citations = [],
   ];
 
   const [terms, setTerms] = useState(initialTerms);
-  const [activeCategory, setActiveCategory] = useState('All');
-  const [searchQuery, setSearchQuery] = useState('');
-  const [editingId, setEditingId] = useState(null);
-  const [editTermText, setEditTermText] = useState('');
-  const [editDescText, setEditDescText] = useState('');
-  const [showAddRow, setShowAddRow] = useState(false);
-  const [newCat, setNewCat] = useState(GLOSSARY_CATEGORIES[0]);
-  const [newTerm, setNewTerm] = useState('');
-  const [newDesc, setNewDesc] = useState('');
 
-  const filteredTerms = terms.filter(t => {
-    const matchesCat = activeCategory === 'All' || t.category === activeCategory;
-    const q = searchQuery.toLowerCase().trim();
-    const matchesQuery = !q || t.term.toLowerCase().includes(q) || t.description.toLowerCase().includes(q) || t.category.toLowerCase().includes(q);
-    return matchesCat && matchesQuery;
-  });
-
-  const categoriesToRender = activeCategory === 'All'
-    ? GLOSSARY_CATEGORIES.filter(cat => terms.some(t => t.category === cat))
-    : [activeCategory];
-
-  const handleStartEdit = (item) => {
-    setEditingId(item.id);
-    setEditTermText(item.term);
-    setEditDescText(item.description);
-  };
-
-  const handleSaveEdit = (id) => {
-    setTerms(prev => prev.map(t => t.id === id ? { ...t, term: editTermText, description: editDescText } : t));
-    setEditingId(null);
-  };
-
-  const handleDeleteTerm = (id) => {
-    setTerms(prev => prev.filter(t => t.id !== id));
-  };
-
-  const handleAddTerm = (e) => {
-    e.preventDefault();
-    if (!newTerm.trim() || !newDesc.trim()) return;
-    const newItem = {
-      id: `g-custom-${Date.now()}`,
-      category: newCat,
-      term: newTerm.trim(),
-      description: newDesc.trim()
-    };
-    setTerms(prev => [...prev, newItem]);
-    setNewTerm('');
-    setNewDesc('');
-    setShowAddRow(false);
+  const handleUpdate = (id, field, val) => {
+    setTerms(prev => prev.map(t => t.id === id ? { ...t, [field]: val } : t));
   };
 
   return (
-    <div className="space-y-6 font-sans">
-      {/* Header & Controls Bar */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-slate-50 p-4 rounded-2xl border border-slate-200">
-        <div>
-          <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-            <BookOpen className="w-4 h-4 text-indigo-600" />
-            <span>1.1 SEBI DRHP Glossary & Master Definitions</span>
-          </h3>
-          <p className="text-xs text-slate-500 mt-0.5">
-            Auto-populated from Intake data & SEBI statutory templates. Fully editable by Merchant Banker.
-          </p>
-        </div>
+    <div className="space-y-4 font-serif">
+      <p className="text-xs text-slate-700 leading-relaxed font-sans italic mb-3">
+        In this Draft Red Herring Prospectus, unless the context otherwise indicates or implies, the following terms and abbreviations shall have the meanings assigned to them below.
+      </p>
 
-        <div className="flex items-center gap-2 flex-wrap">
-          {/* Search Input */}
-          <div className="relative">
-            <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search glossary..."
-              className="pl-8 pr-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs outline-none focus:border-indigo-500 w-44"
-            />
-          </div>
-
-          <button
-            type="button"
-            onClick={() => setShowAddRow(!showAddRow)}
-            className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl flex items-center gap-1 transition-all shadow-sm cursor-pointer"
-          >
-            <Plus className="w-3.5 h-3.5" />
-            <span>Add Term</span>
-          </button>
-        </div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-left text-xs border-collapse border border-slate-300 font-sans">
+          <thead>
+            <tr className="bg-slate-100 text-slate-900 font-bold border-b border-slate-300 uppercase tracking-wider text-[11px]">
+              <th className="py-2.5 px-3 border-r border-slate-300 w-1/3">Term / Abbreviation</th>
+              <th className="py-2.5 px-3">Definition / Full Disclosure</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-200 bg-white">
+            {terms.map((item) => (
+              <tr key={item.id} className="hover:bg-slate-50/50">
+                <td className="py-2 px-3 font-bold text-slate-900 align-top border-r border-slate-200">
+                  <input
+                    type="text"
+                    value={item.term}
+                    onChange={(e) => handleUpdate(item.id, 'term', e.target.value)}
+                    className="w-full bg-transparent font-bold text-slate-900 focus:outline-none focus:bg-indigo-50/50 rounded px-1"
+                  />
+                </td>
+                <td className="py-2 px-3 text-slate-800 leading-relaxed align-top">
+                  <textarea
+                    value={item.description}
+                    onChange={(e) => handleUpdate(item.id, 'description', e.target.value)}
+                    rows={1}
+                    className="w-full bg-transparent text-slate-800 focus:outline-none focus:bg-indigo-50/50 rounded px-1 resize-y font-sans text-xs leading-relaxed"
+                  />
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
-
-      {/* Category Tabs */}
-      <div className="flex items-center gap-1.5 overflow-x-auto pb-2 border-b border-slate-200">
-        <button
-          type="button"
-          onClick={() => setActiveCategory('All')}
-          className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
-            activeCategory === 'All'
-              ? 'bg-slate-900 text-white'
-              : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-          }`}
-        >
-          All Categories ({terms.length})
-        </button>
-        {GLOSSARY_CATEGORIES.map(cat => {
-          const count = terms.filter(t => t.category === cat).length;
-          return (
-            <button
-              key={cat}
-              type="button"
-              onClick={() => setActiveCategory(cat)}
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
-                activeCategory === cat
-                  ? 'bg-indigo-600 text-white'
-                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-              }`}
-            >
-              {cat} ({count})
-            </button>
-          );
-        })}
-      </div>
-
-      {/* Inline Add Term Form */}
-      {showAddRow && (
-        <form onSubmit={handleAddTerm} className="p-4 bg-indigo-50/60 border border-indigo-200 rounded-2xl space-y-3 animate-fade-in">
-          <h4 className="text-xs font-bold text-indigo-950 uppercase font-mono tracking-wider flex items-center gap-1.5">
-            <Plus className="w-3.5 h-3.5 text-indigo-600" /> Add New Glossary Term
-          </h4>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <div>
-              <label className="text-[10px] font-bold text-slate-500 uppercase font-mono">Category</label>
-              <select
-                value={newCat}
-                onChange={(e) => setNewCat(e.target.value)}
-                className="w-full p-2 bg-white border border-slate-200 rounded-xl text-xs focus:outline-none"
-              >
-                {GLOSSARY_CATEGORIES.map(cat => (
-                  <option key={cat} value={cat}>{cat}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="text-[10px] font-bold text-slate-500 uppercase font-mono">Term / Abbreviation</label>
-              <input
-                type="text"
-                value={newTerm}
-                onChange={(e) => setNewTerm(e.target.value)}
-                placeholder="e.g. EBITDA / Company"
-                className="w-full p-2 bg-white border border-slate-200 rounded-xl text-xs focus:outline-none"
-                required
-              />
-            </div>
-            <div>
-              <label className="text-[10px] font-bold text-slate-500 uppercase font-mono">Description</label>
-              <input
-                type="text"
-                value={newDesc}
-                onChange={(e) => setNewDesc(e.target.value)}
-                placeholder="Full disclosure definition..."
-                className="w-full p-2 bg-white border border-slate-200 rounded-xl text-xs focus:outline-none"
-                required
-              />
-            </div>
-          </div>
-          <div className="flex justify-end gap-2 pt-1">
-            <button
-              type="button"
-              onClick={() => setShowAddRow(false)}
-              className="px-3 py-1.5 bg-white text-slate-600 text-xs font-bold rounded-xl border border-slate-200 cursor-pointer"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              className="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl shadow-sm cursor-pointer"
-            >
-              Save Term
-            </button>
-          </div>
-        </form>
-      )}
-
-      {/* Render Tables Categorized */}
-      <div className="space-y-6">
-        {categoriesToRender.map(cat => {
-          const categoryTerms = filteredTerms.filter(t => t.category === cat);
-          if (categoryTerms.length === 0) return null;
-
-          return (
-            <div key={cat} className="space-y-2">
-              <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider font-mono border-b border-slate-200 pb-1 flex items-center gap-1.5">
-                <Table className="w-3.5 h-3.5 text-indigo-600" />
-                <span>{cat}</span>
-              </h4>
-
-              <div className="overflow-x-auto rounded-xl border border-slate-200 shadow-2xs">
-                <table className="w-full text-left text-xs border-collapse font-sans">
-                  <thead>
-                    <tr className="bg-slate-100 text-slate-700 font-bold uppercase tracking-wider text-[11px] border-b border-slate-200">
-                      <th className="py-2.5 px-4 w-1/3">Term</th>
-                      <th className="py-2.5 px-4">Description</th>
-                      <th className="py-2.5 px-4 w-20 text-center">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100 bg-white">
-                    {categoryTerms.map(item => {
-                      const isEditingThis = editingId === item.id;
-                      return (
-                        <tr key={item.id} className="hover:bg-slate-50/70 transition-colors">
-                          <td className="py-3 px-4 font-bold text-slate-900 align-top">
-                            {isEditingThis ? (
-                              <input
-                                type="text"
-                                value={editTermText}
-                                onChange={(e) => setEditTermText(e.target.value)}
-                                className="w-full p-1.5 border border-indigo-300 rounded text-xs focus:outline-none"
-                              />
-                            ) : (
-                              item.term
-                            )}
-                          </td>
-                          <td className="py-3 px-4 text-slate-700 leading-relaxed align-top">
-                            {isEditingThis ? (
-                              <textarea
-                                value={editDescText}
-                                onChange={(e) => setEditDescText(e.target.value)}
-                                className="w-full p-1.5 border border-indigo-300 rounded text-xs focus:outline-none min-h-[60px]"
-                              />
-                            ) : (
-                              item.description
-                            )}
-                          </td>
-                          <td className="py-3 px-4 align-top text-center">
-                            {isEditingThis ? (
-                              <div className="flex items-center justify-center gap-1">
-                                <button
-                                  type="button"
-                                  onClick={() => handleSaveEdit(item.id)}
-                                  className="p-1 bg-emerald-100 text-emerald-700 hover:bg-emerald-200 rounded cursor-pointer"
-                                  title="Save"
-                                >
-                                  <Check className="w-3.5 h-3.5" />
-                                </button>
-                              </div>
-                            ) : (
-                              <div className="flex items-center justify-center gap-1">
-                                <button
-                                  type="button"
-                                  onClick={() => handleStartEdit(item)}
-                                  className="p-1 text-slate-400 hover:text-indigo-600 rounded cursor-pointer"
-                                  title="Edit Row"
-                                >
-                                  <Edit3 className="w-3.5 h-3.5" />
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => handleDeleteTerm(item.id)}
-                                  className="p-1 text-slate-400 hover:text-red-600 rounded cursor-pointer"
-                                  title="Delete Row"
-                                >
-                                  <Trash2 className="w-3.5 h-3.5" />
-                                </button>
-                              </div>
-                            )}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          );
-        })}
-      </div>
-
-      {citations.length > 0 && (
-        <div className="flex items-center gap-1.5 text-[10px] pt-2 border-t border-slate-100 font-sans">
-          <span className="text-slate-400 font-mono uppercase font-bold">Grounding Citations:</span>
-          {citations.map((c, idx) => (
-            <button
-              key={idx}
-              type="button"
-              onClick={() => onCitationClick && onCitationClick(c)}
-              className="px-2 py-0.5 rounded bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-medium border border-indigo-100 flex items-center gap-1 transition-colors cursor-pointer"
-            >
-              <Bookmark className="w-2.5 h-2.5 text-indigo-400" /> {c.split(': ').pop()}
-            </button>
-          ))}
-        </div>
-      )}
     </div>
   );
 }
@@ -1764,179 +1517,54 @@ export function DrhpGlossarySection({ company = {}, intake = {}, citations = [],
  * 14. SECTION 1.2: CERTAIN CONVENTIONS, FINANCIAL & MARKET DATA
  * ---------------------------------------------------- */
 export function DrhpConventionsSection({ company = {}, intake = {}, citations = [], onCitationClick }) {
-  const [cardsData, setCardsData] = useState({
-    currency: "All references in this Draft Red Herring Prospectus to 'INR', 'Rs.', 'Rupees', or '₹' are to the Indian Rupee, the official currency of the Republic of India. Financial amounts are presented in Indian Rupees and formatted in Crores (1 Crore = 10,000,000 INR) or Lakhs (1 Lakh = 100,000 INR) unless otherwise specified.",
-    financial: "Financial information included in this DRHP is derived from our Restated Financial Statements for FY 2022-23, FY 2023-24, and FY 2024-25, prepared in accordance with Indian Accounting Standards (Ind AS) / Indian GAAP and the Companies Act, 2013. Our Fiscal Year commences on April 1 and ends on March 31 of the following calendar year.",
+  const [conventions, setConventions] = useState({
+    currency: "All references in this Draft Red Herring Prospectus to 'INR', 'Rs.', 'Rupees', or '₹' are to the Indian Rupee, the official currency of the Republic of India. All financial amounts contained herein are presented in Indian Rupees and expressed in Crores (1 Crore = 10,000,000 INR) or Lakhs (1 Lakh = 100,000 INR) unless explicitly specified otherwise.",
+    financial: "Financial information included in this Draft Red Herring Prospectus is derived from our Restated Financial Statements for FY 2022-23, FY 2023-24, and FY 2024-25, prepared in accordance with Indian Accounting Standards (Ind AS) / Indian GAAP and the relevant provisions of the Companies Act, 2013. Our Fiscal Year commences on April 1 and ends on March 31 of the following calendar year.",
     market: "Market and industry data used throughout this DRHP has been obtained from CRISIL Research Report, Ministry of Heavy Industries, MCA filings, and official government publications. Industry publications generally state that the information contained therein has been obtained from sources believed to be reliable.",
     numerical: "Certain numerical figures and percentages in this DRHP have been subject to rounding adjustments. Component figures in tables may not sum exactly to stated totals due to rounding off to two decimal places."
   });
 
-  const [sources] = useState([
-    { id: 'src-1', title: 'Audited FS FY25', desc: 'Audited Financial Statements for FY 2024-25', badge: 'Audited FS FY25' },
-    { id: 'src-2', title: 'CRISIL Industry Report', desc: 'CRISIL Research Precision Engineering Outlook', badge: 'CRISIL Report' },
-    { id: 'src-3', title: 'MCA ROC Vault', desc: 'Ministry of Corporate Affairs ROC Filings', badge: 'MCA' },
-    { id: 'src-4', title: 'Intake Questionnaire', desc: 'Verified Company Profile Intake Data', badge: 'Intake: Company Details' }
-  ]);
-
-  const [editingCard, setEditingCard] = useState(null);
-  const [editText, setEditText] = useState('');
-
-  const handleStartEdit = (key) => {
-    setEditingCard(key);
-    setEditText(cardsData[key]);
-  };
-
-  const handleSaveCard = (key) => {
-    setCardsData(prev => ({ ...prev, [key]: editText }));
-    setEditingCard(null);
+  const handleChange = (key, val) => {
+    setConventions(prev => ({ ...prev, [key]: val }));
   };
 
   return (
-    <div className="space-y-6 font-sans">
-      <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200">
-        <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-          <Info className="w-4 h-4 text-indigo-600" />
-          <span>1.2 Certain Conventions, Presentation of Financial & Market Data</span>
-        </h3>
-        <p className="text-xs text-slate-500 mt-0.5">
-          SEBI disclosure conventions regarding currency notation, restated financial reporting, market research sources, and rounding rules.
-        </p>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {/* Card 1: Currency Convention */}
-        <div className="p-5 bg-white rounded-2xl border border-slate-200 shadow-2xs space-y-3 relative group">
-          <div className="flex items-center justify-between border-b border-slate-100 pb-2">
-            <h4 className="text-xs font-bold text-slate-900 uppercase font-mono tracking-wider flex items-center gap-1.5">
-              <DollarSign className="w-3.5 h-3.5 text-emerald-600" /> Currency Convention
-            </h4>
-            <button
-              type="button"
-              onClick={() => editingCard === 'currency' ? handleSaveCard('currency') : handleStartEdit('currency')}
-              className="text-[10px] font-bold text-indigo-600 hover:text-indigo-800 flex items-center gap-1 cursor-pointer"
-            >
-              {editingCard === 'currency' ? <><Check className="w-3 h-3 text-emerald-600" /> Save</> : <><Edit3 className="w-3 h-3" /> Edit</>}
-            </button>
-          </div>
-          {editingCard === 'currency' ? (
-            <textarea
-              value={editText}
-              onChange={(e) => setEditText(e.target.value)}
-              className="w-full p-2 text-xs border border-indigo-300 rounded-xl focus:outline-none min-h-[90px]"
-            />
-          ) : (
-            <p className="text-xs text-slate-700 leading-relaxed font-sans">{cardsData.currency}</p>
-          )}
-          <div className="flex items-center gap-2 pt-1">
-            <span className="px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 font-bold border border-emerald-200 text-[10px]">INR / ₹</span>
-            <span className="px-2 py-0.5 rounded bg-slate-100 text-slate-600 font-bold border border-slate-200 text-[10px]">Crore & Lakh Format</span>
-          </div>
+    <div className="space-y-4 font-serif">
+      <div className="space-y-4 text-xs text-slate-900 leading-relaxed font-sans">
+        <div>
+          <span className="font-bold text-slate-900 font-serif text-xs uppercase block mb-1">Currency and Financial Presentation</span>
+          <textarea
+            value={conventions.currency}
+            onChange={(e) => handleChange('currency', e.target.value)}
+            className="w-full bg-transparent text-slate-800 focus:outline-none focus:bg-indigo-50/50 rounded p-1.5 min-h-[50px] resize-y font-sans text-xs leading-relaxed"
+          />
         </div>
 
-        {/* Card 2: Financial Reporting */}
-        <div className="p-5 bg-white rounded-2xl border border-slate-200 shadow-2xs space-y-3 relative group">
-          <div className="flex items-center justify-between border-b border-slate-100 pb-2">
-            <h4 className="text-xs font-bold text-slate-900 uppercase font-mono tracking-wider flex items-center gap-1.5">
-              <Briefcase className="w-3.5 h-3.5 text-indigo-600" /> Financial Reporting Standards
-            </h4>
-            <button
-              type="button"
-              onClick={() => editingCard === 'financial' ? handleSaveCard('financial') : handleStartEdit('financial')}
-              className="text-[10px] font-bold text-indigo-600 hover:text-indigo-800 flex items-center gap-1 cursor-pointer"
-            >
-              {editingCard === 'financial' ? <><Check className="w-3 h-3 text-emerald-600" /> Save</> : <><Edit3 className="w-3 h-3" /> Edit</>}
-            </button>
-          </div>
-          {editingCard === 'financial' ? (
-            <textarea
-              value={editText}
-              onChange={(e) => setEditText(e.target.value)}
-              className="w-full p-2 text-xs border border-indigo-300 rounded-xl focus:outline-none min-h-[90px]"
-            />
-          ) : (
-            <p className="text-xs text-slate-700 leading-relaxed font-sans">{cardsData.financial}</p>
-          )}
-          <div className="flex items-center gap-2 pt-1">
-            <span className="px-2 py-0.5 rounded bg-indigo-50 text-indigo-700 font-bold border border-indigo-200 text-[10px]">Ind AS / Indian GAAP</span>
-            <span className="px-2 py-0.5 rounded bg-slate-100 text-slate-600 font-bold border border-slate-200 text-[10px]">Fiscal Year: April 1 – March 31</span>
-          </div>
+        <div>
+          <span className="font-bold text-slate-900 font-serif text-xs uppercase block mb-1">Financial Reporting Standards</span>
+          <textarea
+            value={conventions.financial}
+            onChange={(e) => handleChange('financial', e.target.value)}
+            className="w-full bg-transparent text-slate-800 focus:outline-none focus:bg-indigo-50/50 rounded p-1.5 min-h-[60px] resize-y font-sans text-xs leading-relaxed"
+          />
         </div>
 
-        {/* Card 3: Market Data Sources */}
-        <div className="p-5 bg-white rounded-2xl border border-slate-200 shadow-2xs space-y-3 relative group">
-          <div className="flex items-center justify-between border-b border-slate-100 pb-2">
-            <h4 className="text-xs font-bold text-slate-900 uppercase font-mono tracking-wider flex items-center gap-1.5">
-              <Layers className="w-3.5 h-3.5 text-amber-600" /> Market & Industry Data Sources
-            </h4>
-            <button
-              type="button"
-              onClick={() => editingCard === 'market' ? handleSaveCard('market') : handleStartEdit('market')}
-              className="text-[10px] font-bold text-indigo-600 hover:text-indigo-800 flex items-center gap-1 cursor-pointer"
-            >
-              {editingCard === 'market' ? <><Check className="w-3 h-3 text-emerald-600" /> Save</> : <><Edit3 className="w-3 h-3" /> Edit</>}
-            </button>
-          </div>
-          {editingCard === 'market' ? (
-            <textarea
-              value={editText}
-              onChange={(e) => setEditText(e.target.value)}
-              className="w-full p-2 text-xs border border-indigo-300 rounded-xl focus:outline-none min-h-[90px]"
-            />
-          ) : (
-            <p className="text-xs text-slate-700 leading-relaxed font-sans">{cardsData.market}</p>
-          )}
-          <div className="flex items-center gap-2 pt-1 flex-wrap">
-            <span className="px-2 py-0.5 rounded bg-amber-50 text-amber-700 font-bold border border-amber-200 text-[10px]">CRISIL Report</span>
-            <span className="px-2 py-0.5 rounded bg-slate-100 text-slate-600 font-bold border border-slate-200 text-[10px]">Govt Sources</span>
-            <span className="px-2 py-0.5 rounded bg-slate-100 text-slate-600 font-bold border border-slate-200 text-[10px]">MCA Filings</span>
-          </div>
+        <div>
+          <span className="font-bold text-slate-900 font-serif text-xs uppercase block mb-1">Market and Industry Data Sources</span>
+          <textarea
+            value={conventions.market}
+            onChange={(e) => handleChange('market', e.target.value)}
+            className="w-full bg-transparent text-slate-800 focus:outline-none focus:bg-indigo-50/50 rounded p-1.5 min-h-[50px] resize-y font-sans text-xs leading-relaxed"
+          />
         </div>
 
-        {/* Card 4: Numerical Conventions */}
-        <div className="p-5 bg-white rounded-2xl border border-slate-200 shadow-2xs space-y-3 relative group">
-          <div className="flex items-center justify-between border-b border-slate-100 pb-2">
-            <h4 className="text-xs font-bold text-slate-900 uppercase font-mono tracking-wider flex items-center gap-1.5">
-              <TrendingUp className="w-3.5 h-3.5 text-blue-600" /> Numerical Conventions
-            </h4>
-            <button
-              type="button"
-              onClick={() => editingCard === 'numerical' ? handleSaveCard('numerical') : handleStartEdit('numerical')}
-              className="text-[10px] font-bold text-indigo-600 hover:text-indigo-800 flex items-center gap-1 cursor-pointer"
-            >
-              {editingCard === 'numerical' ? <><Check className="w-3 h-3 text-emerald-600" /> Save</> : <><Edit3 className="w-3 h-3" /> Edit</>}
-            </button>
-          </div>
-          {editingCard === 'numerical' ? (
-            <textarea
-              value={editText}
-              onChange={(e) => setEditText(e.target.value)}
-              className="w-full p-2 text-xs border border-indigo-300 rounded-xl focus:outline-none min-h-[90px]"
-            />
-          ) : (
-            <p className="text-xs text-slate-700 leading-relaxed font-sans">{cardsData.numerical}</p>
-          )}
-          <div className="flex items-center gap-2 pt-1">
-            <span className="px-2 py-0.5 rounded bg-blue-50 text-blue-700 font-bold border border-blue-200 text-[10px]">2 Decimal Places</span>
-            <span className="px-2 py-0.5 rounded bg-slate-100 text-slate-600 font-bold border border-slate-200 text-[10px]">Component Total Match</span>
-          </div>
-        </div>
-      </div>
-
-      {/* Data Sources Grid (Source Badges) */}
-      <div className="p-5 bg-indigo-50/40 border border-indigo-100 rounded-2xl space-y-3">
-        <h4 className="text-xs font-bold text-indigo-950 uppercase font-mono tracking-wider flex items-center gap-1.5">
-          <Bookmark className="w-3.5 h-3.5 text-indigo-600" /> Mapped Grounding Data Sources
-        </h4>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-          {sources.map(src => (
-            <div key={src.id} className="p-3 bg-white border border-indigo-100 rounded-xl space-y-1 hover:border-indigo-300 transition-all">
-              <span className="px-2 py-0.5 rounded bg-indigo-100 text-indigo-800 font-mono text-[9px] font-bold uppercase inline-block">
-                {src.badge}
-              </span>
-              <p className="text-xs font-bold text-slate-800">{src.title}</p>
-              <p className="text-[10px] text-slate-500">{src.desc}</p>
-            </div>
-          ))}
+        <div>
+          <span className="font-bold text-slate-900 font-serif text-xs uppercase block mb-1">Rounding & Numerical Adjustments</span>
+          <textarea
+            value={conventions.numerical}
+            onChange={(e) => handleChange('numerical', e.target.value)}
+            className="w-full bg-transparent text-slate-800 focus:outline-none focus:bg-indigo-50/50 rounded p-1.5 min-h-[40px] resize-y font-sans text-xs leading-relaxed"
+          />
         </div>
       </div>
     </div>
@@ -1963,103 +1591,16 @@ Actual results could differ materially from those expressed or implied in such f
 Neither our Company, the Promoters, the Lead Manager, nor any of their respective affiliates undertake any obligation to update or revise any forward-looking statement, whether as a result of new information, future events, or otherwise, except as required by SEBI (ICDR) Regulations, 2018 or applicable law.`;
 
   const [statementText, setStatementText] = useState(defaultStatement);
-  const [originalText, setOriginalText] = useState(defaultStatement);
-  const [isDiffMode, setIsDiffMode] = useState(false);
-  const [isGenerating, setIsGenerating] = useState(false);
-  const [accepted, setAccepted] = useState(true);
-
-  const handleRegenerate = () => {
-    setIsGenerating(true);
-    setTimeout(() => {
-      const refreshed = defaultStatement + `\n\n[SEBI ICDR Schedule VI legal disclosure re-verified on ${new Date().toLocaleDateString()}]`;
-      setStatementText(refreshed);
-      setAccepted(false);
-      setIsGenerating(false);
-    }, 600);
-  };
-
-  const handleAcceptChanges = () => {
-    setOriginalText(statementText);
-    setAccepted(true);
-    setIsDiffMode(false);
-  };
 
   return (
-    <div className="space-y-5 font-sans">
-      {/* Header & AI Workflow Actions */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-slate-50 p-4 rounded-2xl border border-slate-200">
-        <div>
-          <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-            <ShieldAlert className="w-4 h-4 text-indigo-600" />
-            <span>1.3 Forward Looking Statements</span>
-          </h3>
-          <p className="text-xs text-slate-500 mt-0.5">
-            SEBI DRHP statutory legal disclaimer covering projections, risk disclosures, and update obligations.
-          </p>
-        </div>
-
-        <div className="flex items-center gap-2 flex-wrap">
-          <button
-            type="button"
-            onClick={handleRegenerate}
-            disabled={isGenerating}
-            className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl flex items-center gap-1.5 transition-all border border-slate-200 cursor-pointer disabled:opacity-50"
-          >
-            <RefreshCw className={`w-3.5 h-3.5 text-indigo-600 ${isGenerating ? 'animate-spin' : ''}`} />
-            <span>Regenerate AI</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setIsDiffMode(!isDiffMode)}
-            className={`px-3 py-1.5 text-xs font-bold rounded-xl flex items-center gap-1.5 transition-all border cursor-pointer ${
-              isDiffMode
-                ? 'bg-indigo-600 text-white border-indigo-600'
-                : 'bg-white text-slate-700 hover:bg-slate-100 border-slate-200'
-            }`}
-          >
-            <History className="w-3.5 h-3.5" />
-            <span>Compare Versions</span>
-          </button>
-
-          {!accepted && (
-            <button
-              type="button"
-              onClick={handleAcceptChanges}
-              className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl flex items-center gap-1 transition-all shadow-sm cursor-pointer"
-            >
-              <Check className="w-3.5 h-3.5" />
-              <span>Accept Changes</span>
-            </button>
-          )}
-        </div>
+    <div className="space-y-4 font-serif">
+      <div className="space-y-2">
+        <textarea
+          value={statementText}
+          onChange={(e) => setStatementText(e.target.value)}
+          className="w-full bg-transparent text-slate-900 leading-relaxed font-sans text-xs p-2 focus:outline-none focus:bg-indigo-50/50 rounded min-h-[240px] resize-y"
+        />
       </div>
-
-      {/* View Mode: Normal Editor vs Split Diff View */}
-      {isDiffMode ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl space-y-2">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 font-mono">Original / Base SEBI Version</span>
-            <div className="text-xs text-slate-700 leading-relaxed whitespace-pre-wrap font-sans">{originalText}</div>
-          </div>
-          <div className="p-4 bg-indigo-50/40 border border-indigo-200 rounded-2xl space-y-2">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-600 font-mono">Active Edited / AI Version</span>
-            <div className="text-xs text-slate-900 leading-relaxed whitespace-pre-wrap font-sans font-medium">{statementText}</div>
-          </div>
-        </div>
-      ) : (
-        <div className="space-y-2">
-          <label className="text-[10px] font-bold uppercase font-mono tracking-wider text-slate-400 flex items-center justify-between">
-            <span>Editable SEBI Forward-Looking Disclaimer Text</span>
-            <span>{statementText.length} Characters</span>
-          </label>
-          <textarea
-            value={statementText}
-            onChange={(e) => { setStatementText(e.target.value); setAccepted(false); }}
-            className="w-full p-4 text-xs leading-relaxed font-sans text-slate-800 bg-white border border-slate-200 rounded-2xl focus:ring-2 focus:ring-indigo-500 focus:outline-none min-h-[240px] resize-y shadow-2xs"
-          />
-        </div>
-      )}
     </div>
   );
 }

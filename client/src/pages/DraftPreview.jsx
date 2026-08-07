@@ -876,165 +876,97 @@ export default function DraftPreview({ initialMode = 'chapter' }) {
       {/* Main DRHP Subsection Composition Pane (Center Workspace) */}
       <div className={`${viewMode === 'chapter' ? 'xl:col-span-2' : 'xl:col-span-3'} space-y-4`}>
 
-        {/* Workspace Top Header Bar */}
-        <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-4 font-sans">
-
-          {/* Focused Subsection Title & Toolbar */}
-          <div className="flex items-center justify-between gap-4 flex-wrap">
-            <div>
-              <div className="flex items-center gap-2 flex-wrap">
-                <h2 className="text-lg font-bold text-slate-900">
-                  {viewMode === 'chapter'
-                    ? (isCoverPages ? 'Draft Prospectus — Pages 1–3 (Front Matter)' : activeNode.fullTitle)
-                    : 'Draft Preview — Merged DRHP Document'}
-                </h2>
-
-                {/* Auto-Save & Status Badge */}
-                <div className="flex items-center gap-2 pl-2 border-l border-slate-200">
-                  <div className="flex items-center gap-1.5 text-xs font-mono">
-                    {autoSaveStatus === 'saving' ? (
-                      <span className="text-blue-600 flex items-center gap-1">
-                        <Loader2 className="w-3.5 h-3.5 animate-spin" /> Saving...
-                      </span>
-                    ) : autoSaveStatus === 'saved' ? (
-                      <span className="text-emerald-600 flex items-center gap-1 font-semibold">
-                        <Check className="w-3.5 h-3.5" /> Saved
-                      </span>
-                    ) : (
-                      <span className="text-amber-600 flex items-center gap-1">
-                        <Save className="w-3.5 h-3.5" /> Unsaved
-                      </span>
-                    )}
-                    <span className="text-[10px] text-slate-400">
-                      ({lastSavedTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })})
-                    </span>
-                  </div>
-
-                  {currentSection.status === 'certified' ? (
-                    <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center gap-1">
-                      <ShieldCheck className="w-3 h-3" /> Certified
-                    </span>
-                  ) : (
-                    <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-600 border border-slate-200">
-                      Document Composition Mode
-                    </span>
-                  )}
-                </div>
-              </div>
-              <p className="text-xs text-slate-500 mt-0.5">
-                {viewMode === 'chapter'
-                  ? (isCoverPages
-                      ? 'Editing independent chapter: Front Matter (Pages 1–3). Only content belonging to this chapter is displayed.'
-                      : `Editing independent chapter: ${activeNode.section.title}. Only content belonging to this chapter is displayed.`)
-                  : 'Complete merged DRHP document assembling Front Matter, Table of Contents, and all 10 SEBI sections.'}
-              </p>
-            </div>
-
-            {/* Action Buttons: View Sources, Regenerate, Export Actions */}
-            <div className="flex items-center gap-2 flex-wrap">
-              <button
-                onClick={() => setShowSourceDrawer(true)}
-                className="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold rounded-xl text-xs transition-all flex items-center gap-1.5 border border-indigo-200/60"
-              >
-                <Eye className="w-3.5 h-3.5 text-indigo-600" />
-                <span>View Sources</span>
-              </button>
-
-              <button
-                onClick={handleRegenerate}
-                disabled={generating}
-                className="px-3 py-1.5 bg-slate-50 hover:bg-slate-100 text-slate-700 font-semibold rounded-xl text-xs transition-all flex items-center gap-1.5 border border-slate-200"
-                title="Re-assemble AI composition"
-              >
-                <RefreshCw className={`w-3.5 h-3.5 text-indigo-500 ${generating ? 'animate-spin' : ''}`} />
-                <span>Regenerate</span>
-              </button>
-
-              {/* Subsection Export Buttons */}
-              <div className="flex items-center gap-1 pl-2 border-l border-slate-200">
-                <button
-                  onClick={() => handleExportSection('pdf')}
-                  disabled={exportingSectionPdf || exportingSectionDocx || copyingSection}
-                  className="px-2.5 py-1.5 bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-xl font-medium text-xs transition-all flex items-center gap-1 cursor-pointer disabled:opacity-50"
-                  title="Export current section as PDF"
-                >
-                  {exportingSectionPdf ? (
-                    <Loader2 className="w-3.5 h-3.5 text-red-500 animate-spin" />
-                  ) : (
-                    <FileText className="w-3.5 h-3.5 text-red-500" />
-                  )}
-                  <span>PDF</span>
-                </button>
-
-                <button
-                  onClick={() => handleExportSection('docx')}
-                  disabled={exportingSectionPdf || exportingSectionDocx || copyingSection}
-                  className="px-2.5 py-1.5 bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-xl font-medium text-xs transition-all flex items-center gap-1 cursor-pointer disabled:opacity-50"
-                  title="Export current section as DOCX"
-                >
-                  {exportingSectionDocx ? (
-                    <Loader2 className="w-3.5 h-3.5 text-blue-500 animate-spin" />
-                  ) : (
-                    <FileSpreadsheet className="w-3.5 h-3.5 text-blue-500" />
-                  )}
-                  <span>DOCX</span>
-                </button>
-
-                <button
-                  onClick={handleCopySection}
-                  disabled={exportingSectionPdf || exportingSectionDocx || copyingSection}
-                  className="px-2.5 py-1.5 bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-xl font-medium text-xs transition-all flex items-center gap-1 cursor-pointer disabled:opacity-50"
-                  title="Copy current section content with formatting"
-                >
-                  {copyingSection ? (
-                    <Loader2 className="w-3.5 h-3.5 text-indigo-500 animate-spin" />
-                  ) : (
-                    <Copy className="w-3.5 h-3.5 text-indigo-500" />
-                  )}
-                  <span>Copy Text</span>
-                </button>
-              </div>
+        {/* Global Toolbar for Chapter Document */}
+        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs flex items-center justify-between gap-4 flex-wrap font-sans">
+          <div className="flex items-center gap-3">
+            <h2 className="text-base font-bold text-slate-900 tracking-tight">
+              {viewMode === 'chapter'
+                ? (isCoverPages ? 'Draft Prospectus — Pages 1–3 (Front Matter)' : activeNode.fullTitle)
+                : 'Draft Preview — Merged DRHP Document'}
+            </h2>
+            <div className="flex items-center gap-1.5 text-xs font-mono border-l border-slate-200 pl-3">
+              {autoSaveStatus === 'saving' ? (
+                <span className="text-blue-600 flex items-center gap-1">
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" /> Saving...
+                </span>
+              ) : autoSaveStatus === 'saved' ? (
+                <span className="text-emerald-600 flex items-center gap-1 font-semibold">
+                  <Check className="w-3.5 h-3.5" /> Saved
+                </span>
+              ) : (
+                <span className="text-amber-600 flex items-center gap-1">
+                  <Save className="w-3.5 h-3.5" /> Unsaved
+                </span>
+              )}
             </div>
           </div>
 
-          {/* Export Notification Toast Banner */}
-          {exportNotice && (
-            <div className={`p-3 rounded-xl border flex items-center justify-between text-xs font-medium animate-fade-in ${
-              exportNotice.type === 'success'
-                ? 'bg-emerald-50 border-emerald-200 text-emerald-900'
-                : 'bg-red-50 border-red-200 text-red-900'
-            }`}>
-              <div className="flex items-center gap-2">
-                {exportNotice.type === 'success' ? (
-                  <CheckCircle className="w-4 h-4 text-emerald-600 shrink-0" />
-                ) : (
-                  <AlertTriangle className="w-4 h-4 text-red-600 shrink-0" />
-                )}
-                <span>{exportNotice.message}</span>
-              </div>
-              <button onClick={() => setExportNotice(null)} className="p-1 hover:opacity-75 cursor-pointer">
-                <X className="w-3.5 h-3.5" />
-              </button>
-            </div>
-          )}
+          <div className="flex items-center gap-2 flex-wrap">
+            {/* 1. View Sources */}
+            <button
+              onClick={() => setShowSourceDrawer(true)}
+              className="px-3 py-1.5 bg-slate-50 hover:bg-slate-100 text-slate-700 font-semibold rounded-lg text-xs transition-all flex items-center gap-1.5 border border-slate-200 cursor-pointer"
+            >
+              <Eye className="w-3.5 h-3.5 text-indigo-600" />
+              <span>View Sources</span>
+            </button>
 
-          {/* Merchant Banker Certify Action */}
-          {user?.role === 'reviewer' && (
-            <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-xs">
-              <span className="text-slate-500 font-medium">Merchant Banker Sign-off:</span>
-              <button
-                onClick={handleCertifyToggle}
-                className={`px-3 py-1 rounded-xl font-bold text-xs transition-all flex items-center gap-1.5 ${
-                  currentSection.status === 'certified'
-                    ? 'bg-amber-50 text-amber-700 hover:bg-amber-100 border border-amber-200'
-                    : 'bg-emerald-600 text-white hover:bg-emerald-700 shadow-sm'
-                }`}
-              >
-                <ShieldCheck className="w-3.5 h-3.5" />
-                <span>{currentSection.status === 'certified' ? 'Uncertify Subsection' : 'Certify Subsection'}</span>
-              </button>
-            </div>
-          )}
+            {/* 2. Regenerate Chapter */}
+            <button
+              onClick={handleRegenerate}
+              disabled={generating}
+              className="px-3 py-1.5 bg-slate-50 hover:bg-slate-100 text-slate-700 font-semibold rounded-lg text-xs transition-all flex items-center gap-1.5 border border-slate-200 cursor-pointer disabled:opacity-50"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 text-indigo-500 ${generating ? 'animate-spin' : ''}`} />
+              <span>Regenerate Chapter</span>
+            </button>
+
+            {/* 3. Version History */}
+            <button
+              onClick={() => setActiveVersion(prev => prev === 'current' ? 'original' : 'current')}
+              className={`px-3 py-1.5 text-xs font-semibold rounded-lg flex items-center gap-1.5 transition-all border cursor-pointer ${
+                activeVersion === 'original'
+                  ? 'bg-indigo-600 text-white border-indigo-600'
+                  : 'bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200'
+              }`}
+            >
+              <History className="w-3.5 h-3.5" />
+              <span>Version History</span>
+            </button>
+
+            {/* 4. PDF */}
+            <button
+              onClick={() => handleExportSection('pdf')}
+              disabled={exportingSectionPdf || exportingSectionDocx}
+              className="px-3 py-1.5 bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-lg font-semibold text-xs transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+            >
+              {exportingSectionPdf ? <Loader2 className="w-3.5 h-3.5 text-red-500 animate-spin" /> : <FileText className="w-3.5 h-3.5 text-red-500" />}
+              <span>PDF</span>
+            </button>
+
+            {/* 5. DOCX */}
+            <button
+              onClick={() => handleExportSection('docx')}
+              disabled={exportingSectionPdf || exportingSectionDocx}
+              className="px-3 py-1.5 bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-lg font-semibold text-xs transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+            >
+              {exportingSectionDocx ? <Loader2 className="w-3.5 h-3.5 text-blue-500 animate-spin" /> : <FileSpreadsheet className="w-3.5 h-3.5 text-blue-500" />}
+              <span>DOCX</span>
+            </button>
+
+            {/* 6. Review Mode */}
+            <button
+              onClick={handleCertifyToggle}
+              className={`px-3 py-1.5 text-xs font-semibold rounded-lg flex items-center gap-1.5 transition-all border cursor-pointer ${
+                currentSection.status === 'certified'
+                  ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                  : 'bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200'
+              }`}
+            >
+              <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
+              <span>Review Mode</span>
+            </button>
+          </div>
         </div>
 
         {/* SUBSECTION REVIEW ISSUES PANEL */}
@@ -1126,7 +1058,9 @@ export default function DraftPreview({ initialMode = 'chapter' }) {
                   <div className="px-8 md:px-14 pb-14 space-y-16">
                     {DRHP_HIERARCHY.map((sec, secIdx) => {
                       const romanNumerals = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X', 'XI'];
-                      const romanTitle = `SECTION ${romanNumerals[secIdx] || (secIdx + 1)}: ${sec.title}`;
+                      const secTitleDisplay = sec.title.startsWith('SECTION')
+                        ? sec.title
+                        : `SECTION ${romanNumerals[secIdx] || (secIdx + 1)} – ${sec.title}`;
                       const subsections = sec.subsections && sec.subsections.length > 0
                         ? sec.subsections
                         : [{ id: sec.id, title: sec.title, key: sec.key }];
@@ -1134,12 +1068,9 @@ export default function DraftPreview({ initialMode = 'chapter' }) {
                       return (
                         <div key={sec.id} id={`drhp-sec-${sec.id}`} className="space-y-10 border-t-4 border-slate-900 pt-10 font-serif">
                           {/* Section Title Banner */}
-                          <div className="border-b-2 border-slate-900 pb-3 text-center space-y-1">
-                            <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest font-mono">
-                              SECURITIES AND EXCHANGE BOARD OF INDIA — REGULATION COMPLIANT DISCLOSURE
-                            </p>
+                          <div className="border-b-2 border-slate-900 pb-3 text-center">
                             <h2 className="text-xl md:text-2xl font-black text-slate-900 tracking-wide uppercase">
-                              {romanTitle}
+                              {secTitleDisplay}
                             </h2>
                           </div>
 
@@ -1149,24 +1080,15 @@ export default function DraftPreview({ initialMode = 'chapter' }) {
                               const subKey = sub.key;
                               const subNumber = sec.subsections && sec.subsections.length > 0 ? `${secIdx + 1}.${subIdx + 1}` : `${secIdx + 1}.0`;
                               const subBlocks = getBlocksForSubsection(sub.id, subKey, drafts, intakeCache);
-                              const subCitations = subBlocks.flatMap(b => b.citations || []);
-                              const uniqueSubCitations = Array.from(new Set(subCitations));
+                              const cleanSubTitle = (sub.title || '').replace(/^\d+(\.\d+)*\s*/, '').trim();
 
                               return (
                                 <div key={sub.id} id={`drhp-sub-${sub.id}`} data-toc-id={sub.id} className="drhp-subsection-anchor space-y-5 pt-4 border-t border-slate-200">
                                   {/* Subsection Header */}
-                                  <div className="flex items-center justify-between border-b border-slate-300 pb-2">
-                                    <div className="flex items-center gap-2 flex-1">
-                                      <span className="text-indigo-700 font-mono font-bold text-xs shrink-0">
-                                        {subNumber}
-                                      </span>
-                                      <h3 className="text-base font-bold text-slate-900 tracking-tight uppercase font-serif">
-                                        {sub.title}
-                                      </h3>
-                                    </div>
-                                    <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-slate-100 text-slate-600 border border-slate-200 uppercase font-sans shrink-0">
-                                      {subKey.replace(/_/g, ' ')}
-                                    </span>
+                                  <div className="border-b border-slate-300 pb-2">
+                                    <h3 className="text-base font-bold text-slate-900 tracking-tight font-serif">
+                                      {subNumber} {cleanSubTitle}
+                                    </h3>
                                   </div>
 
                                   {/* Multi-Format Composition Blocks */}
@@ -1177,50 +1099,13 @@ export default function DraftPreview({ initialMode = 'chapter' }) {
                                       ))
                                     ) : (
                                       <p className="text-xs text-slate-500 italic font-sans">
-                                        Disclosure text pending generation for {sub.title}.
+                                        Disclosure text pending generation for {cleanSubTitle}.
                                       </p>
                                     )}
                                   </div>
 
-                                  {/* Inline Narrative Editor per subsection */}
-                                  <div className="space-y-1.5 pt-3 border-t border-slate-100 font-sans">
-                                    <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400 font-mono flex items-center justify-between">
-                                      <span>SEBI Disclosure Narrative</span>
-                                      <span className="text-slate-400 font-sans font-normal text-[10px]">Real-time Auto-Save Editor</span>
-                                    </label>
-                                    <textarea
-                                      value={subBlocks.map(b => b.text).join('\n\n')}
-                                      onChange={(e) => {
-                                        const val = e.target.value;
-                                        setEditorText(val);
-                                        triggerAutoSave(val);
-                                      }}
-                                      placeholder={`Enter disclosure narrative for ${sub.title}...`}
-                                      className="w-full p-4 border border-slate-200 rounded-xl bg-slate-50/50 focus:bg-white text-xs leading-relaxed font-sans text-slate-800 focus:ring-2 focus:ring-indigo-500 focus:outline-none min-h-[120px] resize-y transition-all"
-                                    />
-                                  </div>
-
-                                  {/* Grounding Citations */}
-                                  {uniqueSubCitations.length > 0 && (
-                                    <div className="flex items-center gap-1.5 pt-2 border-t border-slate-100 text-[10px] font-sans">
-                                      <span className="text-slate-400 font-mono uppercase font-bold">Grounding Citations:</span>
-                                      <div className="flex flex-wrap gap-1">
-                                        {uniqueSubCitations.map((cite, cidx) => (
-                                          <button
-                                            key={cidx}
-                                            onClick={() => handleSourceClick(cite)}
-                                            className="px-2 py-0.5 rounded bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-medium border border-indigo-100 flex items-center gap-1 transition-colors cursor-pointer"
-                                          >
-                                            <Bookmark className="w-2.5 h-2.5 text-indigo-400" />
-                                            <span>{cite.split(': ').pop()}</span>
-                                          </button>
-                                        ))}
-                                      </div>
-                                    </div>
-                                  )}
-
                                   {/* Page Break Boundary Divider */}
-                                  <div className="pt-8 pb-4 flex items-center justify-center font-mono text-[10px] text-slate-400 select-none">
+                                  <div className="pt-6 pb-4 flex items-center justify-center font-mono text-[10px] text-slate-400 select-none">
                                     <div className="w-full border-t border-dashed border-slate-300" />
                                     <span className="px-3 py-0.5 bg-slate-100 text-slate-500 rounded-full border border-slate-200 text-[9px] uppercase tracking-widest font-bold shrink-0 mx-2">
                                       Page Break — SEBI DRHP Continuous Document View
@@ -1258,7 +1143,9 @@ export default function DraftPreview({ initialMode = 'chapter' }) {
                       const sec = activeNode.section;
                       const secIdx = DRHP_HIERARCHY.findIndex(s => s.id === sec.id);
                       const romanNumerals = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X', 'XI'];
-                      const romanTitle = `SECTION ${romanNumerals[secIdx >= 0 ? secIdx : 0] || 'I'}: ${sec.title}`;
+                      const secTitleDisplay = sec.title.startsWith('SECTION')
+                        ? sec.title
+                        : `SECTION ${romanNumerals[secIdx >= 0 ? secIdx : 0] || 'I'} – ${sec.title}`;
                       const subsections = sec.subsections && sec.subsections.length > 0
                         ? sec.subsections
                         : [{ id: sec.id, title: sec.title, key: sec.key }];
@@ -1266,12 +1153,9 @@ export default function DraftPreview({ initialMode = 'chapter' }) {
                       return (
                         <div key={sec.id} id={`drhp-sec-${sec.id}`} className="space-y-10 font-serif">
                           {/* Section Title Banner */}
-                          <div className="border-b-2 border-slate-900 pb-3 text-center space-y-1">
-                            <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest font-mono">
-                              SECURITIES AND EXCHANGE BOARD OF INDIA — INDEPENDENT CHAPTER WORKSPACE
-                            </p>
+                          <div className="border-b-2 border-slate-900 pb-3 text-center">
                             <h2 className="text-xl md:text-2xl font-black text-slate-900 tracking-wide uppercase">
-                              {romanTitle}
+                              {secTitleDisplay}
                             </h2>
                           </div>
 
@@ -1281,24 +1165,15 @@ export default function DraftPreview({ initialMode = 'chapter' }) {
                               const subKey = sub.key;
                               const subNumber = sec.subsections && sec.subsections.length > 0 ? `${secIdx + 1}.${subIdx + 1}` : `${secIdx + 1}.0`;
                               const subBlocks = getBlocksForSubsection(sub.id, subKey, drafts, intakeCache);
-                              const subCitations = subBlocks.flatMap(b => b.citations || []);
-                              const uniqueSubCitations = Array.from(new Set(subCitations));
+                              const cleanSubTitle = (sub.title || '').replace(/^\d+(\.\d+)*\s*/, '').trim();
 
                               return (
                                 <div key={sub.id} id={`drhp-sub-${sub.id}`} data-toc-id={sub.id} data-sub-id={sub.id} className="drhp-subsection-anchor space-y-5 pt-6 border-t border-slate-200 scroll-mt-20">
                                   {/* Subsection Header */}
-                                  <div id={sub.id} className="flex items-center justify-between border-b border-slate-300 pb-2 scroll-mt-20">
-                                    <div className="flex items-center gap-2 flex-1">
-                                      <span className="text-indigo-700 font-mono font-bold text-xs shrink-0">
-                                        {subNumber}
-                                      </span>
-                                      <h3 className="text-base font-bold text-slate-900 tracking-tight uppercase font-serif">
-                                        {sub.title}
-                                      </h3>
-                                    </div>
-                                    <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-slate-100 text-slate-600 border border-slate-200 uppercase font-sans shrink-0">
-                                      {subKey.replace(/_/g, ' ')}
-                                    </span>
+                                  <div id={sub.id} className="pb-2 border-b border-slate-300 scroll-mt-20">
+                                    <h3 className="text-base font-bold text-slate-900 tracking-tight font-serif">
+                                      {subNumber} {cleanSubTitle}
+                                    </h3>
                                   </div>
 
                                   {/* Multi-Format Composition Blocks */}
@@ -1309,47 +1184,11 @@ export default function DraftPreview({ initialMode = 'chapter' }) {
                                       ))
                                     ) : (
                                       <p className="text-xs text-slate-500 italic font-sans">
-                                        Disclosure text pending generation for {sub.title}.
+                                        Disclosure text pending generation for {cleanSubTitle}.
                                       </p>
                                     )}
                                   </div>
 
-                                  {/* Inline Narrative Editor per subsection */}
-                                  <div className="space-y-1.5 pt-3 border-t border-slate-100 font-sans">
-                                    <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400 font-mono flex items-center justify-between">
-                                      <span>SEBI Disclosure Narrative</span>
-                                      <span className="text-slate-400 font-sans font-normal text-[10px]">Real-time Auto-Save Editor</span>
-                                    </label>
-                                    <textarea
-                                      value={subBlocks.map(b => b.text).join('\n\n')}
-                                      onChange={(e) => {
-                                        const val = e.target.value;
-                                        setEditorText(val);
-                                        triggerAutoSave(val);
-                                      }}
-                                      placeholder={`Enter disclosure narrative for ${sub.title}...`}
-                                      className="w-full p-4 border border-slate-200 rounded-xl bg-slate-50/50 focus:bg-white text-xs leading-relaxed font-sans text-slate-800 focus:ring-2 focus:ring-indigo-500 focus:outline-none min-h-[120px] resize-y transition-all"
-                                    />
-                                  </div>
-
-                                  {/* Grounding Citations */}
-                                  {uniqueSubCitations.length > 0 && (
-                                    <div className="flex items-center gap-1.5 pt-2 border-t border-slate-100 text-[10px] font-sans">
-                                      <span className="text-slate-400 font-mono uppercase font-bold">Grounding Citations:</span>
-                                      <div className="flex flex-wrap gap-1">
-                                        {uniqueSubCitations.map((cite, cidx) => (
-                                          <button
-                                            key={cidx}
-                                            onClick={() => handleSourceClick(cite)}
-                                            className="px-2 py-0.5 rounded bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-medium border border-indigo-100 flex items-center gap-1 transition-colors cursor-pointer"
-                                          >
-                                            <Bookmark className="w-2.5 h-2.5 text-indigo-400" />
-                                            <span>{cite.split(': ').pop()}</span>
-                                          </button>
-                                        ))}
-                                      </div>
-                                    </div>
-                                  )}
                                 </div>
                               );
                             })}
