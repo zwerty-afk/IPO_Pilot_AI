@@ -115,148 +115,122 @@ export default function Dashboard() {
   // DYNAMIC WORKFLOW STAGE PROGRESS CALCULATIONS (REAL DATA ONLY)
   // ----------------------------------------------------------------------
 
-  // Stage 1: Company Setup (Completed upon company creation)
+  // Stage 1: Company Created (Completed upon company creation)
   const setupStatus = companyId ? 'Completed' : 'Not Started';
 
   // Stage 2: Intake Form
-  const intakeKeys = Object.keys(intakeData || {});
-  const filledIntakeSteps = intakeKeys.filter(k => {
+  const mandatoryIntakeSections = ['company_details', 'business_overview', 'promoters', 'capital_structure', 'financials', 'objects', 'rpt', 'litigation', 'legal_compliance', 'risk_information', 'other_disclosures'];
+  const filledMandatorySteps = mandatoryIntakeSections.filter(k => {
     const section = intakeData[k];
-    return section && typeof section === 'object' && Object.values(section).some(v => v !== undefined && v !== null && String(v).trim() !== '');
+    return section && typeof section === 'object' && Object.values(section).some(v => v !== undefined && v !== null && String(v).trim() !== '' && (!Array.isArray(v) || v.length > 0));
   });
-  const totalMandatorySteps = 11;
-  let intakeStatus = 'Not Started';
-  if (filledIntakeSteps.length >= totalMandatorySteps) {
-    intakeStatus = 'Completed';
-  } else if (filledIntakeSteps.length > 0) {
-    intakeStatus = 'In Progress';
-  }
+  const intakeIsComplete = filledMandatorySteps.length >= mandatoryIntakeSections.length;
+  const intakeStatus = intakeIsComplete ? 'Completed' : 'In Progress';
 
-  // Stage 3: OCR & AI Extraction
+  // Stage 3: Compliance Checklist
   const docList = documents || [];
-  let ocrStatus = 'Not Started';
-  if (docList.length === 0) {
-    ocrStatus = 'Not Started';
+  const uploadedDocTypes = new Set(docList.map(d => d.doc_type));
+  const hasMandatoryDocs = (uploadedDocTypes.has('aoa') || uploadedDocTypes.has('moa')) &&
+                           (uploadedDocTypes.has('financial_statements') || uploadedDocTypes.has('audited_financials') || uploadedDocTypes.has('annual_report'));
+  const hasComplianceInfo = intakeData.legal_compliance && Object.keys(intakeData.legal_compliance).length > 0;
+  const complianceIsComplete = intakeIsComplete && hasMandatoryDocs && hasComplianceInfo && criticalCount === 0;
+
+  let complianceStatus = 'Pending';
+  if (complianceIsComplete) {
+    complianceStatus = 'Completed';
+  } else if (intakeIsComplete) {
+    complianceStatus = 'In Progress';
   } else {
-    const hasUnconfirmed = docList.some(d => d.status === 'processing' || d.status === 'pending');
-    if (hasUnconfirmed) {
-      ocrStatus = 'In Progress';
-    } else {
-      ocrStatus = 'Completed';
-    }
+    complianceStatus = 'Pending';
   }
 
-  // Stage 4: Compliance Checklist
-  // Prerequisite: OCR & AI Extraction / Intake must not be Not Started
-  let complianceStatus = 'Not Started';
-  if (ocrStatus !== 'Not Started' || intakeStatus !== 'Not Started') {
-    const uploadedDocTypes = new Set(docList.map(d => d.doc_type));
-    const hasMandatoryDocs = uploadedDocTypes.has('aoa') && uploadedDocTypes.has('moa');
-    const hasFin = docList.some(d => d.doc_type === 'financial_statements' || d.doc_type === 'audited_financials');
-    if (hasMandatoryDocs && hasFin && intakeStatus === 'Completed') {
-      complianceStatus = 'Completed';
-    } else {
-      complianceStatus = 'In Progress';
-    }
+  // Stage 4: Gap Analysis
+  const gapIsComplete = complianceIsComplete && criticalCount === 0 && highCount === 0;
+  let gapStatus = 'Pending';
+  if (gapIsComplete) {
+    gapStatus = 'Completed';
+  } else if (intakeIsComplete) {
+    gapStatus = 'In Progress';
+  } else {
+    gapStatus = 'Pending';
   }
 
-  // Stage 5: Gap Analysis
-  // Prerequisite: Compliance Checklist must not be Not Started
-  let gapStatus = 'Not Started';
-  if (complianceStatus !== 'Not Started') {
-    if (criticalCount > 0) {
-      gapStatus = 'Blocked';
-    } else if (highCount > 0 || (stats?.gapReport && stats.gapReport.length > 0)) {
-      gapStatus = 'In Progress';
-    } else if (complianceStatus === 'Completed') {
-      gapStatus = 'Completed';
-    } else {
-      gapStatus = 'In Progress';
-    }
-  }
-
-  // Stage 6: Draft Prospectus
-  // Prerequisite: Gap Analysis must not be Not Started
+  // Stage 5: Draft Prospectus
   const requiredChapters = ['general', 'risk_factors', 'company_details', 'business_overview', 'financials', 'litigation', 'objects', 'other_disclosures'];
   const generatedChaptersCount = requiredChapters.filter(k => drafts[k] && drafts[k].blocks && drafts[k].blocks.length > 0 && drafts[k].status !== 'not_generated').length;
-  
-  let draftStatus = 'Not Started';
-  if (gapStatus !== 'Not Started') {
-    if (generatedChaptersCount === requiredChapters.length) {
-      draftStatus = 'Completed';
-    } else if (generatedChaptersCount > 0) {
-      draftStatus = 'In Progress';
-    }
-  }
+  const draftIsComplete = generatedChaptersCount === requiredChapters.length;
 
-  // Stage 7: Reviewer Workspace
-  // Prerequisite: Draft Prospectus must not be Not Started
-  let reviewerStatus = 'Not Started';
-  if (draftStatus !== 'Not Started') {
-    const reviewedCount = requiredChapters.filter(k => drafts[k]?.status === 'approved' || drafts[k]?.status === 'certified').length;
-    if (reviewedCount === requiredChapters.length) {
-      reviewerStatus = 'Completed';
-    } else {
-      reviewerStatus = 'In Progress';
-    }
-  }
-
-  // Stage 8: Certification
-  // Prerequisite: Reviewer Workspace must not be Not Started
-  let certStatus = 'Pending';
-  if (reviewerStatus === 'Completed') {
-    const certifiedCount = requiredChapters.filter(k => drafts[k]?.status === 'certified').length;
-    if (certifiedCount === requiredChapters.length) {
-      certStatus = 'Completed';
-    } else {
-      certStatus = 'Pending';
-    }
-  } else if (draftStatus === 'Not Started') {
-    certStatus = 'Not Started';
+  let draftStatus = 'Pending';
+  if (draftIsComplete) {
+    draftStatus = 'Completed';
+  } else if (intakeIsComplete) {
+    draftStatus = 'In Progress';
   } else {
-    certStatus = 'Pending';
+    draftStatus = 'Pending';
   }
 
-  // Stage 9: Export
-  // Prerequisite: Certification must be Completed
+  // Stage 6: Certification
+  const certifiedChaptersCount = requiredChapters.filter(k => drafts[k]?.status === 'certified').length;
+  const certIsComplete = draftIsComplete && certifiedChaptersCount === requiredChapters.length;
+
+  let certStatus = 'Not Started';
+  if (certIsComplete) {
+    certStatus = 'Completed';
+  } else if (draftIsComplete) {
+    certStatus = 'In Progress';
+  } else {
+    certStatus = 'Not Started';
+  }
+
+  // Stage 7: Export
+  const exportDownloaded = (auditLogs || []).some(l => l.action === 'EXPORT_DOWNLOADED' || (l.description && l.description.includes('downloaded')));
   let exportStatus = 'Locked';
-  if (certStatus === 'Completed') {
-    exportStatus = 'Available';
+  if (exportDownloaded) {
+    exportStatus = 'Completed';
+  } else if (certIsComplete) {
+    exportStatus = 'In Progress';
+  } else {
+    exportStatus = 'Locked';
   }
 
-  // SECTION 1: IPO WORKFLOW STAGES (DYNAMIC)
+  // Derived statuses for OCR and Reviewer
+  const ocrStatus = docList.length > 0 && docList.every(d => d.status === 'confirmed' || d.status === 'completed' || d.ocr_status === 'completed')
+    ? 'Completed'
+    : (docList.length > 0 ? 'In Progress' : 'Pending');
+
+  const reviewerStatus = openComments === 0 && certIsComplete
+    ? 'Completed'
+    : (draftIsComplete ? 'In Progress' : 'Pending');
+
+  // SECTION 1: IPO WORKFLOW STAGES (DYNAMIC - 7 STAGES)
   const workflowStages = [
-    { name: 'Company Setup', status: setupStatus, route: '/intake' },
+    { name: 'Company Created', status: setupStatus, route: '/intake' },
     { name: 'Intake Form', status: intakeStatus, route: '/intake' },
-    { name: 'OCR & AI Extraction', status: ocrStatus, route: '/intake' },
     { name: 'Compliance Checklist', status: complianceStatus, route: '/compliance-checklist' },
     { name: 'Gap Analysis', status: gapStatus, route: '/gap-analysis' },
     { name: 'Draft Prospectus', status: draftStatus, route: '/draft' },
-    { name: 'Reviewer Workspace', status: reviewerStatus, route: '/reviewer' },
     { name: 'Certification', status: certStatus, route: '/readiness' },
     { name: 'Export', status: exportStatus, route: '/draft-preview' }
   ];
 
-  const stageStatuses = [setupStatus, intakeStatus, ocrStatus, complianceStatus, gapStatus, draftStatus, reviewerStatus, certStatus, exportStatus];
+  const stageStatuses = [setupStatus, intakeStatus, complianceStatus, gapStatus, draftStatus, certStatus, exportStatus];
   const firstIncompleteIdx = stageStatuses.findIndex(s => s !== 'Completed');
-  const activeStageNumber = firstIncompleteIdx === -1 ? 9 : firstIncompleteIdx + 1;
+  const activeStageNumber = firstIncompleteIdx === -1 ? 7 : firstIncompleteIdx + 1;
 
   const currentStageText = stats?.currentStage || (
     activeStageNumber === 1 ? 'Company Account Setup' :
     activeStageNumber === 2 ? 'Intake Questionnaire Completion' :
-    activeStageNumber === 3 ? 'Document Upload & OCR Processing' :
-    activeStageNumber === 4 ? 'Statutory Compliance Validation' :
-    activeStageNumber === 5 ? 'Compliance Gap Resolution' :
-    activeStageNumber === 6 ? 'DRHP Prospectus Generation' :
-    activeStageNumber === 7 ? 'Reviewer Workspace Sign-Off' :
-    activeStageNumber === 8 ? 'Final Certification' : 'DRHP Filing Ready'
+    activeStageNumber === 3 ? 'Statutory Compliance Validation' :
+    activeStageNumber === 4 ? 'Compliance Gap Resolution' :
+    activeStageNumber === 5 ? 'DRHP Prospectus Generation' :
+    activeStageNumber === 6 ? 'Final Certification' : 'DRHP Export & Filing Ready'
   );
 
   // SECTION 2: TODAY'S PRIORITIES (DYNAMIC BASED ON REAL DATA)
   const priorityItems = [];
   if (intakeStatus !== 'Completed') {
     priorityItems.push({
-      title: filledIntakeSteps.length === 0 ? 'Complete Initial Intake Form' : 'Complete Pending Intake Questionnaire Sections',
+      title: filledMandatorySteps.length === 0 ? 'Complete Initial Intake Form' : 'Complete Pending Intake Questionnaire Sections',
       priority: 'High',
       owner: 'Issuer Team',
       dueDate: 'Today',
@@ -548,7 +522,7 @@ export default function Dashboard() {
             <p className="text-xs text-slate-500">End-to-end prospectus compilation and filing stages</p>
           </div>
           <span className="text-xs font-semibold text-indigo-600 bg-indigo-50 px-3 py-1 rounded-full border border-indigo-100">
-            Stage {activeStageNumber} of 9 Active
+            Stage {activeStageNumber} of 7 Active
           </span>
         </div>
 
@@ -562,8 +536,9 @@ export default function Dashboard() {
                   className={`w-full text-left p-3 rounded-xl border transition-all hover:shadow-md flex flex-col justify-between h-24 ${
                     stg.status === 'Completed' ? 'bg-emerald-50/50 border-emerald-200 hover:border-emerald-300' :
                     stg.status === 'In Progress' ? 'bg-indigo-50/60 border-indigo-200 hover:border-indigo-400 ring-2 ring-indigo-500/10' :
-                    stg.status === 'Blocked' ? 'bg-red-50/60 border-red-200 hover:border-red-300' :
-                    'bg-slate-50/60 border-slate-200 hover:border-slate-300'
+                    stg.status === 'Pending' ? 'bg-amber-50/50 border-amber-200 hover:border-amber-300' :
+                    stg.status === 'Not Started' ? 'bg-slate-50/60 border-slate-200 hover:border-slate-300' :
+                    'bg-slate-50/40 border-slate-200/60 opacity-75'
                   }`}
                 >
                   <div className="flex items-center justify-between w-full">

@@ -10,7 +10,8 @@ import {
   addComment, 
   resolveComment, 
   getIntake, 
-  getDocuments 
+  getDocuments,
+  downloadPdf
 } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import FrontMatterTemplate from '../components/FrontMatterTemplate';
@@ -501,68 +502,33 @@ export default function DraftPreview({ initialMode = 'chapter' }) {
         setExportingSectionPdf(true);
         setExportNotice(null);
 
-        const printWindow = window.open('', '_blank', 'width=900,height=1100');
-        if (!printWindow) {
-          throw new Error('Pop-up blocked. Please allow pop-ups to export PDF.');
-        }
-
-        printWindow.document.write(`
-          <!DOCTYPE html>
-          <html>
-            <head>
-              <meta charset="utf-8"/>
-              <title>${title}</title>
-              <style>
-                @media print {
-                  @page { size: A4; margin: 15mm; }
-                  body { font-family: 'Times New Roman', serif; color: #0f172a; font-size: 11pt; line-height: 1.6; background: #fff; }
-                  h1, h2, h3, h4 { font-family: Arial, Helvetica, sans-serif; color: #0f172a; font-weight: bold; page-break-after: avoid; }
-                  h1 { font-size: 16pt; border-bottom: 2pt solid #0f172a; margin-bottom: 12pt; padding-bottom: 4pt; text-transform: uppercase; }
-                  h2 { font-size: 14pt; margin-top: 14pt; margin-bottom: 6pt; text-transform: uppercase; }
-                  h3 { font-size: 12pt; margin-top: 10pt; margin-bottom: 4pt; color: #1e293b; }
-                  p { margin-bottom: 8pt; text-align: justify; }
-                  table { width: 100%; border-collapse: collapse; margin: 12pt 0; page-break-inside: avoid; }
-                  th, td { border: 1px solid #cbd5e1; padding: 6pt 8pt; text-align: left; font-size: 10pt; }
-                  th { background-color: #f1f5f9 !important; font-weight: bold; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-                  .stat-card, .callout, .bg-slate-50, .bg-indigo-50 { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-                  button, textarea, .page-break-divider, label { display: none !important; }
-                }
-                body { font-family: Arial, Helvetica, sans-serif; padding: 24px; color: #0f172a; line-height: 1.6; }
-                h1 { font-size: 16pt; border-bottom: 2px solid #0f172a; padding-bottom: 6px; }
-                h2 { font-size: 14pt; color: #0f172a; margin-top: 16px; }
-                h3 { font-size: 12pt; color: #1e293b; margin-top: 12px; }
-                p { margin-bottom: 8px; }
-                table { width: 100%; border-collapse: collapse; margin: 12px 0; }
-                th, td { border: 1px solid #cbd5e1; padding: 6px 8px; font-size: 10pt; }
-                th { background-color: #f1f5f9; font-weight: bold; }
-              </style>
-            </head>
-            <body>
-              <h1 style="text-align: center;">SEBI SME DRHP — DISCLOSURE SECTION</h1>
-              <h2 style="text-align: center; color: #4338ca; margin-bottom: 20px;">${title}</h2>
-              <div>${htmlContent}</div>
-              <script>
-                window.onload = function() {
-                  setTimeout(function() {
-                    window.print();
-                  }, 250);
-                };
-              </script>
-            </body>
-          </html>
-        `);
-        printWindow.document.close();
+        const res = await downloadPdf(companyId);
+        const dataBlob = res.data;
+        
+        const blobData = dataBlob instanceof Blob ? dataBlob : new Blob([dataBlob], { 
+          type: 'application/pdf' 
+        });
+        
+        const url = window.URL.createObjectURL(blobData);
+        const link = document.createElement('a');
+        link.href = url;
+        link.setAttribute('download', `IPO_Draft_Prospectus_${companyId}_${new Date().toISOString().split('T')[0]}.pdf`);
+        document.body.appendChild(link);
+        link.click();
+        
+        link.parentNode.removeChild(link);
+        window.URL.revokeObjectURL(url);
 
         setExportNotice({
           type: 'success',
-          message: `PDF export window opened for "${title}".`
+          message: 'Full DRHP Draft Prospectus exported successfully as PDF!'
         });
-        setTimeout(() => setExportNotice(null), 4000);
+        setTimeout(() => setExportNotice(null), 5000);
       } catch (err) {
         console.error("PDF export failed:", err);
         setExportNotice({
           type: 'error',
-          message: err.message || 'Failed to export section as PDF.'
+          message: err.message || 'Failed to export full draft prospectus as PDF.'
         });
         setTimeout(() => setExportNotice(null), 5000);
       } finally {
