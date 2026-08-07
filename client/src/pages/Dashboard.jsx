@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getCompanyStatus, generateDrafts, getIpoReadiness, getIntake, getDocuments, getDrafts } from '../services/api';
+import { getCompanyStatus, generateDrafts, getIpoReadiness, getIntake, getDocuments, getDrafts, getAuditLogs } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { 
   TrendingUp, 
@@ -39,24 +39,28 @@ export default function Dashboard() {
   const [intakeData, setIntakeData] = useState({});
   const [documents, setDocuments] = useState([]);
   const [drafts, setDrafts] = useState({});
+  const [auditLogs, setAuditLogs] = useState([]);
 
   const companyId = localStorage.getItem('ipo_company_id') || 'aarav-precision';
 
   const loadStatus = async () => {
     try {
       setLoading(true);
-      const [res, readinessRes, intakeRes, docsRes, draftsRes] = await Promise.all([
+      const [res, readinessRes, intakeRes, docsRes, draftsRes, auditLogsRes] = await Promise.all([
         getCompanyStatus(companyId),
         getIpoReadiness(companyId),
         getIntake(companyId),
         getDocuments(companyId),
-        getDrafts(companyId)
+        getDrafts(companyId),
+        getAuditLogs(companyId).catch(() => ({ data: { logs: [] } }))
       ]);
       setStats(res.data || res);
       setReadinessData(readinessRes.data || readinessRes);
       setIntakeData(intakeRes.data || intakeRes || {});
       setDocuments(docsRes.data || docsRes || []);
       setDrafts(draftsRes.data || draftsRes || {});
+      const logs = auditLogsRes.data?.logs || auditLogsRes.logs || [];
+      setAuditLogs(logs);
     } catch (err) {
       console.error("Failed to load dashboard status:", err);
     } finally {
@@ -66,6 +70,13 @@ export default function Dashboard() {
 
   useEffect(() => {
     loadStatus();
+    const handleUpdate = () => loadStatus();
+    window.addEventListener('ipo-readiness-changed', handleUpdate);
+    window.addEventListener('storage', handleUpdate);
+    return () => {
+      window.removeEventListener('ipo-readiness-changed', handleUpdate);
+      window.removeEventListener('storage', handleUpdate);
+    };
   }, [companyId]);
 
   const handleSyncAI = async () => {
@@ -92,132 +103,351 @@ export default function Dashboard() {
     );
   }
 
-  // Derived metrics
-  const companyName = stats?.companyName || 'Aarav Precision Components Ltd.';
-  const ipoType = stats?.ipoType || 'SME IPO (NSE Emerge / BSE SME)';
-  const currentStage = stats?.currentStage || 'Draft Prospectus Preparation & Gap Analysis';
-  const readinessScore = readinessData?.overall_score ?? (stats?.completenessPercentage || 78);
-  const criticalCount = stats?.inconsistenciesCount ?? 2;
-  const highCount = stats?.gapsCount ?? 3;
-  const openComments = stats?.openComments ?? 4;
+  // Derived metrics from REAL DATA ONLY
+  const companyName = stats?.companyName || intakeData.company_details?.legal_name || 'Your Company';
+  const ipoType = stats?.ipoType || (intakeData.company_details?.proposed_exchange ? (intakeData.company_details.proposed_exchange === 'mainboard' ? 'Main Board IPO' : 'SME IPO (NSE Emerge / BSE SME)') : 'SME IPO (NSE Emerge / BSE SME)');
+  const readinessScore = readinessData?.overall_score ?? (stats?.completenessPercentage ?? 0);
+  const criticalCount = stats?.inconsistenciesCount ?? 0;
+  const highCount = stats?.gapsCount ?? 0;
+  const openComments = stats?.openComments ?? 0;
 
-  // SECTION 1: IPO WORKFLOW STAGES
+  // ----------------------------------------------------------------------
+  // DYNAMIC WORKFLOW STAGE PROGRESS CALCULATIONS (REAL DATA ONLY)
+  // ----------------------------------------------------------------------
+
+  // Stage 1: Company Setup (Completed upon company creation)
+  const setupStatus = companyId ? 'Completed' : 'Not Started';
+
+  // Stage 2: Intake Form
+  const intakeKeys = Object.keys(intakeData || {});
+  const filledIntakeSteps = intakeKeys.filter(k => {
+    const section = intakeData[k];
+    return section && typeof section === 'object' && Object.values(section).some(v => v !== undefined && v !== null && String(v).trim() !== '');
+  });
+  const totalMandatorySteps = 11;
+  let intakeStatus = 'Not Started';
+  if (filledIntakeSteps.length >= totalMandatorySteps) {
+    intakeStatus = 'Completed';
+  } else if (filledIntakeSteps.length > 0) {
+    intakeStatus = 'In Progress';
+  }
+
+  // Stage 3: OCR & AI Extraction
+  const docList = documents || [];
+  let ocrStatus = 'Not Started';
+  if (docList.length === 0) {
+    ocrStatus = 'Not Started';
+  } else {
+    const hasUnconfirmed = docList.some(d => d.status === 'processing' || d.status === 'pending');
+    if (hasUnconfirmed) {
+      ocrStatus = 'In Progress';
+    } else {
+      ocrStatus = 'Completed';
+    }
+  }
+
+  // Stage 4: Compliance Checklist
+  // Prerequisite: OCR & AI Extraction / Intake must not be Not Started
+  let complianceStatus = 'Not Started';
+  if (ocrStatus !== 'Not Started' || intakeStatus !== 'Not Started') {
+    const uploadedDocTypes = new Set(docList.map(d => d.doc_type));
+    const hasMandatoryDocs = uploadedDocTypes.has('aoa') && uploadedDocTypes.has('moa');
+    const hasFin = docList.some(d => d.doc_type === 'financial_statements' || d.doc_type === 'audited_financials');
+    if (hasMandatoryDocs && hasFin && intakeStatus === 'Completed') {
+      complianceStatus = 'Completed';
+    } else {
+      complianceStatus = 'In Progress';
+    }
+  }
+
+  // Stage 5: Gap Analysis
+  // Prerequisite: Compliance Checklist must not be Not Started
+  let gapStatus = 'Not Started';
+  if (complianceStatus !== 'Not Started') {
+    if (criticalCount > 0) {
+      gapStatus = 'Blocked';
+    } else if (highCount > 0 || (stats?.gapReport && stats.gapReport.length > 0)) {
+      gapStatus = 'In Progress';
+    } else if (complianceStatus === 'Completed') {
+      gapStatus = 'Completed';
+    } else {
+      gapStatus = 'In Progress';
+    }
+  }
+
+  // Stage 6: Draft Prospectus
+  // Prerequisite: Gap Analysis must not be Not Started
+  const requiredChapters = ['general', 'risk_factors', 'company_details', 'business_overview', 'financials', 'litigation', 'objects', 'other_disclosures'];
+  const generatedChaptersCount = requiredChapters.filter(k => drafts[k] && drafts[k].blocks && drafts[k].blocks.length > 0 && drafts[k].status !== 'not_generated').length;
+  
+  let draftStatus = 'Not Started';
+  if (gapStatus !== 'Not Started') {
+    if (generatedChaptersCount === requiredChapters.length) {
+      draftStatus = 'Completed';
+    } else if (generatedChaptersCount > 0) {
+      draftStatus = 'In Progress';
+    }
+  }
+
+  // Stage 7: Reviewer Workspace
+  // Prerequisite: Draft Prospectus must not be Not Started
+  let reviewerStatus = 'Not Started';
+  if (draftStatus !== 'Not Started') {
+    const reviewedCount = requiredChapters.filter(k => drafts[k]?.status === 'approved' || drafts[k]?.status === 'certified').length;
+    if (reviewedCount === requiredChapters.length) {
+      reviewerStatus = 'Completed';
+    } else {
+      reviewerStatus = 'In Progress';
+    }
+  }
+
+  // Stage 8: Certification
+  // Prerequisite: Reviewer Workspace must not be Not Started
+  let certStatus = 'Pending';
+  if (reviewerStatus === 'Completed') {
+    const certifiedCount = requiredChapters.filter(k => drafts[k]?.status === 'certified').length;
+    if (certifiedCount === requiredChapters.length) {
+      certStatus = 'Completed';
+    } else {
+      certStatus = 'Pending';
+    }
+  } else if (draftStatus === 'Not Started') {
+    certStatus = 'Not Started';
+  } else {
+    certStatus = 'Pending';
+  }
+
+  // Stage 9: Export
+  // Prerequisite: Certification must be Completed
+  let exportStatus = 'Locked';
+  if (certStatus === 'Completed') {
+    exportStatus = 'Available';
+  }
+
+  // SECTION 1: IPO WORKFLOW STAGES (DYNAMIC)
   const workflowStages = [
-    { name: 'Company Setup', status: 'Completed', route: '/intake' },
-    { name: 'Intake Form', status: 'Completed', route: '/intake' },
-    { name: 'OCR & AI Extraction', status: 'Completed', route: '/intake' },
-    { name: 'Compliance Checklist', status: 'In Progress', route: '/compliance-checklist' },
-    { name: 'Gap Analysis', status: criticalCount > 0 ? 'Blocked' : 'In Progress', route: '/gap-analysis' },
-    { name: 'Draft Prospectus', status: 'In Progress', route: '/draft' },
-    { name: 'Reviewer Workspace', status: 'In Progress', route: '/reviewer' },
-    { name: 'Certification', status: 'Pending', route: '/readiness' },
-    { name: 'Export', status: 'Pending', route: '/draft-preview' }
+    { name: 'Company Setup', status: setupStatus, route: '/intake' },
+    { name: 'Intake Form', status: intakeStatus, route: '/intake' },
+    { name: 'OCR & AI Extraction', status: ocrStatus, route: '/intake' },
+    { name: 'Compliance Checklist', status: complianceStatus, route: '/compliance-checklist' },
+    { name: 'Gap Analysis', status: gapStatus, route: '/gap-analysis' },
+    { name: 'Draft Prospectus', status: draftStatus, route: '/draft' },
+    { name: 'Reviewer Workspace', status: reviewerStatus, route: '/reviewer' },
+    { name: 'Certification', status: certStatus, route: '/readiness' },
+    { name: 'Export', status: exportStatus, route: '/draft-preview' }
   ];
 
-  // SECTION 2: TODAY'S PRIORITIES (Top 3-5 Actionable Tasks)
-  const todayPriorities = [
-    {
-      title: 'Upload FY24 Audit Report',
+  const stageStatuses = [setupStatus, intakeStatus, ocrStatus, complianceStatus, gapStatus, draftStatus, reviewerStatus, certStatus, exportStatus];
+  const firstIncompleteIdx = stageStatuses.findIndex(s => s !== 'Completed');
+  const activeStageNumber = firstIncompleteIdx === -1 ? 9 : firstIncompleteIdx + 1;
+
+  const currentStageText = stats?.currentStage || (
+    activeStageNumber === 1 ? 'Company Account Setup' :
+    activeStageNumber === 2 ? 'Intake Questionnaire Completion' :
+    activeStageNumber === 3 ? 'Document Upload & OCR Processing' :
+    activeStageNumber === 4 ? 'Statutory Compliance Validation' :
+    activeStageNumber === 5 ? 'Compliance Gap Resolution' :
+    activeStageNumber === 6 ? 'DRHP Prospectus Generation' :
+    activeStageNumber === 7 ? 'Reviewer Workspace Sign-Off' :
+    activeStageNumber === 8 ? 'Final Certification' : 'DRHP Filing Ready'
+  );
+
+  // SECTION 2: TODAY'S PRIORITIES (DYNAMIC BASED ON REAL DATA)
+  const priorityItems = [];
+  if (intakeStatus !== 'Completed') {
+    priorityItems.push({
+      title: filledIntakeSteps.length === 0 ? 'Complete Initial Intake Form' : 'Complete Pending Intake Questionnaire Sections',
+      priority: 'High',
+      owner: 'Issuer Team',
+      dueDate: 'Today',
+      action: 'Complete Intake',
+      route: '/intake'
+    });
+  }
+  if (ocrStatus !== 'Completed') {
+    priorityItems.push({
+      title: docList.length === 0 ? 'Upload Mandatory Compliance Documents (AOA, MOA, Financials)' : 'Execute OCR Extraction on Uploaded Documents',
       priority: 'High',
       owner: 'Finance Team',
-      dueDate: 'Today, 5:00 PM',
-      action: 'Upload FY24 Audit',
+      dueDate: 'Today',
+      action: docList.length === 0 ? 'Upload Documents' : 'Run OCR',
       route: '/intake'
-    },
-    {
-      title: 'Resolve Compliance Discrepancy',
-      priority: 'Critical',
+    });
+  }
+  if (complianceStatus !== 'Completed') {
+    priorityItems.push({
+      title: 'Run Statutory SEBI ICDR Compliance Checklist Engine',
+      priority: criticalCount > 0 ? 'Critical' : 'High',
       owner: 'Legal Counsel',
-      dueDate: 'Aug 09, 2026',
-      action: 'Resolve Compliance Failure',
+      dueDate: 'Today',
+      action: 'Run Validation',
+      route: '/compliance-checklist'
+    });
+  }
+  if (gapStatus !== 'Completed' && (criticalCount > 0 || highCount > 0)) {
+    priorityItems.push({
+      title: `Resolve ${criticalCount + highCount} Compliance & Discrepancy Gaps`,
+      priority: criticalCount > 0 ? 'Critical' : 'High',
+      owner: 'Legal Counsel',
+      dueDate: 'Today',
+      action: 'Resolve Gaps',
       route: '/gap-analysis'
-    },
-    {
-      title: 'Clarify Promoter Lock-in Comment',
-      priority: 'High',
-      owner: 'Merchant Banker',
-      dueDate: 'Aug 10, 2026',
-      action: 'Respond to Reviewer',
-      route: '/reviewer'
-    },
-    {
-      title: 'Review Material Contracts Gap',
-      priority: 'Medium',
-      owner: 'Promoter',
-      dueDate: 'Aug 11, 2026',
-      action: 'Review Gap Analysis',
-      route: '/gap-analysis'
-    },
-    {
-      title: 'Generate Restated Financials Chapter',
+    });
+  }
+  if (draftStatus !== 'Completed') {
+    priorityItems.push({
+      title: 'Generate DRHP Prospectus Draft Chapters',
       priority: 'Medium',
       owner: 'AI Copilot',
-      dueDate: 'Aug 12, 2026',
-      action: 'Generate Financial Chapter',
+      dueDate: 'Today',
+      action: 'Generate Drafts',
       route: '/draft'
+    });
+  }
+  if (openComments > 0) {
+    priorityItems.push({
+      title: `Respond to ${openComments} Reviewer Workspace Clarifications`,
+      priority: 'High',
+      owner: 'Merchant Banker',
+      dueDate: 'Today',
+      action: 'Respond to Reviewer',
+      route: '/reviewer'
+    });
+  }
+  if (certStatus !== 'Completed') {
+    priorityItems.push({
+      title: 'Certify DRHP Prospectus Sections for Filing',
+      priority: 'Medium',
+      owner: 'Lead Banker',
+      dueDate: 'Today',
+      action: 'Certify Sections',
+      route: '/readiness'
+    });
+  }
+  const todayPriorities = priorityItems.slice(0, 5);
+
+  // SECTION 4: DRHP CHAPTER DRAFT PROGRESS (DYNAMIC FROM DRAFTS STATE)
+  const chapterDefinitions = [
+    { name: 'General', code: 'general' },
+    { name: 'Risk Factors', code: 'risk_factors' },
+    { name: 'Introduction', code: 'company_details' },
+    { name: 'About Company', code: 'business_overview' },
+    { name: 'Financial', code: 'financials' },
+    { name: 'Legal', code: 'litigation' },
+    { name: 'Offer', code: 'objects' },
+    { name: 'Other Information', code: 'other_disclosures' }
+  ];
+
+  const drhpChapters = chapterDefinitions.map(def => {
+    const sec = drafts[def.code];
+    if (!sec || !sec.blocks || sec.blocks.length === 0 || sec.status === 'not_generated') {
+      return { name: def.name, code: def.code, status: 'Not Started', progress: 0 };
     }
-  ];
+    if (sec.status === 'certified') {
+      return { name: def.name, code: def.code, status: 'Certified', progress: 100 };
+    }
+    if (sec.status === 'approved') {
+      return { name: def.name, code: def.code, status: 'Completed', progress: 90 };
+    }
+    if (sec.status === 'in_review' || sec.status === 'clarification_requested') {
+      return { name: def.name, code: def.code, status: 'Under Review', progress: 75 };
+    }
+    return { name: def.name, code: def.code, status: 'Draft', progress: 50 };
+  });
 
-  // SECTION 4: DRHP CHAPTER DRAFT PROGRESS
-  const drhpChapters = [
-    { name: 'General', code: 'general', status: 'Certified', progress: 100 },
-    { name: 'Risk Factors', code: 'risk_factors', status: 'Under Review', progress: 75 },
-    { name: 'Introduction', code: 'company_details', status: 'Completed', progress: 90 },
-    { name: 'About Company', code: 'business_overview', status: 'Completed', progress: 85 },
-    { name: 'Financial', code: 'financials', status: 'Draft', progress: 60 },
-    { name: 'Legal', code: 'litigation', status: 'Draft', progress: 50 },
-    { name: 'Offer', code: 'objects', status: 'Under Review', progress: 70 },
-    { name: 'Other Information', code: 'other_disclosures', status: 'Draft', progress: 40 }
-  ];
+  // SECTION 6: PENDING TASKS TABLE DATA (DYNAMIC)
+  const pendingTasksTable = todayPriorities.map((t, idx) => ({
+    id: idx + 1,
+    task: t.title,
+    assignedTo: t.owner,
+    priority: t.priority,
+    dueDate: t.dueDate,
+    status: t.priority === 'Critical' ? 'Blocked' : 'Pending',
+    route: t.route
+  }));
 
-  // SECTION 6: PENDING TASKS TABLE DATA
-  const pendingTasksTable = [
-    { id: 1, task: 'Upload FY24 Restated Financial Statements', assignedTo: 'Statutory Auditor', priority: 'High', dueDate: 'Today', status: 'Pending', route: '/intake' },
-    { id: 2, task: 'Resolve Promoter Holding Discrepancy (62% vs 58%)', assignedTo: 'Legal Counsel', priority: 'Critical', dueDate: 'Aug 09, 2026', status: 'Blocked', route: '/gap-analysis' },
-    { id: 3, task: 'Respond to Merchant Banker query on Litigation', assignedTo: 'Merchant Banker', priority: 'High', dueDate: 'Aug 10, 2026', status: 'In Progress', route: '/reviewer' },
-    { id: 4, task: 'Verify Objects of Issue expenditure schedule', assignedTo: 'Promoter', priority: 'Medium', dueDate: 'Aug 11, 2026', status: 'Pending', route: '/intake' },
-    { id: 5, task: 'Audit Capital Structure history notes', assignedTo: 'Merchant Banker', priority: 'Low', dueDate: 'Aug 14, 2026', status: 'Pending', route: '/compliance-checklist' }
-  ];
+  // SECTION 7: RECENT ACTIVITY TIMELINE (DYNAMIC FROM AUDIT LOGS)
+  const recentActivities = auditLogs.length > 0
+    ? auditLogs.slice(0, 6).map((log) => {
+        const action = log.action || '';
+        let icon = Sparkles;
+        let iconBg = 'bg-indigo-50 text-indigo-600';
+        if (action.includes('DOCUMENT') || action.includes('UPLOAD')) {
+          icon = FileSpreadsheet;
+          iconBg = 'bg-indigo-50 text-indigo-600';
+        } else if (action.includes('INTAKE') || action.includes('RESOLVED')) {
+          icon = CheckCircle2;
+          iconBg = 'bg-emerald-50 text-emerald-600';
+        } else if (action.includes('COMMENT')) {
+          icon = MessageSquare;
+          iconBg = 'bg-amber-50 text-amber-600';
+        } else if (action.includes('CERTIFY')) {
+          icon = ShieldCheck;
+          iconBg = 'bg-emerald-50 text-emerald-600';
+        }
 
-  // SECTION 7: RECENT ACTIVITY TIMELINE
-  const recentActivities = [
-    { time: '10 mins ago', title: 'Financial Updated', desc: 'Statutory auditor uploaded audited financial annexures for FY24', icon: FileSpreadsheet, iconBg: 'bg-indigo-50 text-indigo-600' },
-    { time: '45 mins ago', title: 'Gap Closed', desc: 'Cross-document mismatch on promoter shareholding resolved', icon: CheckCircle2, iconBg: 'bg-emerald-50 text-emerald-600' },
-    { time: '2 hours ago', title: 'Draft Generated', desc: 'AI Copilot generated Chapter 5 - Financial Information draft', icon: Sparkles, iconBg: 'bg-purple-50 text-purple-600' },
-    { time: '4 hours ago', title: 'Reviewer Comment', desc: 'Lead merchant banker requested clarification on Risk Factors #3', icon: MessageSquare, iconBg: 'bg-amber-50 text-amber-600' },
-    { time: 'Yesterday', title: 'Certification', desc: 'Section 1 General Disclosures officially certified by Lead Banker', icon: ShieldCheck, iconBg: 'bg-emerald-50 text-emerald-600' },
-    { time: '2 days ago', title: 'Export', desc: 'Preliminary DRHP preview package exported as draft PDF', icon: ExternalLink, iconBg: 'bg-slate-100 text-slate-600' }
-  ];
+        const logTime = log.created_at ? new Date(log.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Recently';
+        return {
+          time: logTime,
+          title: log.action ? log.action.replace(/_/g, ' ') : 'System Action',
+          desc: log.description || 'Audit log action recorded',
+          icon,
+          iconBg
+        };
+      })
+    : [
+        {
+          time: 'Initial',
+          title: 'Company Setup Initialized',
+          desc: `Clean project tracking initialized from zero for ${companyName}.`,
+          icon: CheckCircle2,
+          iconBg: 'bg-indigo-50 text-indigo-600'
+        }
+      ];
 
-  // SECTION 8: AI RECOMMENDATIONS (EXACTLY 3)
-  const aiRecommendations = [
-    {
-      title: 'Run Compliance Validation',
+  // SECTION 8: AI RECOMMENDATIONS (DYNAMIC)
+  const recItems = [];
+  if (intakeStatus !== 'Completed' || ocrStatus !== 'Completed') {
+    recItems.push({
+      title: 'Complete Intake & Document Upload',
+      desc: 'Submit mandatory legal identity, financial statements, and corporate charter documents.',
+      action: 'Go to Intake',
+      route: '/intake'
+    });
+  }
+  if (complianceStatus !== 'Completed') {
+    recItems.push({
+      title: 'Run Statutory Compliance Engine',
       desc: 'Scan all 12 SEBI ICDR chapters for missing mandatory clauses, disclosures, and annexure references.',
       action: 'Run Validation',
       route: '/compliance-checklist'
-    },
-    {
-      title: 'Generate Financial Chapter',
-      desc: 'Automatically synthesize extracted audited balance sheets into SEBI restated financial disclosure format.',
-      action: 'Generate Chapter',
+    });
+  }
+  if (draftStatus !== 'Completed') {
+    recItems.push({
+      title: 'Generate DRHP Draft Chapters',
+      desc: 'Synthesize extracted balance sheet items and intake answers into SEBI disclosure format.',
+      action: 'Generate Chapters',
       route: '/draft'
-    },
-    {
-      title: 'Submit for Review',
-      desc: 'Send verified Company Overview and Objects of the Issue chapters to Lead Merchant Banker for sign-off.',
+    });
+  }
+  if (reviewerStatus !== 'Completed') {
+    recItems.push({
+      title: 'Submit Chapters for Review',
+      desc: 'Send verified Company Overview and Objects of the Issue chapters to Lead Merchant Banker.',
       action: 'Submit for Review',
       route: '/reviewer'
-    }
-  ];
+    });
+  }
+  const aiRecommendations = recItems.slice(0, 3);
 
-  // SECTION 10: TEAM OVERVIEW
+  // SECTION 10: TEAM OVERVIEW (REAL COMPANY NAME & TEAM ROLES)
   const teamMembers = [
-    { entity: 'Company (Promoter)', name: 'Aarav Precision Ltd.', role: 'Issuer', status: 'Active Drafting', lastActive: '2 mins ago', badgeColor: 'bg-indigo-100 text-indigo-800' },
-    { entity: 'Merchant Banker', name: 'Equinox Capital Services', role: 'Lead Manager', status: 'Reviewing Drafts', lastActive: '15 mins ago', badgeColor: 'bg-purple-100 text-purple-800' },
-    { entity: 'Legal Counsel', name: 'Shardul Counsel LLP', role: 'Legal Auditor', status: 'Vetting Disclosures', lastActive: '1 hour ago', badgeColor: 'bg-amber-100 text-amber-800' },
-    { entity: 'Statutory Auditor', name: 'B.K. Mehta & Co.', role: 'Financial Auditor', status: 'Financials Uploaded', lastActive: '3 hours ago', badgeColor: 'bg-emerald-100 text-emerald-800' },
-    { entity: 'Reviewer', name: 'SEBI Compliance Desk', role: 'Compliance Officer', status: 'Comments Pending', lastActive: '5 hours ago', badgeColor: 'bg-blue-100 text-blue-800' }
+    { entity: 'Company (Promoter)', name: companyName, role: 'Issuer', status: intakeStatus === 'Completed' ? 'Intake Complete' : 'Active Intake', lastActive: 'Recently', badgeColor: 'bg-indigo-100 text-indigo-800' },
+    { entity: 'Merchant Banker', name: 'Lead Manager Desk', role: 'Lead Manager', status: reviewerStatus === 'Completed' ? 'Approved' : 'Reviewing Drafts', lastActive: 'Recently', badgeColor: 'bg-purple-100 text-purple-800' },
+    { entity: 'Legal Counsel', name: 'Statutory Counsel LLP', role: 'Legal Auditor', status: complianceStatus === 'Completed' ? 'Compliant' : 'Vetting Disclosures', lastActive: 'Recently', badgeColor: 'bg-amber-100 text-amber-800' },
+    { entity: 'Statutory Auditor', name: 'Financial Auditor Desk', role: 'Financial Auditor', status: docList.length > 0 ? 'Financials Uploaded' : 'Pending Audit Sync', lastActive: 'Recently', badgeColor: 'bg-emerald-100 text-emerald-800' },
+    { entity: 'Reviewer', name: 'SEBI Compliance Desk', role: 'Compliance Officer', status: openComments > 0 ? `${openComments} Open Comments` : 'Compliant', lastActive: 'Recently', badgeColor: 'bg-blue-100 text-blue-800' }
   ];
 
   // Helper badge styles
@@ -225,6 +455,7 @@ export default function Dashboard() {
     switch (status) {
       case 'Completed':
       case 'Certified':
+      case 'Available':
         return <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800"><Check className="w-3 h-3" /> {status}</span>;
       case 'In Progress':
       case 'Draft':
@@ -234,7 +465,9 @@ export default function Dashboard() {
       case 'Blocked':
       case 'Critical':
         return <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-red-100 text-red-800"><AlertCircle className="w-3 h-3" /> {status}</span>;
+      case 'Locked':
       case 'Pending':
+      case 'Not Started':
       default:
         return <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-slate-100 text-slate-600">{status}</span>;
     }
@@ -280,7 +513,7 @@ export default function Dashboard() {
             <span className="font-medium text-slate-600">{ipoType}</span>
             <span className="text-slate-300">•</span>
             <span className="font-medium text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
-              Stage: {currentStage}
+              Stage: {currentStageText}
             </span>
           </div>
         </div>
@@ -315,7 +548,7 @@ export default function Dashboard() {
             <p className="text-xs text-slate-500">End-to-end prospectus compilation and filing stages</p>
           </div>
           <span className="text-xs font-semibold text-indigo-600 bg-indigo-50 px-3 py-1 rounded-full border border-indigo-100">
-            Stage 5 of 9 Active
+            Stage {activeStageNumber} of 9 Active
           </span>
         </div>
 
@@ -369,7 +602,7 @@ export default function Dashboard() {
               </div>
             </div>
             <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-amber-50 text-amber-700 border border-amber-200">
-              5 Action Items
+              {todayPriorities.length} Action Items
             </span>
           </div>
 
@@ -464,7 +697,7 @@ export default function Dashboard() {
                   <span className="text-xs font-bold uppercase tracking-wider">Resolved</span>
                   <CheckCircle2 className="w-4 h-4" />
                 </div>
-                <p className="text-2xl font-extrabold text-emerald-900">12</p>
+                <p className="text-2xl font-extrabold text-emerald-900">{stats?.resolvedCount ?? (readinessScore >= 80 ? 12 : Math.round(readinessScore / 8))}</p>
                 <p className="text-[10px] text-emerald-700 font-medium">Verified Clauses</p>
               </div>
             </div>
@@ -557,31 +790,31 @@ export default function Dashboard() {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
           <div className="p-4 rounded-xl bg-amber-50/60 border border-amber-200/80 text-center space-y-1">
             <p className="text-xs font-bold text-amber-700 uppercase tracking-wider">Pending Reviews</p>
-            <p className="text-2xl font-extrabold text-amber-900">3 Chapters</p>
+            <p className="text-2xl font-extrabold text-amber-900">{requiredChapters.filter(k => drafts[k] && drafts[k].status !== 'certified' && drafts[k].status !== 'approved').length} Chapters</p>
             <p className="text-[10px] text-amber-700">Awaiting Feedback</p>
           </div>
 
           <div className="p-4 rounded-xl bg-red-50/60 border border-red-200/80 text-center space-y-1">
             <p className="text-xs font-bold text-red-700 uppercase tracking-wider">Changes Requested</p>
-            <p className="text-2xl font-extrabold text-red-900">1 Section</p>
+            <p className="text-2xl font-extrabold text-red-900">{requiredChapters.filter(k => drafts[k]?.status === 'clarification_requested').length} Section</p>
             <p className="text-[10px] text-red-700">Risk Factors #3</p>
           </div>
 
           <div className="p-4 rounded-xl bg-indigo-50/60 border border-indigo-200/80 text-center space-y-1">
             <p className="text-xs font-bold text-indigo-700 uppercase tracking-wider">Approved Chapters</p>
-            <p className="text-2xl font-extrabold text-indigo-900">4 Chapters</p>
+            <p className="text-2xl font-extrabold text-indigo-900">{requiredChapters.filter(k => drafts[k]?.status === 'approved').length} Chapters</p>
             <p className="text-[10px] text-indigo-700">Ready for Certification</p>
           </div>
 
           <div className="p-4 rounded-xl bg-emerald-50/60 border border-emerald-200/80 text-center space-y-1">
             <p className="text-xs font-bold text-emerald-700 uppercase tracking-wider">Certified Chapters</p>
-            <p className="text-2xl font-extrabold text-emerald-900">2 Chapters</p>
+            <p className="text-2xl font-extrabold text-emerald-900">{requiredChapters.filter(k => drafts[k]?.status === 'certified').length} Chapters</p>
             <p className="text-[10px] text-emerald-700">Signed & Stamped</p>
           </div>
 
           <div className="p-4 rounded-xl bg-purple-50/60 border border-purple-200/80 text-center space-y-1">
             <p className="text-xs font-bold text-purple-700 uppercase tracking-wider">Reviewer Comments</p>
-            <p className="text-2xl font-extrabold text-purple-900">3 Open</p>
+            <p className="text-2xl font-extrabold text-purple-900">{openComments} Open</p>
             <p className="text-[10px] text-purple-700">Merchant Banker Desk</p>
           </div>
         </div>
@@ -601,7 +834,7 @@ export default function Dashboard() {
             </div>
           </div>
           <span className="text-xs font-bold text-slate-500 bg-slate-100 px-3 py-1 rounded-full">
-            5 Total Pending
+            {pendingTasksTable.length} Total Pending
           </span>
         </div>
 
@@ -750,7 +983,7 @@ export default function Dashboard() {
                 <h3 className="text-3xl font-black text-white mt-0.5">{readinessScore}%</h3>
               </div>
               <span className="px-3 py-1 bg-emerald-500/20 text-emerald-300 text-xs font-bold rounded-full border border-emerald-500/30">
-                Almost Ready for Filing
+                {readinessScore >= 90 ? 'Ready for Filing' : readinessScore >= 50 ? 'Drafting In Progress' : 'Initial Setup Phase'}
               </span>
             </div>
 
@@ -768,15 +1001,15 @@ export default function Dashboard() {
               </div>
               <div>
                 <p className="text-slate-400 text-[10px] uppercase font-bold">Pending Docs</p>
-                <p className="font-bold text-amber-400 text-sm mt-0.5">3 Documents</p>
+                <p className="font-bold text-amber-400 text-sm mt-0.5">{docList.length === 0 ? 3 : docList.filter(d => d.status === 'processing' || d.status === 'pending').length} Documents</p>
               </div>
               <div>
                 <p className="text-slate-400 text-[10px] uppercase font-bold">Pending Reviews</p>
-                <p className="font-bold text-indigo-300 text-sm mt-0.5">2 Chapters</p>
+                <p className="font-bold text-indigo-300 text-sm mt-0.5">{requiredChapters.filter(k => drafts[k]?.status !== 'approved' && drafts[k]?.status !== 'certified').length} Chapters</p>
               </div>
               <div>
                 <p className="text-slate-400 text-[10px] uppercase font-bold">Estimated Filing</p>
-                <p className="font-bold text-emerald-400 text-sm mt-0.5">Aug 25 (18 Days)</p>
+                <p className="font-bold text-emerald-400 text-sm mt-0.5">{readinessScore >= 90 ? 'Ready Now' : readinessScore >= 50 ? 'In 10 Days' : 'Target Q4'}</p>
               </div>
             </div>
           </div>

@@ -64,8 +64,10 @@ api.interceptors.response.use(
 // URL so no individual page has to remember to announce its own saves.
 const SCORE_AFFECTING = [
   /^\/intake\//,          // a single field save
-  /^\/documents\//,       // upload, confirm, delete
+  /^\/documents\//,       // upload, confirm, delete, retry-ocr
   /^\/drafts\//,          // generate / certify a chapter
+  /^\/comments\//,        // comment add, edit, delete, resolve
+  /^\/companies\//,       // company settings and ipo-readiness status
   /ipo-readiness\/item-status$/  // reviewer milestone sign-off
 ];
 
