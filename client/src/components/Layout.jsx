@@ -30,8 +30,8 @@ const BASE_NAV = [
   { to: '/gap-analysis',         icon: AlertTriangle,   label: 'Gap Analysis' },
   { to: '/readiness',            icon: TrendingUp,      label: 'IPO Readiness' },
   { to: '/draft',                icon: Edit3,           label: 'Draft Prospectus' },
-  { to: '/draft-preview',        icon: Eye,             label: 'Draft Preview' },
   { to: '/reviewer',             icon: UserCheck,       label: 'Reviewer Workspace' },
+  { to: '/draft-preview',        icon: Eye,             label: 'Export' },
 ];
 
 // ─── component ────────────────────────────────────────────────────────────────
