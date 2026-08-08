@@ -557,53 +557,22 @@ export default function DraftCanvas({ showToolbar = true, mode = 'chapter' }) {
         </div>
       )}
 
-      {/* Optional Toolbar (Only shown on Draft Prospectus page) */}
+      {/* AutoSave Status Header */}
       {showToolbar && (
-        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs flex items-center justify-between gap-4 flex-wrap font-sans">
-          <div className="flex items-center gap-3">
-            <h2 className="text-base font-bold text-slate-900 tracking-tight">
-              {viewMode === 'chapter'
-                ? (isCoverPages ? 'Draft Prospectus — Pages 1–3 (Front Matter)' : activeNode.fullTitle)
-                : 'Draft Preview — Merged DRHP Document'}
-            </h2>
-            <div className="flex items-center gap-1.5 text-xs font-mono border-l border-slate-200 pl-3">
-              {autoSaveStatus === 'saving' ? (
-                <span className="text-blue-600 flex items-center gap-1">
-                  <Loader2 className="w-3.5 h-3.5 animate-spin" /> Saving...
-                </span>
-              ) : autoSaveStatus === 'saved' ? (
-                <span className="text-emerald-600 flex items-center gap-1 font-semibold">
-                  <Check className="w-3.5 h-3.5" /> Saved
-                </span>
-              ) : (
-                <span className="text-amber-600 flex items-center gap-1">
-                  <Save className="w-3.5 h-3.5" /> Unsaved
-                </span>
-              )}
-            </div>
-          </div>
-
-          <div className="flex items-center gap-2 flex-wrap">
-            <button onClick={() => setShowSourceDrawer(true)} className="px-3 py-1.5 bg-slate-50 hover:bg-slate-100 text-slate-700 font-semibold rounded-lg text-xs transition-all flex items-center gap-1.5 border border-slate-200 cursor-pointer">
-              <Eye className="w-3.5 h-3.5 text-indigo-600" />
-              <span>View Sources</span>
-            </button>
-
-            <button onClick={handleRegenerateClick} disabled={generating} className="px-3 py-1.5 bg-slate-50 hover:bg-slate-100 text-slate-700 font-semibold rounded-lg text-xs transition-all flex items-center gap-1.5 border border-slate-200 cursor-pointer disabled:opacity-50">
-              <RefreshCw className={`w-3.5 h-3.5 text-indigo-500 ${generating ? 'animate-spin' : ''}`} />
-              <span>Regenerate Chapter</span>
-            </button>
-
-            <button onClick={() => handleExportSection('pdf')} disabled={exportingSectionPdf || exportingSectionDocx} className="px-3 py-1.5 bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-lg font-semibold text-xs transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50">
-              {exportingSectionPdf ? <Loader2 className="w-3.5 h-3.5 text-red-500 animate-spin" /> : <FileText className="w-3.5 h-3.5 text-red-500" />}
-              <span>PDF</span>
-            </button>
-
-            <button onClick={() => handleExportSection('docx')} disabled={exportingSectionPdf || exportingSectionDocx} className="px-3 py-1.5 bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-lg font-semibold text-xs transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50">
-              {exportingSectionDocx ? <Loader2 className="w-3.5 h-3.5 text-blue-500 animate-spin" /> : <FileSpreadsheet className="w-3.5 h-3.5 text-blue-500" />}
-              <span>DOCX</span>
-            </button>
-          </div>
+        <div className="flex items-center justify-start mb-4 font-sans text-xs font-mono">
+          {autoSaveStatus === 'saving' ? (
+            <span className="text-blue-600 flex items-center gap-1">
+              <Loader2 className="w-3.5 h-3.5 animate-spin" /> Saving...
+            </span>
+          ) : autoSaveStatus === 'saved' ? (
+            <span className="text-emerald-600 flex items-center gap-1 font-semibold">
+              <Check className="w-3.5 h-3.5" /> Saved
+            </span>
+          ) : (
+            <span className="text-amber-600 flex items-center gap-1">
+              <Save className="w-3.5 h-3.5" /> Unsaved
+            </span>
+          )}
         </div>
       )}
 
