@@ -44,7 +44,7 @@ import {
   Save,
   FileSpreadsheet
 } from 'lucide-react';
-import { downloadPdf } from '../services/api';
+import { downloadPdf, downloadDocx } from '../services/api';
 
 function getBlocksForSubsection(subId, subKey, drafts, intakeCache = {}) {
   const sectionDraft = drafts[subKey] || { blocks: [] };
@@ -340,20 +340,17 @@ export default function DraftCanvas({ showToolbar = true, mode = 'chapter' }) {
     } else if (format === 'docx') {
       try {
         setExportingSectionDocx(true);
-        const docxHeader = `<html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
-        <head><meta charset='utf-8'><title>${title}</title></head>
-        <body><h1>SEBI SME DRHP</h1><h2>${title}</h2>${htmlContent}</body>
-        </html>`;
-
-        const blob = new Blob(['\ufeff' + docxHeader], { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `${sanitizedTitle}_prospectus.docx`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
+        const res = await downloadDocx(companyId);
+        const dataBlob = res.data;
+        const blobData = dataBlob instanceof Blob ? dataBlob : new Blob([dataBlob], { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
+        const url = window.URL.createObjectURL(blobData);
+        const link = document.createElement('a');
+        link.href = url;
+        link.setAttribute('download', `IPO_Draft_Prospectus_${companyId}_${new Date().toISOString().split('T')[0]}.docx`);
+        document.body.appendChild(link);
+        link.click();
+        link.parentNode.removeChild(link);
+        window.URL.revokeObjectURL(url);
       } catch (err) {
         console.error("DOCX export failed:", err);
       } finally {
@@ -557,8 +554,54 @@ export default function DraftCanvas({ showToolbar = true, mode = 'chapter' }) {
         </div>
       )}
 
-      {/* AutoSave Status Header */}
-      {showToolbar && (
+      {/* Export Actions Header (Shown on Export / Preview view) */}
+      {showToolbar && mode === 'preview' && (
+        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs flex items-center justify-between gap-4 flex-wrap font-sans mb-4">
+          <div className="flex items-center gap-3">
+            <h2 className="text-base font-bold text-slate-900 tracking-tight">
+              DRHP Export
+            </h2>
+            <div className="flex items-center gap-1.5 text-xs font-mono border-l border-slate-200 pl-3">
+              {autoSaveStatus === 'saving' ? (
+                <span className="text-blue-600 flex items-center gap-1">
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" /> Saving...
+                </span>
+              ) : autoSaveStatus === 'saved' ? (
+                <span className="text-emerald-600 flex items-center gap-1 font-semibold">
+                  <Check className="w-3.5 h-3.5" /> Saved
+                </span>
+              ) : (
+                <span className="text-amber-600 flex items-center gap-1">
+                  <Save className="w-3.5 h-3.5" /> Unsaved
+                </span>
+              )}
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => handleExportSection('pdf')}
+              disabled={exportingSectionPdf || exportingSectionDocx}
+              className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white font-bold rounded-lg text-xs transition-all flex items-center gap-1.5 shadow-xs cursor-pointer disabled:opacity-50"
+            >
+              {exportingSectionPdf ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <FileText className="w-3.5 h-3.5" />}
+              <span>PDF</span>
+            </button>
+
+            <button
+              onClick={() => handleExportSection('docx')}
+              disabled={exportingSectionPdf || exportingSectionDocx}
+              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg text-xs transition-all flex items-center gap-1.5 shadow-xs cursor-pointer disabled:opacity-50"
+            >
+              {exportingSectionDocx ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <FileSpreadsheet className="w-3.5 h-3.5" />}
+              <span>DOCX</span>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Draft Prospectus Chapter Header (Shown on Chapter view) */}
+      {showToolbar && mode === 'chapter' && (
         <div className="flex items-center justify-start mb-4 font-sans text-xs font-mono">
           {autoSaveStatus === 'saving' ? (
             <span className="text-blue-600 flex items-center gap-1">
