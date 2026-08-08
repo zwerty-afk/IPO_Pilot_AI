@@ -837,10 +837,10 @@ export default function IntakeForm() {
   }, [loadDocuments]);
 
   // Poll while any doc has ocr_status === 'processing'
+  const hasPendingOcr = documents.some(d => d.ocr_status === 'processing');
   useEffect(() => {
-    const hasPending = documents.some(d => d.ocr_status === 'processing');
     let timer;
-    if (hasPending) {
+    if (hasPendingOcr) {
       timer = setInterval(async () => {
         try {
           const res = await getDocuments(companyId);
@@ -861,7 +861,7 @@ export default function IntakeForm() {
     return () => {
       if (timer) clearInterval(timer);
     };
-  }, [documents, companyId, loadPrefill, loadAllIntake]);
+  }, [hasPendingOcr, companyId, loadPrefill, loadAllIntake]);
 
   // Only offer suggestions for the step on screen, and only for fields this step
   // actually renders. The document map extracts more keys than the questionnaire
@@ -890,7 +890,6 @@ export default function IntakeForm() {
       setSavedSuccess(true);
       setTimeout(() => setSavedSuccess(false), 3000);
       setTimeout(() => setPrefillNote(''), 4000);
-      scrollToTop();
     } catch (err) {
       console.error('Failed to apply prefill:', err);
       setPrefillNote('Could not auto-fill right now. Please enter the values manually.');

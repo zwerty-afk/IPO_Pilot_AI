@@ -25,19 +25,11 @@ api.interceptors.request.use(
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    // Only treat a 401 as "your session is bad, go re-authenticate" when it is
-    // actually about an existing session. A 401 from login or register is an
-    // authentication failure message for the user, NOT a reason to clear local storage
-    // and force-reload the page.
-    const isAuthUrl = error.config?.url?.includes('/auth/login') || error.config?.url?.includes('/auth/register');
-    const isAuthFailure = !isAuthUrl && error.response &&
-      error.response.status === 401 &&
-      (error.config?.url?.includes('/auth/') ||
-       /Missing Token|Invalid Token|Session expired|Unauthorized/i.test(error.response.data?.message || ''));
-    if (isAuthFailure) {
-      localStorage.removeItem('ipo_token');
-      localStorage.removeItem('ipo_company_id');
-      window.location.href = '/login';
+    if (error.response && error.response.status === 401) {
+      const isAuthUrl = error.config?.url?.includes('/auth/login') || error.config?.url?.includes('/auth/register');
+      if (!isAuthUrl) {
+        console.warn(`[api] 401 Unauthorized encountered on ${error.config?.url}. Preserving current view without hard reload.`);
+      }
     }
     return Promise.reject(error);
   }

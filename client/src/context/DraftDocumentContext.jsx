@@ -131,7 +131,7 @@ export function DraftDocumentProvider({ children }) {
   const [activeCompanyId, setActiveCompanyId] = useState(() => localStorage.getItem('ipo_company_id') || 'aarav-precision');
   const companyId = activeCompanyId;
 
-  // Poll/Listen for company switches
+  // Event listener for company switches
   useEffect(() => {
     const syncCompany = () => {
       const stored = localStorage.getItem('ipo_company_id') || 'aarav-precision';
@@ -141,11 +141,9 @@ export function DraftDocumentProvider({ children }) {
     };
     window.addEventListener('ipo-company-changed', syncCompany);
     window.addEventListener('storage', syncCompany);
-    const iv = setInterval(syncCompany, 1000);
     return () => {
       window.removeEventListener('ipo-company-changed', syncCompany);
       window.removeEventListener('storage', syncCompany);
-      clearInterval(iv);
     };
   }, [activeCompanyId]);
 
@@ -247,16 +245,9 @@ export function DraftDocumentProvider({ children }) {
         loadDraftData(true);
       }
     };
-    window.addEventListener('storage', handleStorageChange);
-
-    const pollInterval = setInterval(() => {
-      loadDraftData(true);
-    }, 2500);
-
     return () => {
       if (syncChannelRef.current) syncChannelRef.current.close();
       window.removeEventListener('storage', handleStorageChange);
-      clearInterval(pollInterval);
     };
   }, [companyId, selectedSectionKey, loadDraftData]);
 

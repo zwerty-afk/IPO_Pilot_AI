@@ -5,14 +5,15 @@ import { calculateSingleSourceOfTruthReadiness } from '../utils/readinessEngine'
 import { useAuth } from '../context/AuthContext';
 import { useDraftDocument } from '../context/DraftDocumentContext';
 import { 
-  TrendingUp, 
   CheckCircle2, 
   RefreshCw,
   ArrowRight,
   Sparkles,
   Award,
   Layers,
-  Info
+  FileText,
+  Download,
+  ShieldCheck
 } from 'lucide-react';
 
 export default function IpoReadinessPage() {
@@ -52,213 +53,181 @@ export default function IpoReadinessPage() {
     loadData();
   }, [companyId]);
 
-  // Safe readiness object from central context with deterministic engine fallback
   const readiness = centralReadiness || calculateSingleSourceOfTruthReadiness(intakeData, documents, gapReport, drafts);
-  const { score: overallScore, categories, meta } = readiness;
+  const { score: overallScore, categories, sectionBreakdown, meta } = readiness;
 
   if (loading) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-[60vh] space-y-3">
+      <div className="flex flex-col items-center justify-center min-h-[60vh] space-y-3 font-sans">
         <RefreshCw className="w-8 h-8 text-indigo-600 animate-spin" />
-        <p className="text-slate-500 text-xs font-mono font-medium">Calculating Single Source of Truth IPO Readiness Score…</p>
+        <p className="text-slate-500 text-xs font-mono font-medium">Calculating Fixed Weighted IPO Readiness Score…</p>
       </div>
     );
   }
 
-  // Build Action Plan to reach 100/100
-  const actionItems = [];
-
-  if (meta.uploadedCoreDocsCount < meta.totalCoreDocs) {
-    const missingPts = Math.round(((meta.totalCoreDocs - meta.uploadedCoreDocsCount) / meta.totalCoreDocs) * 15);
-    actionItems.push({
-      id: 'ACT-001',
-      category: 'Intake & Documents',
-      title: `Upload Remaining Statutory Evidence (${meta.totalCoreDocs - meta.uploadedCoreDocsCount} Docs)`,
-      description: 'Attach certified Board Resolution and Articles of Association (AOA) charters.',
-      pts: missingPts > 0 ? missingPts : 5,
-      route: '/intake',
-      btnText: 'Go to Intake Form'
-    });
-  }
-
-  if (meta.passedRulesCount < meta.totalRules) {
-    const missingPts = (meta.totalRules - meta.passedRulesCount) * 5;
-    actionItems.push({
-      id: 'ACT-002',
-      category: 'Compliance & Checks',
-      title: 'Complete SEBI ICDR Sec 179 Board Authorization',
-      description: 'Execute board resolution approving equity issue and audit committee charter.',
-      pts: missingPts > 0 ? missingPts : 5,
-      route: '/compliance-checklist',
-      btnText: 'Verify Compliance'
-    });
-  }
-
-  if (meta.certifiedChaptersCount < meta.totalChapters) {
-    const remainingChapters = meta.totalChapters - meta.certifiedChaptersCount;
-    const missingPts = Math.round(remainingChapters * 1.82);
-    actionItems.push({
-      id: 'ACT-003',
-      category: 'Reviewer Certification',
-      title: `Obtain Merchant Banker Certification on ${remainingChapters} Chapters`,
-      description: 'Submit completed DRHP chapters to Lead Merchant Banker for legal certification.',
-      pts: missingPts > 0 ? missingPts : 7,
-      route: '/reviewer',
-      btnText: 'Open Reviewer Workspace'
-    });
-  }
-
-  if (meta.addressedGapsCount < meta.totalGaps) {
-    const remainingGaps = meta.totalGaps - meta.addressedGapsCount;
-    const missingPts = Math.round((remainingGaps / meta.totalGaps) * 20);
-    actionItems.push({
-      id: 'ACT-004',
-      category: 'Gap Remediation',
-      title: `Address ${remainingGaps} Identified Disclosure Discrepancies`,
-      description: 'Document litigation notice & RPT reconciliation disclosures in DRHP draft.',
-      pts: missingPts > 0 ? missingPts : 4,
-      route: '/gap-analysis',
-      btnText: 'Go to Gap Analysis'
-    });
-  }
+  const isFullyReady = overallScore === 100;
 
   return (
-    <div className="space-y-6 font-sans pb-12 max-w-7xl mx-auto">
+    <div className="space-y-6 font-sans pb-12 max-w-6xl mx-auto animate-fade-in">
+      
       {/* ── Page Header ────────────────────────────────────────────────────── */}
-      <div className="flex items-center justify-between gap-4 flex-wrap border-b border-slate-200 pb-5">
+      <div className="flex items-center justify-between gap-4 flex-wrap border-b border-slate-200 pb-4">
         <div>
           <div className="flex items-center gap-2">
-            <h1 className="text-2xl font-black tracking-tight text-slate-900">IPO Readiness</h1>
-            <span className="px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold bg-indigo-50 text-indigo-700 border border-indigo-200">
-              Fixed 100-Point Model
+            <h1 className="text-2xl font-black tracking-tight text-slate-900">IPO READINESS</h1>
+            <span className="px-2.5 py-0.5 rounded-full text-xs font-mono font-bold bg-indigo-50 text-indigo-700 border border-indigo-200">
+              Fixed 100-Point Weighted Model
             </span>
           </div>
           <p className="text-xs text-slate-500 mt-1 font-sans">
-            One single authoritative readiness score. Cumulative progress calculation out of 100 points across 4 fixed categories.
+            Section-level weighted cumulative progress score out of 100 points across 5 independent categories.
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
-          <button
-            onClick={loadData}
-            className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-xl transition-all flex items-center gap-1.5 border border-slate-200 cursor-pointer"
-          >
-            <RefreshCw className="w-3.5 h-3.5" />
-            <span>Recalculate Progress</span>
-          </button>
-        </div>
+        <button
+          onClick={loadData}
+          className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-xl transition-all flex items-center gap-1.5 border border-slate-200 cursor-pointer"
+        >
+          <RefreshCw className="w-3.5 h-3.5" />
+          <span>Refresh Readiness</span>
+        </button>
       </div>
 
-      {/* ── PRIMARY HERO SCORE CARD (Single Score Display Only) ────────────── */}
-      <div className="bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 rounded-3xl p-6 sm:p-8 text-white shadow-xl relative overflow-hidden">
-        {/* Subtle decorative glow */}
-        <div className="absolute -right-20 -top-20 w-80 h-80 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none" />
-
+      {/* ── PRIMARY HERO SCORE CARD ────────────────────────────────────────── */}
+      <div className={`rounded-3xl p-6 sm:p-8 text-white shadow-xl relative overflow-hidden transition-all ${
+        isFullyReady 
+          ? 'bg-gradient-to-br from-emerald-900 via-emerald-950 to-slate-900 border border-emerald-500/30'
+          : 'bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 border border-indigo-500/20'
+      }`}>
         <div className="flex flex-col lg:flex-row items-center justify-between gap-8 relative z-10">
-          {/* Main Score Display: 70 / 100 IPO Readiness */}
+          
+          {/* Main Hero Score Display */}
           <div className="space-y-3 text-center lg:text-left">
-            <div className="inline-flex items-center gap-2 px-3 py-1 bg-white/10 backdrop-blur-md rounded-full text-xs font-mono font-bold text-indigo-300 border border-white/10">
+            <div className="inline-flex items-center gap-2 px-3 py-1 bg-white/10 backdrop-blur-md rounded-full text-xs font-mono font-bold text-indigo-200 border border-white/10">
               <Award className="w-3.5 h-3.5 text-amber-400" />
-              <span>Single Source of Truth Score</span>
+              <span>{isFullyReady ? '100% Certified & Approved' : 'Cumulative Progress Score'}</span>
             </div>
 
             <div className="flex items-baseline justify-center lg:justify-start gap-3">
               <span className="text-6xl sm:text-7xl font-black tracking-tight text-white font-mono">
-                {overallScore}
+                {overallScore}%
               </span>
-              <span className="text-2xl font-bold text-indigo-300 font-mono">/ 100 IPO Readiness</span>
+              <span className="text-2xl font-bold text-indigo-300 font-mono">
+                {isFullyReady ? '— IPO READY' : 'Progress toward DRHP readiness'}
+              </span>
             </div>
 
             <p className="text-sm font-medium text-slate-300 max-w-md">
-              {overallScore === 0 ? '🏁 Initial setup phase. Begin by filling intake details and uploading statutory charters to earn points.' :
-               overallScore >= 85 ? '🎉 Outstanding! DRHP filing preparations are certified and ready for submission.' :
-               overallScore >= 60 ? '⚡ Strong progress! Key compliance and intake requirements are satisfied.' :
-               '🚀 Preparation in progress. Complete remaining intake and legal checks to earn full score.'}
+              {isFullyReady 
+                ? '🎉 All required workflow stages completed. DRHP filing is 100% ready for export.'
+                : overallScore === 0 
+                ? '🏁 Initial setup phase (0/100). Complete Intake Form sections to earn points.' 
+                : '🚀 Cumulative workflow progress. Earn points as sections, documents, compliance rules, gaps, and certifications are completed.'}
             </p>
           </div>
 
-          {/* 4 Category Score Pills (Sums Exactly to overallScore) */}
+          {/* Overall Progress Gauge */}
           <div className="w-full lg:w-1/2 space-y-4 bg-white/5 backdrop-blur-md p-5 rounded-2xl border border-white/10">
             <div className="flex items-center justify-between text-xs font-mono">
-              <span className="text-indigo-200 font-bold uppercase tracking-wider">Category Score Sum</span>
-              <span className="text-emerald-400 font-bold font-mono">{categories.intake.score} + {categories.compliance.score} + {categories.gapRemediation.score} + {categories.certification.score} = {overallScore} Pts</span>
+              <span className="text-indigo-200 font-bold uppercase tracking-wider">TOTAL IPO READINESS</span>
+              <span className="text-emerald-400 font-bold">{overallScore} / 100 Pts</span>
             </div>
 
             <div className="w-full h-4 bg-slate-800 rounded-full overflow-hidden p-0.5 border border-white/10">
               <div 
-                className="h-full bg-gradient-to-r from-indigo-500 via-purple-500 to-emerald-400 rounded-full transition-all duration-700 shadow-lg"
+                className={`h-full rounded-full transition-all duration-700 shadow-lg ${
+                  isFullyReady ? 'bg-gradient-to-r from-emerald-500 to-teal-300' : 'bg-gradient-to-r from-indigo-500 via-purple-500 to-emerald-400'
+                }`}
                 style={{ width: `${overallScore}%` }}
               />
             </div>
 
-            {/* 4 Category Exact Points Badges */}
-            <div className="grid grid-cols-2 gap-2 text-[11px] font-mono pt-1">
-              <div className="p-2.5 rounded-xl bg-white/5 border border-white/10 flex items-center justify-between">
-                <span className="text-slate-300 truncate">Intake & Info</span>
+            {/* 5 Fixed Category Summary Pills */}
+            <div className="grid grid-cols-5 gap-1.5 text-[10px] font-mono pt-1 text-center">
+              <div className="p-1.5 rounded-lg bg-white/5 border border-white/10 flex flex-col items-center">
+                <span className="text-slate-300 text-[9px] block">Intake</span>
                 <span className="font-bold text-indigo-300">{categories.intake.score}/30</span>
               </div>
-              <div className="p-2.5 rounded-xl bg-white/5 border border-white/10 flex items-center justify-between">
-                <span className="text-slate-300 truncate">Compliance</span>
-                <span className="font-bold text-indigo-300">{categories.compliance.score}/30</span>
+              <div className="p-1.5 rounded-lg bg-white/5 border border-white/10 flex flex-col items-center">
+                <span className="text-slate-300 text-[9px] block">Docs</span>
+                <span className="font-bold text-blue-300">{categories.documents.score}/20</span>
               </div>
-              <div className="p-2.5 rounded-xl bg-white/5 border border-white/10 flex items-center justify-between">
-                <span className="text-slate-300 truncate">Gap Remediation</span>
-                <span className="font-bold text-indigo-300">{categories.gapRemediation.score}/20</span>
+              <div className="p-1.5 rounded-lg bg-white/5 border border-white/10 flex flex-col items-center">
+                <span className="text-slate-300 text-[9px] block">Compl.</span>
+                <span className="font-bold text-purple-300">{categories.compliance.score}/10</span>
               </div>
-              <div className="p-2.5 rounded-xl bg-white/5 border border-white/10 flex items-center justify-between">
-                <span className="text-slate-300 truncate">Certification</span>
+              <div className="p-1.5 rounded-lg bg-white/5 border border-white/10 flex flex-col items-center">
+                <span className="text-slate-300 text-[9px] block">Gaps</span>
+                <span className="font-bold text-amber-300">{categories.gapRemediation.score}/20</span>
+              </div>
+              <div className="p-1.5 rounded-lg bg-white/5 border border-white/10 flex flex-col items-center">
+                <span className="text-slate-300 text-[9px] block">Cert.</span>
                 <span className="font-bold text-emerald-400">{categories.certification.score}/20</span>
               </div>
             </div>
           </div>
         </div>
-
-        {/* Informational Callout */}
-        <div className="mt-6 pt-4 border-t border-white/10 flex items-start gap-2.5 text-xs text-indigo-200">
-          <Sparkles className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
-          <p className="leading-relaxed">
-            <strong className="text-white">Cumulative Rule Guarantee:</strong> Identifying or documenting a risk disclosure never reduces your score. Completing required intake items, compliance checks, gap remediations, and legal certifications adds points towards reaching 100/100.
-          </p>
-        </div>
       </div>
 
-      {/* ── 4 CATEGORY BREAKDOWN CARDS GRID (2x2) ────────────────────────── */}
+      {/* ── FIVE CATEGORY PROGRESS CARDS ────────────────────────────────────── */}
       <div className="space-y-3">
-        <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wider font-mono flex items-center gap-2">
-          <Layers className="w-4 h-4 text-indigo-600" /> Category Point Breakdown (Sum = {overallScore} / 100)
+        <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider font-mono flex items-center gap-1.5">
+          <Layers className="w-4 h-4 text-indigo-600" /> Five Independent Category Breakdown (Sum = {overallScore} / 100)
         </h3>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {/* CATEGORY 1 CARD */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          
+          {/* CATEGORY 1: INTAKE FORM (30 PTS) */}
           <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-4 flex flex-col justify-between hover:border-indigo-200 transition-all">
             <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center font-bold">
+                  <div className="w-8 h-8 rounded-xl bg-indigo-50 text-indigo-700 flex items-center justify-center font-bold text-xs">
                     1
                   </div>
                   <div>
-                    <h4 className="font-bold text-slate-900 text-sm">{categories.intake.title}</h4>
+                    <h4 className="font-bold text-slate-900 text-xs">INTAKE FORM</h4>
                     <span className="text-[10px] text-slate-400 font-mono">Max Allocation: 30 Points</span>
                   </div>
                 </div>
-                <span className="text-base font-black text-indigo-600 font-mono bg-indigo-50 px-2.5 py-1 rounded-xl border border-indigo-100">
-                  {categories.intake.score} / 30 Pts
+                <span className="text-base font-black text-indigo-700 font-mono bg-indigo-50 px-2.5 py-1 rounded-xl border border-indigo-100">
+                  {categories.intake.score} / 30
                 </span>
               </div>
 
-              <div className="w-full bg-slate-100 h-2.5 rounded-full overflow-hidden">
-                <div className="bg-indigo-600 h-full rounded-full" style={{ width: `${categories.intake.pct}%` }} />
+              <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
+                <div className="bg-indigo-600 h-full rounded-full transition-all duration-500" style={{ width: `${categories.intake.pct}%` }} />
               </div>
 
-              <div className="space-y-1.5 text-xs text-slate-600">
-                <div className="flex items-center gap-2 text-emerald-700 font-medium">
-                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                  <span>{meta.filledIntakeSectionsCount} / {meta.totalIntakeSections} Intake Sections Completed</span>
+              {/* Intake Section Level Weighted Breakdown */}
+              <div className="space-y-1 text-[11px] text-slate-600 font-mono pt-1 border-t border-slate-100">
+                <div className="flex items-center justify-between">
+                  <span>Company Details:</span>
+                  <span className="font-bold text-slate-900">{sectionBreakdown.companyDetails} / 5 Pts</span>
                 </div>
-                <div className="flex items-center gap-2 text-slate-600">
-                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                  <span>{meta.uploadedCoreDocsCount} / {meta.totalCoreDocs} Statutory Charters & Audits Uploaded</span>
+                <div className="flex items-center justify-between">
+                  <span>Promoters & Capital:</span>
+                  <span className="font-bold text-slate-900">{sectionBreakdown.promotersCapital} / 5 Pts</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span>Business Overview:</span>
+                  <span className="font-bold text-slate-900">{sectionBreakdown.businessOverview} / 5 Pts</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span>Financial Info:</span>
+                  <span className="font-bold text-slate-900">{sectionBreakdown.financials} / 5 Pts</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span>Legal / Compliance:</span>
+                  <span className="font-bold text-slate-900">{sectionBreakdown.legalCompliance} / 4 Pts</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span>Objects / RPT:</span>
+                  <span className="font-bold text-slate-900">{sectionBreakdown.objectsRpt} / 3 Pts</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span>Risk Factors:</span>
+                  <span className="font-bold text-slate-900">{sectionBreakdown.riskFactors} / 3 Pts</span>
                 </div>
               </div>
             </div>
@@ -267,42 +236,90 @@ export default function IpoReadinessPage() {
               onClick={() => navigate('/intake')}
               className="w-full py-2 px-3 bg-slate-50 hover:bg-indigo-50 text-slate-700 hover:text-indigo-700 font-semibold rounded-xl text-xs transition-all flex items-center justify-between border border-slate-200 hover:border-indigo-200 cursor-pointer mt-2"
             >
-              <span>Manage Intake & Documents</span>
+              <span>Go to Intake Form</span>
               <ArrowRight className="w-3.5 h-3.5" />
             </button>
           </div>
 
-          {/* CATEGORY 2 CARD */}
+          {/* CATEGORY 2: DOCUMENTS (20 PTS) */}
           <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-4 flex flex-col justify-between hover:border-indigo-200 transition-all">
             <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center font-bold">
+                  <div className="w-8 h-8 rounded-xl bg-blue-50 text-blue-700 flex items-center justify-center font-bold text-xs">
                     2
                   </div>
                   <div>
-                    <h4 className="font-bold text-slate-900 text-sm">{categories.compliance.title}</h4>
-                    <span className="text-[10px] text-slate-400 font-mono">Max Allocation: 30 Points</span>
+                    <h4 className="font-bold text-slate-900 text-xs">DOCUMENTS</h4>
+                    <span className="text-[10px] text-slate-400 font-mono">Max Allocation: 20 Points</span>
                   </div>
                 </div>
-                <span className="text-base font-black text-purple-600 font-mono bg-purple-50 px-2.5 py-1 rounded-xl border border-purple-100">
-                  {categories.compliance.score} / 30 Pts
+                <span className="text-base font-black text-blue-700 font-mono bg-blue-50 px-2.5 py-1 rounded-xl border border-blue-100">
+                  {categories.documents.score} / 20
                 </span>
               </div>
 
-              <div className="w-full bg-slate-100 h-2.5 rounded-full overflow-hidden">
-                <div className="bg-purple-600 h-full rounded-full" style={{ width: `${categories.compliance.pct}%` }} />
+              <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
+                <div className="bg-blue-600 h-full rounded-full transition-all duration-500" style={{ width: `${categories.documents.pct}%` }} />
               </div>
 
-              <div className="space-y-1.5 text-xs text-slate-600">
-                <div className="flex items-center gap-2 text-emerald-700 font-medium">
-                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                  <span>{meta.passedRulesCount} / {meta.totalRules} SEBI ICDR Rules Satisfied</span>
+              <div className="space-y-1.5 text-xs text-slate-600 font-sans pt-1">
+                <div className="flex items-center gap-2 text-slate-700 font-medium">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                  <span>{meta.uploadedCoreDocsCount} / {meta.totalCoreDocs} Statutory Charters Uploaded</span>
                 </div>
-                <div className="flex items-center gap-2 text-slate-600">
-                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                  <span>Net Worth & Promoters Lock-in Eligibility Passed</span>
+                <div className="space-y-1 pt-1 text-[11px] font-mono text-slate-500 border-t border-slate-100">
+                  {meta.coreDocs.map(doc => (
+                    <div key={doc.type} className="flex items-center justify-between">
+                      <span className="truncate">{doc.label}:</span>
+                      <span className={doc.uploaded ? 'font-bold text-emerald-600' : 'text-slate-400'}>
+                        {doc.uploaded ? '+4 Pts' : '0 Pts'}
+                      </span>
+                    </div>
+                  ))}
                 </div>
+              </div>
+            </div>
+
+            <button
+              onClick={() => navigate('/intake')}
+              className="w-full py-2 px-3 bg-slate-50 hover:bg-blue-50 text-slate-700 hover:text-blue-700 font-semibold rounded-xl text-xs transition-all flex items-center justify-between border border-slate-200 hover:border-blue-200 cursor-pointer mt-2"
+            >
+              <span>Upload Documents</span>
+              <ArrowRight className="w-3.5 h-3.5" />
+            </button>
+          </div>
+
+          {/* CATEGORY 3: COMPLIANCE (10 PTS) */}
+          <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-4 flex flex-col justify-between hover:border-indigo-200 transition-all">
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-xl bg-purple-50 text-purple-700 flex items-center justify-center font-bold text-xs">
+                    3
+                  </div>
+                  <div>
+                    <h4 className="font-bold text-slate-900 text-xs">COMPLIANCE</h4>
+                    <span className="text-[10px] text-slate-400 font-mono">Max Allocation: 10 Points</span>
+                  </div>
+                </div>
+                <span className="text-base font-black text-purple-700 font-mono bg-purple-50 px-2.5 py-1 rounded-xl border border-purple-100">
+                  {categories.compliance.score} / 10
+                </span>
+              </div>
+
+              <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
+                <div className="bg-purple-600 h-full rounded-full transition-all duration-500" style={{ width: `${categories.compliance.pct}%` }} />
+              </div>
+
+              <div className="space-y-1.5 text-xs text-slate-600 font-sans pt-1">
+                <div className="flex items-center gap-2 text-slate-700 font-medium">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-purple-600 shrink-0" />
+                  <span>{meta.passedRulesCount} / {meta.totalRules} SEBI ICDR Rules Passed</span>
+                </div>
+                <p className="text-[11px] text-slate-500 font-mono border-t border-slate-100 pt-1">
+                  Each verified compliance check earns 2 points toward the 10-point ceiling.
+                </p>
               </div>
             </div>
 
@@ -310,42 +327,41 @@ export default function IpoReadinessPage() {
               onClick={() => navigate('/compliance-checklist')}
               className="w-full py-2 px-3 bg-slate-50 hover:bg-purple-50 text-slate-700 hover:text-purple-700 font-semibold rounded-xl text-xs transition-all flex items-center justify-between border border-slate-200 hover:border-purple-200 cursor-pointer mt-2"
             >
-              <span>Verify SEBI ICDR Rules</span>
+              <span>Check Compliance</span>
               <ArrowRight className="w-3.5 h-3.5" />
             </button>
           </div>
 
-          {/* CATEGORY 3 CARD */}
+          {/* CATEGORY 4: GAP ANALYSIS (20 PTS) */}
           <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-4 flex flex-col justify-between hover:border-indigo-200 transition-all">
             <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center font-bold">
-                    3
+                  <div className="w-8 h-8 rounded-xl bg-amber-50 text-amber-700 flex items-center justify-center font-bold text-xs">
+                    4
                   </div>
                   <div>
-                    <h4 className="font-bold text-slate-900 text-sm">{categories.gapRemediation.title}</h4>
+                    <h4 className="font-bold text-slate-900 text-xs">GAP ANALYSIS</h4>
                     <span className="text-[10px] text-slate-400 font-mono">Max Allocation: 20 Points</span>
                   </div>
                 </div>
                 <span className="text-base font-black text-amber-700 font-mono bg-amber-50 px-2.5 py-1 rounded-xl border border-amber-100">
-                  {categories.gapRemediation.score} / 20 Pts
+                  {categories.gapRemediation.score} / 20
                 </span>
               </div>
 
-              <div className="w-full bg-slate-100 h-2.5 rounded-full overflow-hidden">
-                <div className="bg-amber-500 h-full rounded-full" style={{ width: `${categories.gapRemediation.pct}%` }} />
+              <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
+                <div className="bg-amber-500 h-full rounded-full transition-all duration-500" style={{ width: `${categories.gapRemediation.pct}%` }} />
               </div>
 
-              <div className="space-y-1.5 text-xs text-slate-600">
-                <div className="flex items-center gap-2 text-emerald-700 font-medium">
-                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                  <span>{meta.addressedGapsCount} / {meta.totalGaps} Identified Discrepancies Remedied</span>
+              <div className="space-y-1.5 text-xs text-slate-600 font-sans pt-1">
+                <div className="flex items-center gap-2 text-slate-700 font-medium">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                  <span>{meta.addressedGapsCount} / {meta.totalGaps} Identified Discrepancies Resolved</span>
                 </div>
-                <div className="flex items-center gap-2 text-slate-600">
-                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                  <span>Risk Factors & Tax Demands Documented in DRHP</span>
-                </div>
+                <p className="text-[11px] text-slate-500 font-mono border-t border-slate-100 pt-1">
+                  Resolving gaps earns points. Identifying a gap never deducts points.
+                </p>
               </div>
             </div>
 
@@ -353,42 +369,41 @@ export default function IpoReadinessPage() {
               onClick={() => navigate('/gap-analysis')}
               className="w-full py-2 px-3 bg-slate-50 hover:bg-amber-50 text-slate-700 hover:text-amber-800 font-semibold rounded-xl text-xs transition-all flex items-center justify-between border border-slate-200 hover:border-amber-200 cursor-pointer mt-2"
             >
-              <span>View Gap Remediation</span>
+              <span>View Gap Analysis</span>
               <ArrowRight className="w-3.5 h-3.5" />
             </button>
           </div>
 
-          {/* CATEGORY 4 CARD */}
+          {/* CATEGORY 5: REVIEWER CERTIFICATION (20 PTS) */}
           <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-4 flex flex-col justify-between hover:border-indigo-200 transition-all">
             <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold">
-                    4
+                  <div className="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-700 flex items-center justify-center font-bold text-xs">
+                    5
                   </div>
                   <div>
-                    <h4 className="font-bold text-slate-900 text-sm">{categories.certification.title}</h4>
+                    <h4 className="font-bold text-slate-900 text-xs">REVIEWER CERTIFICATION</h4>
                     <span className="text-[10px] text-slate-400 font-mono">Max Allocation: 20 Points</span>
                   </div>
                 </div>
                 <span className="text-base font-black text-emerald-700 font-mono bg-emerald-50 px-2.5 py-1 rounded-xl border border-emerald-100">
-                  {categories.certification.score} / 20 Pts
+                  {categories.certification.score} / 20
                 </span>
               </div>
 
-              <div className="w-full bg-slate-100 h-2.5 rounded-full overflow-hidden">
-                <div className="bg-emerald-600 h-full rounded-full" style={{ width: `${categories.certification.pct}%` }} />
+              <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
+                <div className="bg-emerald-600 h-full rounded-full transition-all duration-500" style={{ width: `${categories.certification.pct}%` }} />
               </div>
 
-              <div className="space-y-1.5 text-xs text-slate-600">
-                <div className="flex items-center gap-2 text-emerald-700 font-medium">
+              <div className="space-y-1.5 text-xs text-slate-600 font-sans pt-1">
+                <div className="flex items-center gap-2 text-slate-700 font-medium">
                   <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                  <span>{meta.certifiedChaptersCount} / {meta.totalChapters} DRHP Chapters Certified by Reviewer</span>
+                  <span>{meta.certifiedChaptersCount} / {meta.totalChapters} DRHP Chapters Certified</span>
                 </div>
-                <div className="flex items-center gap-2 text-slate-600">
-                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                  <span>{meta.approvedChaptersCount} Chapters Approved by Lead Merchant Banker</span>
-                </div>
+                <p className="text-[11px] text-slate-500 font-mono border-t border-slate-100 pt-1">
+                  Merchant Banker certification awards final 20 points toward 100/100 readiness.
+                </p>
               </div>
             </div>
 
@@ -400,76 +415,31 @@ export default function IpoReadinessPage() {
               <ArrowRight className="w-3.5 h-3.5" />
             </button>
           </div>
+
         </div>
       </div>
 
-      {/* ── "PATH TO 100/100" ACTIONABLE TASK PLAN ──────────────────────────── */}
-      <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
-        <div className="flex items-center justify-between border-b border-slate-100 pb-3 flex-wrap gap-2">
-          <div>
-            <h3 className="font-bold text-slate-900 text-base flex items-center gap-2">
-              <Award className="w-5 h-5 text-indigo-600" /> Action Plan to Reach 100/100 Points
-            </h3>
-            <p className="text-xs text-slate-500 mt-0.5 font-sans">
-              Complete these specific workflow actions to earn the remaining {100 - overallScore} points and achieve 100% filing readiness.
-            </p>
+      {/* ── FINAL STATE EXPORT BANNER (Enabled when 100/100) ───────────────── */}
+      {isFullyReady && (
+        <div className="bg-emerald-500 text-white p-6 rounded-2xl shadow-lg flex flex-col sm:flex-row items-center justify-between gap-4 font-sans animate-fade-in">
+          <div className="space-y-1 text-center sm:text-left">
+            <div className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full bg-white/20 text-xs font-mono font-bold">
+              <ShieldCheck className="w-3.5 h-3.5 text-amber-300" />
+              <span>100% — IPO READY</span>
+            </div>
+            <h3 className="text-lg font-black tracking-tight">All required workflow stages completed.</h3>
+            <p className="text-xs text-emerald-100">DRHP prospectus certified and ready for submission & export.</p>
           </div>
 
-          <span className="px-3 py-1 rounded-full text-xs font-mono font-bold bg-amber-50 text-amber-800 border border-amber-200">
-            {100 - overallScore} Points Remaining
-          </span>
+          <button
+            onClick={() => navigate('/export')}
+            className="px-5 py-3 bg-white text-emerald-900 hover:bg-emerald-50 font-black text-xs rounded-xl shadow-md transition-all flex items-center gap-2 cursor-pointer shrink-0"
+          >
+            <Download className="w-4 h-4 text-emerald-700" />
+            <span>Export DRHP Prospectus</span>
+          </button>
         </div>
-
-        <div className="space-y-3">
-          {actionItems.length === 0 ? (
-            <div className="p-6 bg-emerald-50 border border-emerald-200 rounded-xl text-center space-y-2">
-              <CheckCircle2 className="w-8 h-8 text-emerald-600 mx-auto" />
-              <h4 className="font-bold text-emerald-900 text-sm">Perfect 100/100 Score Achieved!</h4>
-              <p className="text-xs text-emerald-700">All intake disclosures, compliance checks, remediations, and reviewer certifications are 100% complete.</p>
-            </div>
-          ) : (
-            actionItems.map((act) => (
-              <div key={act.id} className="p-4 bg-slate-50 hover:bg-slate-100/80 border border-slate-200 rounded-xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 transition-all">
-                <div className="space-y-1">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-[10px] font-mono font-bold px-2 py-0.5 bg-indigo-50 text-indigo-700 border border-indigo-200 rounded">
-                      {act.category}
-                    </span>
-                    <span className="text-[10px] font-mono font-bold px-2 py-0.5 bg-emerald-100 text-emerald-800 border border-emerald-300 rounded">
-                      +{act.pts} Points Available
-                    </span>
-                  </div>
-                  <h4 className="font-bold text-slate-900 text-sm font-sans">{act.title}</h4>
-                  <p className="text-xs text-slate-500 font-sans">{act.description}</p>
-                </div>
-
-                <button
-                  onClick={() => navigate(act.route)}
-                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-xs rounded-xl transition-all shadow-sm flex items-center gap-1.5 shrink-0 cursor-pointer"
-                >
-                  <span>{act.btnText}</span>
-                  <ArrowRight className="w-3.5 h-3.5" />
-                </button>
-              </div>
-            ))
-          )}
-        </div>
-      </div>
-
-      {/* ── DETERMINISTIC FORMULA TRANSPARENCY ────────────────────────────── */}
-      <div className="bg-slate-50 p-6 rounded-2xl border border-slate-200 space-y-3">
-        <h4 className="font-bold text-slate-800 text-xs uppercase tracking-wider font-mono flex items-center gap-2">
-          <Info className="w-4 h-4 text-indigo-600" /> Deterministic Scoring Model Transparency
-        </h4>
-        <p className="text-xs text-slate-600 leading-relaxed font-sans">
-          The IPO Pilot AI Readiness score uses a fixed 100-point allocation matrix:
-          <strong> Intake & Company Information</strong> ({categories.intake.score}/30) + 
-          <strong> Compliance & SEBI Checks</strong> ({categories.compliance.score}/30) + 
-          <strong> Gap Analysis & Remediation</strong> ({categories.gapRemediation.score}/20) + 
-          <strong> Reviewer Certification</strong> ({categories.certification.score}/20) = 
-          <strong className="text-indigo-600 font-mono"> {overallScore} / 100 IPO Readiness</strong>.
-        </p>
-      </div>
+      )}
     </div>
   );
 }

@@ -11,7 +11,7 @@ export function AuthProvider({ children }) {
 
   useEffect(() => {
     const checkAuth = async () => {
-      const storedToken = localStorage.getItem('ipo_token');
+      let storedToken = localStorage.getItem('ipo_token');
       if (storedToken) {
         try {
           const res = await getMe();
@@ -21,14 +21,31 @@ export function AuthProvider({ children }) {
             localStorage.setItem('ipo_company_id', userData.companyId);
           }
           setToken(storedToken);
-        } catch {
+          setLoading(false);
+          return;
+        } catch (err) {
+          console.warn('Existing session invalid, initializing demo authentication:', err);
           localStorage.removeItem('ipo_token');
-          localStorage.removeItem('ipo_company_id');
-          setUser(null);
-          setToken(null);
         }
       }
-      setLoading(false);
+
+      // Initialize shared demo session if unauthenticated
+      try {
+        const res = await loginApi('priya@example.com', 'demo123');
+        const { token: newToken, user: userData } = res.data;
+        localStorage.setItem('ipo_token', newToken);
+        if (userData?.companyId && !localStorage.getItem('ipo_company_id')) {
+          localStorage.setItem('ipo_company_id', userData.companyId);
+        }
+        setToken(newToken);
+        setUser(userData);
+      } catch (err) {
+        console.error('Demo auto-authentication error:', err);
+        setUser(null);
+        setToken(null);
+      } finally {
+        setLoading(false);
+      }
     };
     checkAuth();
   }, []);
