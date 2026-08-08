@@ -792,6 +792,8 @@ export const db = {
     data.companies.push(record);
     if (!data.intake[candidate]) data.intake[candidate] = {};
     if (!data.drafts[candidate]) data.drafts[candidate] = {};
+    if (!data.ipo_readiness) data.ipo_readiness = {};
+    data.ipo_readiness[candidate] = null;
     saveDb(data);
     return record;
   },
@@ -836,15 +838,17 @@ export const db = {
   getDrafts: (companyId) => getDb().drafts[companyId] || {},
   updateSectionStatus: (companyId, sectionKey, status, role) => {
     const data = getDb();
-    if (data.drafts[companyId] && data.drafts[companyId][sectionKey]) {
-      if (status === 'certified' && role !== 'reviewer') {
-        throw new Error('Only a registered Reviewer can certify draft chapters.');
-      }
-      data.drafts[companyId][sectionKey].status = status;
-      data.drafts[companyId][sectionKey].last_updated = new Date().toISOString();
-      saveDb(data);
+    if (!data.drafts[companyId]) data.drafts[companyId] = {};
+    if (!data.drafts[companyId][sectionKey]) {
+      data.drafts[companyId][sectionKey] = { status: 'draft', last_updated: new Date().toISOString(), blocks: [] };
     }
-    return data.drafts[companyId] ? data.drafts[companyId][sectionKey] : null;
+    if ((status === 'certified' || status === 'approved' || status === 'rejected' || status === 'changes_requested') && role !== 'reviewer') {
+      throw new Error('Only a registered Reviewer can update section status.');
+    }
+    data.drafts[companyId][sectionKey].status = status;
+    data.drafts[companyId][sectionKey].last_updated = new Date().toISOString();
+    saveDb(data);
+    return data.drafts[companyId][sectionKey];
   },
   updateSectionContent: (companyId, sectionKey, blocks) => {
     const data = getDb();

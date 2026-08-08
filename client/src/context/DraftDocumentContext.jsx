@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react';
+import { useAuth } from './AuthContext';
 import { 
   getDrafts, 
   generateDrafts, 
@@ -28,61 +29,6 @@ const MOCK_TRACEABLE_AUDIT_LOGS = [
     actionSummary: 'Certified DRHP General Information chapter following statutory diligence approval.',
     prevContent: 'Status: Approved',
     newContent: 'Status: Certified by Rohan Sharma (Merchant Banker Sign-off #MB-2025-089)'
-  },
-  {
-    id: 'LOG-002',
-    timestamp: '2026-08-08 10:15:30 AM',
-    actor: 'Aarav Mehta (Issuer / Managing Director)',
-    source: 'Issuer',
-    actionType: 'Edit',
-    affectedTarget: 'Section VI: Financial Information — Restated Financials',
-    actionSummary: 'Updated FY24 restated revenue figure to match statutory auditor certificate.',
-    prevContent: '- Restated FY24 Revenue: ₹95.00 Crores (Preliminary Intake Draft)',
-    newContent: '+ Restated FY24 Revenue: ₹92.40 Crores (Statutory Auditor Certificate #AC-491)'
-  },
-  {
-    id: 'LOG-003',
-    timestamp: '2026-08-08 09:50:12 AM',
-    actor: 'SEBI Co-Pilot AI Engine',
-    source: 'AI Co-Pilot',
-    actionType: 'Suggestion',
-    affectedTarget: 'Section VIII: Legal and Other Information — Outstanding Litigation',
-    actionSummary: 'Detected pending GST demand notice of ₹45 Lakhs from statutory disclosures; flagged for litigation table inclusion.',
-    prevContent: '- Pending Tax Disputes: None disclosed in preliminary intake',
-    newContent: '+ Addressed Disclosure: GST Demand Order #GST-2024-891 (₹45 Lakhs under appeal)'
-  },
-  {
-    id: 'LOG-004',
-    timestamp: '2026-08-08 09:30:00 AM',
-    actor: 'Priya Verma (Legal Counsel)',
-    source: 'Reviewer',
-    actionType: 'Comment',
-    affectedTarget: 'Section V: Promoters and Management',
-    actionSummary: 'Added annotation requesting certified copy of Board Resolution approving equity issue.',
-    prevContent: 'Annotation: None',
-    newContent: 'Comment: "Please attach Board Resolution extract passed on or after Jan 1, 2025 as mandated under Section 179(3) Companies Act."'
-  },
-  {
-    id: 'LOG-005',
-    timestamp: '2026-08-07 04:15:22 PM',
-    actor: 'Rohan Sharma (Lead Merchant Banker)',
-    source: 'Reviewer',
-    actionType: 'Approval',
-    affectedTarget: 'Section IV: Capital Structure',
-    actionSummary: 'Approved Capital Structure pre-issue equity shareholding disclosure.',
-    prevContent: 'Status: Under Review',
-    newContent: 'Status: Approved by Lead Merchant Banker'
-  },
-  {
-    id: 'LOG-006',
-    timestamp: '2026-08-07 02:00:10 PM',
-    actor: 'System Automated Pipeline',
-    source: 'System',
-    actionType: 'Intake Update',
-    affectedTarget: 'Section II: Business Overview',
-    actionSummary: 'Automated OCR extraction populated plant capacity figures from MIDC Factory License PDF.',
-    prevContent: '- Installed CNC Capacity: Unspecified',
-    newContent: '+ Installed CNC Capacity: 500,000 Units/Annum across 20 automated CNC/VMC lines'
   }
 ];
 
@@ -128,24 +74,43 @@ export function filterMeaningfulAuditLogs(logs) {
 }
 
 export function DraftDocumentProvider({ children }) {
-  const [activeCompanyId, setActiveCompanyId] = useState(() => localStorage.getItem('ipo_company_id') || 'aarav-precision');
+  const { user } = useAuth();
+  const [activeCompanyId, setActiveCompanyId] = useState(() => {
+    if (user?.role === 'issuer' && user?.companyId) return user.companyId;
+    return localStorage.getItem('ipo_company_id') || user?.companyId || '';
+  });
   const companyId = activeCompanyId;
 
-  // Event listener for company switches
+  // Event listener for company switches & user role updates
   useEffect(() => {
     const syncCompany = () => {
-      const stored = localStorage.getItem('ipo_company_id') || 'aarav-precision';
-      if (stored !== activeCompanyId) {
-        setActiveCompanyId(stored);
+      let targetId = '';
+      if (user?.role === 'issuer' && user?.companyId) {
+        targetId = user.companyId;
+      } else {
+        targetId = localStorage.getItem('ipo_company_id') || user?.companyId || '';
+      }
+
+      if (targetId !== activeCompanyId) {
+        setDrafts({});
+        setGapReport([]);
+        setComments([]);
+        setIntakeCache({});
+        setDocsCache([]);
+        setAuditLogs([]);
+        setActiveCompanyId(targetId);
+        if (targetId) localStorage.setItem('ipo_company_id', targetId);
       }
     };
+
+    syncCompany();
     window.addEventListener('ipo-company-changed', syncCompany);
     window.addEventListener('storage', syncCompany);
     return () => {
       window.removeEventListener('ipo-company-changed', syncCompany);
       window.removeEventListener('storage', syncCompany);
     };
-  }, [activeCompanyId]);
+  }, [user, activeCompanyId]);
 
   const [activeTocId, setActiveTocId] = useState('definitions_and_abbreviations');
   const [drafts, setDrafts] = useState({});
@@ -181,6 +146,17 @@ export function DraftDocumentProvider({ children }) {
   }, [companyId]);
 
   const loadDraftData = useCallback(async (isSilent = false) => {
+    if (!companyId) {
+      setDrafts({});
+      setComments([]);
+      setGapReport([]);
+      setIntakeCache({});
+      setDocsCache([]);
+      setAuditLogs([]);
+      setLoading(false);
+      return;
+    }
+
     try {
       if (!isSilent) setLoading(true);
 
@@ -193,19 +169,24 @@ export function DraftDocumentProvider({ children }) {
       ]);
 
       if (draftRes.status === 'fulfilled') setDrafts(draftRes.value.data || draftRes.value || {});
+      else setDrafts({});
       if (commRes.status === 'fulfilled') setComments(commRes.value.data || commRes.value || []);
+      else setComments([]);
       if (gapRes.status === 'fulfilled') setGapReport(gapRes.value.data || gapRes.value || []);
+      else setGapReport([]);
       if (intakeRes.status === 'fulfilled') setIntakeCache(intakeRes.value.data || intakeRes.value || {});
+      else setIntakeCache({});
       if (docsRes.status === 'fulfilled') setDocsCache(docsRes.value.data || docsRes.value || []);
+      else setDocsCache([]);
 
       try {
         const auditRes = await getAuditLogs(companyId, 1, 50);
         const payload = auditRes.data || auditRes || {};
         const fetchedLogs = payload.logs || payload.data || (Array.isArray(payload) ? payload : []);
         const cleanFetched = filterMeaningfulAuditLogs(fetchedLogs);
-        setAuditLogs(cleanFetched && cleanFetched.length > 0 ? cleanFetched : filterMeaningfulAuditLogs(MOCK_TRACEABLE_AUDIT_LOGS));
+        setAuditLogs(cleanFetched || []);
       } catch (auditErr) {
-        setAuditLogs(filterMeaningfulAuditLogs(MOCK_TRACEABLE_AUDIT_LOGS));
+        setAuditLogs([]);
       }
     } catch (err) {
       console.error("Error loading draft workspace data:", err);

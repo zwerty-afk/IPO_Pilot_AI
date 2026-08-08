@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useAuth } from '../context/AuthContext';
 import { getCompanyStatus, downloadDocx, downloadPdf, getAuditLogs, getIntake } from '../services/api';
 import { 
   Download, 

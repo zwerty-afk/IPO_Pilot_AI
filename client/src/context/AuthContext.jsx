@@ -57,6 +57,7 @@ export function AuthProvider({ children }) {
     if (userData?.companyId) {
       localStorage.setItem('ipo_company_id', userData.companyId);
     }
+    window.dispatchEvent(new CustomEvent('ipo-company-changed'));
     setToken(newToken);
     setUser(userData);
     return res.data;
@@ -69,6 +70,7 @@ export function AuthProvider({ children }) {
     if (userData?.companyId) {
       localStorage.setItem('ipo_company_id', userData.companyId);
     }
+    window.dispatchEvent(new CustomEvent('ipo-company-changed'));
     setToken(newToken);
     setUser(userData);
     return res.data;
@@ -77,6 +79,7 @@ export function AuthProvider({ children }) {
   const logout = useCallback(() => {
     localStorage.removeItem('ipo_token');
     localStorage.removeItem('ipo_company_id');
+    window.dispatchEvent(new CustomEvent('ipo-company-changed'));
     setToken(null);
     setUser(null);
   }, []);

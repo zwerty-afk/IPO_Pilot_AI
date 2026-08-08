@@ -2425,10 +2425,7 @@ app.get('/api/companies/:id/ipo-readiness', authenticateToken, async (req, res) 
     const savedReadiness = db.getIpoReadiness(companyId) || {};
     const itemStatuses = savedReadiness.items || {};
 
-    // ── INTAKE FORM COMPLETION (40 points) ──────────────────────────────────
-    // Credited PER FIELD, not per section. 40 points are divided by the number of
-    // required fields across the whole form, so a single saved field moves the
-    // score immediately instead of waiting for its section to be finished.
+    // ── 1. INTAKE FORM & COMPANY INFORMATION (40 points) ────────────────────
     const INTAKE_SECTIONS = {
       company_details: ['legal_name', 'cin', 'incorporation_date', 'registered_office', 'industry_type'],
       business_overview: ['company_history', 'manufacturing_plants', 'installed_capacity', 'capacity_utilization_pct'],
@@ -2465,91 +2462,80 @@ app.get('/api/companies/:id/ipo-readiness', authenticateToken, async (req, res) 
       if (fields.length > 0 && filledHere === fields.length) completeSections++;
     }
     const POINTS_PER_INTAKE_FIELD = totalIntakeFields > 0 ? 40 / totalIntakeFields : 0;
-    const intakeScore = filledIntakeFields * POINTS_PER_INTAKE_FIELD;
+    const intakeScore = Math.min(40, filledIntakeFields * POINTS_PER_INTAKE_FIELD);
 
-    // ── DOCUMENT UPLOAD + EXTRACTION (30 points) ────────────────────────────
-    // 7 document types, 30/7 ≈ 4.29 points each, awarded by quality:
-    //   full  — uploaded, extraction succeeded, no mismatch against the intake
-    //   half  — uploaded and extracted, but a value disagrees with the intake form
-    //   zero  — never uploaded, or upload/extraction failed
-    // Half credit tops itself up to full as soon as the mismatch is resolved,
-    // because it is derived from the live gap report on every request.
-    const REQUIRED_DOC_TYPES = [
-      'audited_financials', 'incorporation_certificate', 'board_resolution',
-      'litigation_records', 'material_contracts', 'promoter_kyc', 'cap_table',
-      'moa_document', 'aoa_document', 'pan_certificate', 'gst_certificate',
-      'factory_images', 'plant_layout', 'certifications', 'company_brochure',
-      'din_proof', 'promoter_pan', 'appointment_letters',
-      'tax_audit_report', 'annual_reports', 'court_orders', 'legal_opinions'
-    ];
-    const POINTS_PER_DOC = 30 / REQUIRED_DOC_TYPES.length;
+    // ── 2. COMPLIANCE & SEBI CHECKS (20 points) ─────────────────────────────
+    const uploadedDocTypes = new Set(docs.map(d => d.doc_type));
+    const hasIntakeCompleted = Object.keys(intake || {}).some(k => intake[k] && Object.keys(intake[k]).length > 0);
+    let complianceScore = 0;
 
-    // Which document type each consistency gap implicates. Only mismatch gaps
-    // appear here: a missing-disclosure gap is an intake problem, not a document
-    // quality problem, so it must not dock the document that is otherwise fine.
-    const GAP_FIELD_TO_DOC_TYPE = {
-      'financials.revenue_fy25': 'audited_financials',
-      'capital_structure.promoter_holding_pct': 'cap_table'
+    if (hasIntakeCompleted || docs.length > 0) {
+      const complianceRules = [
+        { id: 'RULE-001', points: 2, status: uploadedDocTypes.has('aoa') ? 'Pass' : 'Fail' },
+        { id: 'RULE-002', points: 2, status: uploadedDocTypes.has('moa') ? 'Pass' : 'Fail' },
+        { id: 'RULE-003', points: 2, status: docs.filter(d => d.doc_type === 'financial_statements' || d.doc_type === 'audited_financials').length >= 3 ? 'Pass' : docs.filter(d => d.doc_type === 'financial_statements' || d.doc_type === 'audited_financials').length > 0 ? 'Warning' : 'Fail' },
+        { id: 'RULE-004', points: 2, status: uploadedDocTypes.has('board_resolution') ? 'Pass' : 'Fail' },
+        { id: 'RULE-005', points: 2, status: uploadedDocTypes.has('shareholding_pattern') || uploadedDocTypes.has('cap_table') ? 'Pass' : 'Fail' },
+        { id: 'RULE-006', points: 2, status: uploadedDocTypes.has('promoter_kyc') || uploadedDocTypes.has('din_proof') ? 'Pass' : 'Fail' },
+        { id: 'RULE-007', points: 2, status: uploadedDocTypes.has('factory_license') || (intake.legal_compliance?.factory_license ? 'Pass' : 'Fail') },
+        { id: 'RULE-008', points: 1, status: uploadedDocTypes.has('pan_certificate') || uploadedDocTypes.has('gst_certificate') ? 'Pass' : 'Fail' },
+        { id: 'RULE-009', points: 2, status: uploadedDocTypes.has('auditor_certificate') || (intake.legal_compliance?.auditor_details ? 'Pass' : 'Fail') },
+        { id: 'RULE-010', points: 1, status: uploadedDocTypes.has('litigation_records') || (intake.litigation ? 'Pass' : 'Fail') },
+        { id: 'RULE-011', points: 1, status: uploadedDocTypes.has('material_contracts') || (intake.other_disclosures?.material_contracts ? 'Pass' : 'Fail') },
+        { id: 'RULE-012', points: 1, status: uploadedDocTypes.has('insurance_coverage') || (intake.other_disclosures?.insurance_coverage ? 'Pass' : 'Fail') }
+      ];
+
+      for (const rule of complianceRules) {
+        if (rule.status === 'Pass') complianceScore += rule.points;
+        else if (rule.status === 'Warning') complianceScore += Math.floor(rule.points / 2);
+      }
+    }
+    complianceScore = Math.min(20, complianceScore);
+
+    // ── 3. GAP ANALYSIS & REMEDIATION (20 points) ───────────────────────────
+    let gapScore = 0;
+    if (hasIntakeCompleted || docs.length > 0) {
+      const finDoc = docs.find(d => d.doc_type === 'audited_financials');
+      const capDoc = docs.find(d => d.doc_type === 'cap_table');
+      const financials = intake.financials || {};
+      const capitalStructure = intake.capital_structure || {};
+      const objects = intake.objects || {};
+      const riskInfo = intake.risk_information || {};
+
+      const flaggedIds = new Set(gapReport.map(g => g.id));
+
+      if (financials.revenue_fy25 && finDoc?.extracted_values?.revenue_fy25 && !flaggedIds.has('gap-rev-mismatch')) gapScore += 5;
+      if (capitalStructure.promoter_holding_pct && capDoc?.extracted_values?.promoter_holding_pct && !flaggedIds.has('gap-holding-mismatch')) gapScore += 5;
+      if ((objects.amount_to_raise || objects.purpose) && objects.timeline && objects.timeline.trim() !== '') gapScore += 4;
+      if (riskInfo.top5_customers_pct && String(riskInfo.top5_customers_pct).trim() !== '') gapScore += 2;
+      if (riskInfo.single_factory && String(riskInfo.single_factory).trim() !== '') gapScore += 2;
+      if (riskInfo.pending_tax_demand !== undefined && riskInfo.pending_tax_demand !== null && String(riskInfo.pending_tax_demand).trim() !== '') gapScore += 2;
+    }
+    gapScore = Math.min(20, gapScore);
+
+    // ── 4. REVIEWER CERTIFICATION (20 points) ───────────────────────────────
+    const CERT_POINTS = {
+      company_details: 2, business_overview: 2, financials: 2, capital_structure: 2,
+      objects: 2, promoter_details: 2, risk_factors: 2, litigation: 2,
+      legal_compliance: 2, related_party: 1, other_disclosures: 1
     };
-    const docTypesWithIssues = new Set(
-      gapReport
-        .filter(g => g.category === 'consistency')
-        .map(g => GAP_FIELD_TO_DOC_TYPE[g.fieldName])
-        .filter(Boolean)
-    );
-
-    // Reported back per document type so the dashboard note can explain the split.
-    const docCredit = {};
-    let docScore = 0;
-    for (const docType of REQUIRED_DOC_TYPES) {
-      const uploads = docs.filter(d => d.doc_type === docType);
-      if (uploads.length === 0) { docCredit[docType] = 0; continue; }
-
-      // A confirmed or successfully uploaded document is trusted for scoring
-      const extracted = uploads.some(d =>
-        d.status === 'confirmed' ||
-        d.ocr_status === 'completed' ||
-        d.status === 'uploaded' ||
-        Object.keys(d.extracted_values || {}).length > 0
-      );
-      if (!extracted) { docCredit[docType] = 0; continue; }
-
-      const credit = docTypesWithIssues.has(docType) ? 0.5 : 1;
-      docCredit[docType] = credit;
-      docScore += credit * POINTS_PER_DOC;
-    }
-    const docsFullCredit = REQUIRED_DOC_TYPES.filter(t => docCredit[t] === 1).length;
-    const docsPartialCredit = REQUIRED_DOC_TYPES.filter(t => docCredit[t] === 0.5).length;
-
-    // ── GAP & INCONSISTENCY PENALTY (up to -20 points) ──────────────────────
-    // 3 checks implemented: revenue mismatch, holding mismatch, missing timeline.
-    const MAX_GAP_PENALTY = 20;
-    const GAP_CHECK_COUNT = 3;
-    const PENALTY_PER_GAP = MAX_GAP_PENALTY / GAP_CHECK_COUNT;
-    const gapPenalty = Math.min(MAX_GAP_PENALTY, gapReport.length * PENALTY_PER_GAP);
-
-    // ── REVIEWER CERTIFICATION (30 points) ──────────────────────────────────
-    // 7 draft sections × ~4.29 points each. Counts only when status === 'certified'.
-    const CERT_SECTIONS = [
-      'business_overview', 'risk_factors', 'objects', 'capital_structure',
-      'related_party', 'litigation', 'promoter_details'
-    ];
-    const POINTS_PER_CERT = 30 / CERT_SECTIONS.length;
     let certScore = 0;
-    for (const sec of CERT_SECTIONS) {
-      if (drafts[sec] && drafts[sec].status === 'certified') certScore += POINTS_PER_CERT;
+    let certifiedCount = 0;
+    for (const [secKey, pts] of Object.entries(CERT_POINTS)) {
+      if (drafts[secKey] && drafts[secKey].status === 'certified') {
+        certScore += pts;
+        certifiedCount++;
+      }
     }
-    const certifiedCount = CERT_SECTIONS.filter(s => drafts[s] && drafts[s].status === 'certified').length;
+    certScore = Math.min(20, certScore);
 
-    // ── FINAL SCORE ─────────────────────────────────────────────────────────
-    // Intake(40) + Documents(30) - GapPenalty(up to 20) + Certification(30)
-    // Capped between 0 and 100.
-    const rawScore = intakeScore + docScore - gapPenalty + certScore;
-    const overall_score = Math.max(0, Math.min(100, Math.round(rawScore)));
+    // ── TOTAL SCORE (0-100) ──────────────────────────────────────────────────
+    const overall_score = Math.min(100, Math.max(0, Math.round(intakeScore + complianceScore + gapScore + certScore)));
 
     let overall_label = 'Getting started';
     if (overall_score >= 100) overall_label = 'Ready for IPO filing review';
-    else if (overall_score >= 70) overall_label = 'Almost ready';
+    else if (overall_score >= 80) overall_label = 'Nearly IPO ready';
+    else if (overall_score >= 60) overall_label = 'Strong progress';
     else if (overall_score >= 40) overall_label = 'In progress';
 
     const bankerAccepted = invitations.some(i => i.status === 'accepted');
@@ -2560,7 +2546,7 @@ app.get('/api/companies/:id/ipo-readiness', authenticateToken, async (req, res) 
       { key: 'cap_table_verification', title: 'Cap Table & Promoter Lock-In', category: 'compliance', status: itemStatuses.cap_table_verification?.status || (docs.some(d => d.doc_type === 'cap_table' && d.status === 'confirmed') ? 'verified' : 'needs_changes'), verified_by: itemStatuses.cap_table_verification?.updated_by_name || null },
       { key: 'sebi_icdr_disclosures', title: 'SEBI ICDR Fund Utilization Timeline', category: 'disclosures', status: itemStatuses.sebi_icdr_disclosures?.status || (gapReport.some(g => g.fieldName === 'objects.timeline') ? 'needs_changes' : 'completed'), verified_by: itemStatuses.sebi_icdr_disclosures?.updated_by_name || null },
       { key: 'merchant_banker_appointment', title: 'SEBI-Registered Merchant Banker Engagement', category: 'merchant_banker', status: itemStatuses.merchant_banker_appointment?.status || (bankerAccepted ? 'completed' : 'in_progress'), verified_by: itemStatuses.merchant_banker_appointment?.updated_by_name || null },
-      { key: 'chapter_certifications', title: 'DRHP Chapter Certifications', category: 'certification', status: itemStatuses.chapter_certifications?.status || (certifiedCount === CERT_SECTIONS.length ? 'completed' : 'in_progress'), verified_by: itemStatuses.chapter_certifications?.updated_by_name || null }
+      { key: 'chapter_certifications', title: 'DRHP Chapter Certifications', category: 'certification', status: itemStatuses.chapter_certifications?.status || (certifiedCount === Object.keys(CERT_POINTS).length ? 'completed' : 'in_progress'), verified_by: itemStatuses.chapter_certifications?.updated_by_name || null }
     ];
 
     const resultPayload = {
@@ -2568,19 +2554,19 @@ app.get('/api/companies/:id/ipo-readiness', authenticateToken, async (req, res) 
       companyName: company.name,
       overall_score,
       overall_label,
-      summary: `IPO readiness score is ${overall_score}/100. ${certifiedCount} of ${CERT_SECTIONS.length} draft chapters certified. ${Math.round(intakeScore)}/40 intake (${filledIntakeFields}/${totalIntakeFields} fields), ${Math.round(docScore)}/30 documents, -${Math.round(gapPenalty)} gaps, ${Math.round(certScore)}/30 certification.`,
+      summary: `IPO readiness score is ${overall_score}/100. ${certifiedCount} of ${Object.keys(CERT_POINTS).length} draft chapters certified. ${Math.round(intakeScore)}/40 intake, ${Math.round(complianceScore)}/20 compliance, ${Math.round(gapScore)}/20 gap analysis, ${Math.round(certScore)}/20 certification.`,
       sections: {
         intake_completion: { score: Math.round(intakeScore), max: 40, status: intakeScore >= 35 ? 'ok' : intakeScore > 0 ? 'warning' : 'critical', note: `${filledIntakeFields} of ${totalIntakeFields} required fields filled · ${completeSections} of ${Object.keys(INTAKE_SECTIONS).length} sections complete` },
-        document_completion: { score: Math.round(docScore), max: 30, status: docScore >= 25 ? 'ok' : docScore > 0 ? 'warning' : 'critical', note: `${docsFullCredit} of ${REQUIRED_DOC_TYPES.length} document types verified${docsPartialCredit > 0 ? ` · ${docsPartialCredit} at partial credit pending mismatch resolution` : ''}` },
-        gap_penalty: { score: -Math.round(gapPenalty), max: -20, status: gapReport.length === 0 ? 'ok' : 'warning', note: `${gapReport.length} unresolved gap(s) / inconsistencies` },
-        reviewer_certification: { score: Math.round(certScore), max: 30, status: certScore >= 25 ? 'ok' : certScore > 0 ? 'warning' : 'critical', note: `${certifiedCount} of ${CERT_SECTIONS.length} sections certified by reviewer` },
+        compliance_checks: { score: Math.round(complianceScore), max: 20, status: complianceScore >= 18 ? 'ok' : complianceScore > 0 ? 'warning' : 'critical', note: `${Math.round(complianceScore)} of 20 compliance points earned` },
+        gap_remediation: { score: Math.round(gapScore), max: 20, status: gapScore >= 18 ? 'ok' : gapScore > 0 ? 'warning' : 'critical', note: `${Math.round(gapScore)} of 20 gap remediation points earned` },
+        reviewer_certification: { score: Math.round(certScore), max: 20, status: certScore >= 18 ? 'ok' : certScore > 0 ? 'warning' : 'critical', note: `${certifiedCount} of ${Object.keys(CERT_POINTS).length} sections certified by reviewer` }
       },
       milestone_items: milestoneItems,
       top_gaps: gapReport.slice(0, 3).map(g => g.message),
       recommendations: [
         bankerAccepted ? 'Review draft chapters with engaged Merchant Banker.' : 'Appoint a SEBI-registered Merchant Banker from Invitations.',
         gapReport.length > 0 ? 'Resolve open data discrepancies in Intake Form.' : 'Proceed to final reviewer certification.',
-        certifiedCount < sections.length ? 'Complete section certifications in Reviewer Workspace.' : 'Export certified DRHP prospectus for SEBI submission.'
+        certifiedCount < Object.keys(CERT_POINTS).length ? 'Complete section certifications in Reviewer Workspace.' : 'Export certified DRHP prospectus for SEBI submission.'
       ],
       disclaimer: 'IPO Readiness scores and AI insights are informational tools designed for preparation assistance and do not constitute legal, financial, SEBI regulatory, or merchant banking certification.',
       computed_at: new Date().toISOString()

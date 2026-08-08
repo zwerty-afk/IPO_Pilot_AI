@@ -46,9 +46,20 @@ export default function Dashboard() {
   const [drafts, setDrafts] = useState({});
   const [auditLogs, setAuditLogs] = useState([]);
 
-  const companyId = localStorage.getItem('ipo_company_id') || 'aarav-precision';
+  const companyId = user?.companyId || localStorage.getItem('ipo_company_id') || '';
 
   const loadStatus = async () => {
+    if (!companyId) {
+      setStats(null);
+      setReadinessData(null);
+      setIntakeData({});
+      setDocuments([]);
+      setDrafts({});
+      setAuditLogs([]);
+      setLoading(false);
+      return;
+    }
+
     try {
       setLoading(true);
       const results = await Promise.allSettled([
@@ -80,9 +91,11 @@ export default function Dashboard() {
     loadStatus();
     const handleUpdate = () => loadStatus();
     window.addEventListener('ipo-readiness-changed', handleUpdate);
+    window.addEventListener('ipo-company-changed', handleUpdate);
     window.addEventListener('storage', handleUpdate);
     return () => {
       window.removeEventListener('ipo-readiness-changed', handleUpdate);
+      window.removeEventListener('ipo-company-changed', handleUpdate);
       window.removeEventListener('storage', handleUpdate);
     };
   }, [companyId]);
@@ -678,7 +691,7 @@ export default function Dashboard() {
                   <span className="text-xs font-bold uppercase tracking-wider">Resolved</span>
                   <CheckCircle2 className="w-4 h-4" />
                 </div>
-                <p className="text-2xl font-extrabold text-emerald-900">{stats?.resolvedCount ?? (readinessScore >= 80 ? 12 : Math.round(readinessScore / 8))}</p>
+                <p className="text-2xl font-extrabold text-emerald-900">{centralReadiness?.stages?.gapAnalysis?.checks?.filter(c => c.resolved).length ?? 0}</p>
                 <p className="text-[10px] text-emerald-700 font-medium">Verified Clauses</p>
               </div>
             </div>
@@ -982,7 +995,7 @@ export default function Dashboard() {
               </div>
               <div>
                 <p className="text-slate-400 text-[10px] uppercase font-bold">Pending Docs</p>
-                <p className="font-bold text-amber-400 text-sm mt-0.5">{docList.length === 0 ? 3 : docList.filter(d => d.status === 'processing' || d.status === 'pending').length} Documents</p>
+                <p className="font-bold text-amber-400 text-sm mt-0.5">{docList.filter(d => d.status === 'processing' || d.status === 'pending').length} Documents</p>
               </div>
               <div>
                 <p className="text-slate-400 text-[10px] uppercase font-bold">Pending Reviews</p>

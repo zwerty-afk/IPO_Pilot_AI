@@ -182,13 +182,35 @@ export const stepQuestions = {
   ]
 };
 
-// Global helper for section completion status evaluation
-export function getSectionModuleStatus(stepKey, intakeData = {}, documents = []) {
+// IPO Readiness scoring — exact point allocation for the 11 Intake sections.
+// Weighted by importance and depth of required disclosure (Financials/Legal/Business
+// carry the most required fields and statutory weight). Sums to exactly 40 points —
+// see client/src/utils/readinessEngine.js for how these combine into the 100-point score.
+export const INTAKE_SECTION_POINTS = {
+  company_details: 4,
+  business_overview: 5,
+  promoters: 4,
+  capital_structure: 4,
+  financials: 6,
+  objects: 3,
+  rpt: 2,
+  litigation: 3,
+  legal_compliance: 5,
+  risk_information: 2,
+  other_disclosures: 2
+};
+
+// Shared "how complete is this section" primitive — required-field-fill ratio,
+// respecting industry-profile adaptivity and the document-upload fallback.
+// Used by both getSectionModuleStatus (tri-state UI badge) and the readiness
+// engine (progressive point scoring), so the two never disagree on what counts
+// as filled.
+export function getSectionCompletionRatio(stepKey, intakeData = {}, documents = []) {
   const data = (intakeData && typeof intakeData === 'object' && intakeData[stepKey]) ? intakeData[stepKey] : (intakeData || {});
   const qs = getAdaptiveStepQuestions(stepKey, intakeData);
   const req = qs.filter((q) => !q.optional && (!q.dependsOn || data[q.dependsOn] === 'yes'));
 
-  if (!req.length) return 'empty';
+  if (!req.length) return { filled: 0, total: 0, ratio: 0 };
 
   const filledCount = req.filter((q) => {
     const val = data[q.name];
@@ -199,14 +221,21 @@ export function getSectionModuleStatus(stepKey, intakeData = {}, documents = [])
       if (typeof val === 'boolean') return true;
     }
     const sectionUploadSlots = SECTION_UPLOADS[stepKey] || [];
-    const hasDoc = sectionUploadSlots.some(slot => 
+    const hasDoc = sectionUploadSlots.some(slot =>
       (documents || []).some(d => d.doc_type === slot.docType && (d.status === 'confirmed' || d.ocr_status === 'completed'))
     );
     return hasDoc;
   }).length;
 
-  if (filledCount === 0) return 'empty';
-  if (filledCount === req.length) return 'complete';
+  return { filled: filledCount, total: req.length, ratio: filledCount / req.length };
+}
+
+// Global helper for section completion status evaluation
+export function getSectionModuleStatus(stepKey, intakeData = {}, documents = []) {
+  const { filled, total } = getSectionCompletionRatio(stepKey, intakeData, documents);
+  if (!total) return 'empty';
+  if (filled === 0) return 'empty';
+  if (filled === total) return 'complete';
   return 'partial';
 }
 

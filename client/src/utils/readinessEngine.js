@@ -1,179 +1,164 @@
 /**
  * Single Source of Truth IPO Readiness Scoring Engine
  *
- * Fixed 100-Point 5-Category Weighted Monotonic Model:
- * 1. INTAKE FORM               = 30 Points Max
- *    - Company Details                  5 pts
- *    - Promoters & Capital Structure    5 pts
- *    - Business Overview                5 pts
- *    - Financial Information            5 pts
- *    - Legal & Compliance               4 pts
- *    - Objects / RPT                    3 pts
- *    - Risk Factors                     3 pts
- * 2. DOCUMENTS                 = 20 Points Max (5 core documents x 4 pts each)
- * 3. COMPLIANCE                = 10 Points Max (5 SEBI rules x 2 pts each)
- * 4. GAP ANALYSIS              = 20 Points Max (Proportional to resolved gaps)
- * 5. REVIEWER CERTIFICATION    = 20 Points Max (Proportional to certified chapters)
- * ─────────────────────────────────────────────────────────────────────────────
- * TOTAL                         = 100 Points Max
+ * Fixed 100-Point, 4-Stage Cumulative Model — mirrors the real IPO prep journey:
  *
- * Rule: Monotonic cumulative progress score, NOT a risk score.
- * Points are earned immediately upon completing valid required actions.
- * Points are derived strictly from the active company's actual persisted data.
+ *   1. INTAKE FORM & COMPANY INFORMATION   = 40 Points  (11 sections, weighted by importance)
+ *   2. COMPLIANCE CHECKS                   = 20 Points  (12 SEBI/Companies Act rules)
+ *   3. GAP ANALYSIS & REMEDIATION          = 20 Points  (6 AI-detected consistency/risk checks)
+ *   4. REVIEWER CERTIFICATION              = 20 Points  (11 DRHP chapters, reviewer-only)
+ *   ─────────────────────────────────────────────────────────────────────────
+ *   TOTAL                                  = 100 Points
+ *
+ * Rules:
+ *  - Purely additive/monotonic. Nothing in this file ever subtracts points —
+ *    identifying a risk, a gap, or a failed check never reduces the score; it
+ *    simply means those points haven't been earned yet.
+ *  - Every point traces to a real, already-persisted action (an intake field
+ *    filled, a document uploaded, a gap resolved, a chapter certified). Nothing
+ *    is awarded for merely opening a page.
+ *  - Strictly scoped to the company whose intake/documents/gapReport/drafts are
+ *    passed in — the caller (DraftDocumentContext) already fetches all four
+ *    keyed to the active companyId, so a new company naturally starts at 0/100
+ *    and switching companies never leaks progress between them.
  */
 
+import { INTAKE_SECTION_POINTS, getSectionCompletionRatio, steps as INTAKE_STEPS } from '../data/intakeSchema';
+import { COMPLIANCE_MAX, computeComplianceChecklist } from './complianceRules';
+import { GAP_ANALYSIS_MAX, computeGapAnalysisChecks } from './gapAnalysisChecks';
+
 export const READINESS_WEIGHTS = {
-  INTAKE_MAX: 30,
-  DOCUMENTS_MAX: 20,
-  COMPLIANCE_MAX: 10,
-  GAPS_MAX: 20,
+  INTAKE_MAX: 40,
+  COMPLIANCE_MAX,
+  GAP_ANALYSIS_MAX,
   CERTIFICATION_MAX: 20,
   TOTAL_MAX: 100
 };
 
-function getSectionRatio(data) {
-  if (!data) return 0;
-  if (typeof data !== 'object') return Boolean(data) ? 1 : 0;
-  const entries = Object.entries(data);
-  if (entries.length === 0) return 0;
+// Reviewer Certification — 20 points across the 11 real DRHP chapters that the
+// Reviewer Workspace actually certifies (drafts[key].status === 'certified').
+// Only an actual certification counts; "approved" alone earns nothing here —
+// certification is reviewer-only and is the final sign-off, not a midpoint.
+export const CERTIFICATION_CHAPTER_POINTS = {
+  company_details: 2,
+  business_overview: 2,
+  financials: 2,
+  capital_structure: 2,
+  objects: 2,
+  promoter_details: 2,
+  risk_factors: 2,
+  litigation: 2,
+  legal_compliance: 2,
+  related_party: 1,
+  other_disclosures: 1
+};
 
-  const validFields = entries.filter(([k, v]) => {
-    if (k.startsWith('_') || k === 'id' || k === 'createdAt' || k === 'updatedAt') return false;
-    if (Array.isArray(v)) return v.length > 0;
-    if (typeof v === 'object' && v !== null) {
-      return Object.values(v).some(x => x !== null && x !== undefined && String(x).trim() !== '');
-    }
-    return v !== null && v !== undefined && String(v).trim() !== '';
-  });
+const CHAPTER_LABELS = {
+  company_details: 'General Information & Company Profile',
+  business_overview: 'Business Overview',
+  financials: 'Financial Information',
+  capital_structure: 'Capital Structure',
+  objects: 'Objects of the Issue',
+  promoter_details: 'Promoters & Management',
+  related_party: 'Related Party Transactions',
+  risk_factors: 'Risk Factors',
+  litigation: 'Litigation & Legal Proceedings',
+  legal_compliance: 'Legal & Compliance',
+  other_disclosures: 'Other Disclosures'
+};
 
-  if (validFields.length === 0) return 0;
-  // Requires at least 3 valid fields completed to reach full 100% section score
-  return Math.min(1, validFields.length / 3);
+const STEP_LABELS = INTAKE_STEPS.reduce((acc, s) => { acc[s.key] = s.label; return acc; }, {});
+
+function statusForScore(score) {
+  if (score >= 100) return { label: 'IPO Ready', tier: 'ready' };
+  if (score >= 80) return { label: 'Nearly IPO ready', tier: 'nearly-ready' };
+  if (score >= 60) return { label: 'Strong progress', tier: 'strong' };
+  if (score >= 40) return { label: 'Good progress', tier: 'good' };
+  if (score >= 20) return { label: 'Preparation in progress', tier: 'in-progress' };
+  return { label: 'Getting started', tier: 'starting' };
 }
 
 export function calculateSingleSourceOfTruthReadiness(intakeData = {}, documents = [], gapReport = [], drafts = {}) {
-  // ── 1. INTAKE FORM (30 POINTS MAX) ──────────────────────────────────────────
-  const companyDetailsRatio = getSectionRatio(intakeData.company_details);
-  const companyDetailsPts = Math.round(companyDetailsRatio * 5);
+  // ── 1. INTAKE FORM & COMPANY INFORMATION (40 POINTS) ────────────────────────
+  const intakeSections = Object.entries(INTAKE_SECTION_POINTS).map(([key, max]) => {
+    const { filled, total, ratio } = getSectionCompletionRatio(key, intakeData, documents);
+    const points = Math.round(ratio * max);
+    return { key, label: STEP_LABELS[key] || key, points, max, filled, total, route: `/intake?step=${key}` };
+  });
+  const intakeScore = Math.min(40, intakeSections.reduce((sum, s) => sum + s.points, 0));
 
-  const promoterCapitalRatio = Math.max(
-    getSectionRatio(intakeData.promoters), 
-    getSectionRatio(intakeData.capital_structure), 
-    getSectionRatio(intakeData.promoter_details)
-  );
-  const promoterCapitalPts = Math.round(promoterCapitalRatio * 5);
+  // ── 2. COMPLIANCE CHECKS (20 POINTS) ─────────────────────────────────────────
+  const complianceRules = computeComplianceChecklist(intakeData, documents);
+  const complianceScore = Math.min(COMPLIANCE_MAX, complianceRules.reduce((sum, r) => sum + (r.earnedPoints || 0), 0));
 
-  const businessRatio = getSectionRatio(intakeData.business_overview);
-  const businessPts = Math.round(businessRatio * 5);
+  // ── 3. GAP ANALYSIS & REMEDIATION (20 POINTS) ────────────────────────────────
+  const gapChecks = computeGapAnalysisChecks(intakeData, documents, gapReport);
+  const gapScore = Math.min(GAP_ANALYSIS_MAX, gapChecks.reduce((sum, c) => sum + (c.earnedPoints || 0), 0));
 
-  const financialRatio = getSectionRatio(intakeData.financials);
-  const financialPts = Math.round(financialRatio * 5);
+  // ── 4. REVIEWER CERTIFICATION (20 POINTS) ────────────────────────────────────
+  const certificationChapters = Object.entries(CERTIFICATION_CHAPTER_POINTS).map(([key, max]) => {
+    const status = (drafts[key] && drafts[key].status) || 'draft';
+    const certified = status === 'certified';
+    return { key, label: CHAPTER_LABELS[key] || key, points: certified ? max : 0, max, status, route: '/reviewer' };
+  });
+  const certificationScore = Math.min(20, certificationChapters.reduce((sum, c) => sum + c.points, 0));
 
-  const legalRatio = Math.max(getSectionRatio(intakeData.legal_compliance), getSectionRatio(intakeData.litigation));
-  const legalPts = Math.round(legalRatio * 4);
+  // ── TOTAL (0-100) ─────────────────────────────────────────────────────────────
+  const totalScore = Math.min(100, Math.max(0, intakeScore + complianceScore + gapScore + certificationScore));
 
-  const objectsRptRatio = Math.max(getSectionRatio(intakeData.objects), getSectionRatio(intakeData.rpt), getSectionRatio(intakeData.related_party));
-  const objectsRptPts = Math.round(objectsRptRatio * 3);
+  const stages = {
+    intake: {
+      key: 'intake', title: 'Intake & Company Information', score: intakeScore, max: 40,
+      pct: Math.round((intakeScore / 40) * 100), sections: intakeSections
+    },
+    compliance: {
+      key: 'compliance', title: 'Compliance & SEBI Checks', score: complianceScore, max: COMPLIANCE_MAX,
+      pct: Math.round((complianceScore / COMPLIANCE_MAX) * 100), rules: complianceRules
+    },
+    gapAnalysis: {
+      key: 'gapAnalysis', title: 'Gap Analysis & Remediation', score: gapScore, max: GAP_ANALYSIS_MAX,
+      pct: Math.round((gapScore / GAP_ANALYSIS_MAX) * 100), checks: gapChecks
+    },
+    certification: {
+      key: 'certification', title: 'Reviewer Certification', score: certificationScore, max: 20,
+      pct: Math.round((certificationScore / 20) * 100), chapters: certificationChapters
+    }
+  };
 
-  const riskRatio = Math.max(getSectionRatio(intakeData.risk_information), getSectionRatio(intakeData.risk_factors));
-  const riskPts = Math.round(riskRatio * 3);
-
-  const intakeScore = Math.min(30, Math.max(0, companyDetailsPts + promoterCapitalPts + businessPts + financialPts + legalPts + objectsRptPts + riskPts));
-
-  // ── 2. DOCUMENTS (20 POINTS MAX) ─────────────────────────────────────────────
-  const uploadedDocTypes = new Set((documents || []).map(d => d.doc_type || d.type));
-  const coreDocs = [
-    { type: 'aoa', label: 'Articles of Association (AOA)', pts: 4, uploaded: uploadedDocTypes.has('aoa') },
-    { type: 'moa', label: 'Memorandum of Association (MOA)', pts: 4, uploaded: uploadedDocTypes.has('moa') },
-    { type: 'audited_financials', label: 'Audited Financial Statements', pts: 4, uploaded: uploadedDocTypes.has('audited_financials') },
-    { type: 'board_resolution', label: 'Board Resolution for IPO', pts: 4, uploaded: uploadedDocTypes.has('board_resolution') },
-    { type: 'incorporation_certificate', label: 'Certificate of Incorporation / PAN', pts: 4, uploaded: uploadedDocTypes.has('incorporation_certificate') || uploadedDocTypes.has('pan') }
-  ];
-  const uploadedDocsCount = coreDocs.filter(d => d.uploaded).length;
-  const documentsScore = Math.min(20, Math.max(0, uploadedDocsCount * 4));
-
-  // ── 3. COMPLIANCE (10 POINTS MAX) ────────────────────────────────────────────
-  const hasFinancials = uploadedDocTypes.has('audited_financials') || Boolean(intakeData.financials?.net_worth);
-  const hasCapital = Boolean((intakeData.capital_structure && Object.keys(intakeData.capital_structure).length > 0) || intakeData.promoter_details?.name);
-  const hasOperatingTrack = uploadedDocTypes.has('audited_financials') || Boolean(intakeData.financials?.profit_after_tax);
-  const hasBoard = Boolean(intakeData.company_details?.managing_director || intakeData.legal_compliance?.independent_directors);
-  const hasAuditComm = uploadedDocTypes.has('board_resolution') || Boolean(intakeData.legal_compliance?.audit_committee);
-
-  const sebiRules = [
-    { id: 'R1', label: 'SEBI Reg 6(1) Net Worth Eligibility (Min ₹1 Cr)', passed: hasFinancials, pts: 2 },
-    { id: 'R2', label: 'Promoters 20% Lock-in Eligibility', passed: hasCapital, pts: 2 },
-    { id: 'R3', label: '3-Year Operating Profit Track Record', passed: hasOperatingTrack, pts: 2 },
-    { id: 'R4', label: 'Independent Board Composition (Min 50%)', passed: hasBoard, pts: 2 },
-    { id: 'R5', label: 'Statutory Audit Committee Formed', passed: hasAuditComm, pts: 2 }
-  ];
-  const passedRulesCount = sebiRules.filter(r => r.passed).length;
-  const complianceScore = Math.min(10, Math.max(0, passedRulesCount * 2));
-
-  // ── 4. GAP ANALYSIS (20 POINTS MAX) ──────────────────────────────────────────
-  let gapScore = 0;
-  let addressedGapsCount = 0;
-  const gapsList = Array.isArray(gapReport) ? gapReport : (gapReport?.gaps || []);
-  let totalGaps = gapsList.length;
-
-  if (totalGaps > 0) {
-    addressedGapsCount = gapsList.filter(g => g.status === 'resolved' || g.status === 'addressed' || g.documented_in_drhp).length;
-    gapScore = Math.min(20, Math.round((addressedGapsCount / totalGaps) * 20));
-  } else {
-    gapScore = 0;
+  // ── "How to earn the remaining points" ───────────────────────────────────────
+  const nextActions = [];
+  if (stages.intake.max - stages.intake.score > 0) {
+    nextActions.push({
+      stage: 'intake', label: 'Intake', pointsRemaining: stages.intake.max - stages.intake.score,
+      description: 'Complete remaining Intake sections', route: '/intake'
+    });
   }
-
-  // ── 5. REVIEWER CERTIFICATION (20 POINTS MAX) ─────────────────────────────
-  const chapterKeys = [
-    'company_details', 'business_overview', 'financials', 'capital_structure', 
-    'objects', 'promoter_details', 'related_party', 'risk_factors', 
-    'litigation', 'legal_compliance', 'other_disclosures'
-  ];
-  const certifiedChaptersCount = chapterKeys.filter(k => drafts[k] && drafts[k].status === 'certified').length;
-  const approvedChaptersCount = chapterKeys.filter(k => drafts[k] && drafts[k].status === 'approved').length;
-
-  let certScore = 0;
-  if (certifiedChaptersCount === chapterKeys.length) {
-    certScore = 20;
-  } else {
-    const certPointsRaw = (certifiedChaptersCount * (20 / chapterKeys.length)) + (approvedChaptersCount * 1.0);
-    certScore = Math.min(20, Math.round(certPointsRaw));
+  if (stages.compliance.max - stages.compliance.score > 0) {
+    nextActions.push({
+      stage: 'compliance', label: 'Compliance', pointsRemaining: stages.compliance.max - stages.compliance.score,
+      description: 'Resolve remaining compliance checks', route: '/compliance-checklist'
+    });
   }
-
-  // ── TOTAL READINESS SCORE (0 - 100 POINTS) ──────────────────────────────────
-  const totalScore = Math.min(100, Math.max(0, intakeScore + documentsScore + complianceScore + gapScore + certScore));
+  if (stages.gapAnalysis.max - stages.gapAnalysis.score > 0) {
+    nextActions.push({
+      stage: 'gapAnalysis', label: 'Gap Analysis', pointsRemaining: stages.gapAnalysis.max - stages.gapAnalysis.score,
+      description: 'Complete outstanding remediation actions', route: '/gap-analysis'
+    });
+  }
+  if (stages.certification.max - stages.certification.score > 0) {
+    nextActions.push({
+      stage: 'certification', label: 'Certification', pointsRemaining: stages.certification.max - stages.certification.score,
+      description: 'Complete reviewer certification', route: '/reviewer'
+    });
+  }
 
   return {
-    score: totalScore, // 0 - 100
+    score: totalScore,
     displayScore: `${totalScore} / 100`,
     percentage: `${totalScore}%`,
-    categories: {
-      intake: { title: 'INTAKE FORM', score: intakeScore, max: 30, pct: Math.round((intakeScore / 30) * 100) },
-      documents: { title: 'DOCUMENTS', score: documentsScore, max: 20, pct: Math.round((documentsScore / 20) * 100) },
-      compliance: { title: 'COMPLIANCE', score: complianceScore, max: 10, pct: Math.round((complianceScore / 10) * 100) },
-      gapRemediation: { title: 'GAP ANALYSIS', score: gapScore, max: 20, pct: Math.round((gapScore / 20) * 100) },
-      certification: { title: 'REVIEWER CERTIFICATION', score: certScore, max: 20, pct: Math.round((certScore / 20) * 100) }
-    },
-    sectionBreakdown: {
-      companyDetails: companyDetailsPts,
-      promotersCapital: promoterCapitalPts,
-      businessOverview: businessPts,
-      financials: financialPts,
-      legalCompliance: legalPts,
-      objectsRpt: objectsRptPts,
-      riskFactors: riskPts
-    },
-    meta: {
-      uploadedCoreDocsCount: uploadedDocsCount,
-      totalCoreDocs: 5,
-      coreDocs,
-      passedRulesCount,
-      totalRules: sebiRules.length,
-      sebiRules,
-      addressedGapsCount,
-      totalGaps,
-      certifiedChaptersCount,
-      approvedChaptersCount,
-      totalChapters: chapterKeys.length
-    }
+    status: statusForScore(totalScore),
+    remainingPoints: 100 - totalScore,
+    stages,
+    nextActions
   };
 }

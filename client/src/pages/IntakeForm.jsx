@@ -695,6 +695,7 @@ function DocumentUploadSlot({ slot, companyId, documents, setDocuments, onUpload
 }
 
 export default function IntakeForm() {
+  const { user } = useAuth();
   const [searchParams] = useSearchParams();
   const targetStep = searchParams.get('step');
   const targetField = searchParams.get('field');
@@ -725,7 +726,7 @@ export default function IntakeForm() {
   const [confidenceMap, setConfidenceMap] = useState({});
   const intakeTopRef = useRef(null);
 
-  const companyId = localStorage.getItem('ipo_company_id') || 'aarav-precision';
+  const companyId = user?.companyId || localStorage.getItem('ipo_company_id') || '';
   const currentStep = steps[currentStepIndex];
 
   const scrollToTop = () => {

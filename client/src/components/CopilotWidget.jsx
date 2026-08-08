@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
 import { 
   Bot, 
   X, 
@@ -508,6 +509,7 @@ function CopilotStructuredResponse({ content, pathname, navigate, onActionClick,
 export default function CopilotWidget() {
   const navigate = useNavigate();
   const location = useLocation();
+  const { user } = useAuth();
 
   const [isOpen, setIsOpen] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
@@ -524,7 +526,7 @@ export default function CopilotWidget() {
   const messagesEndRef = useRef(null);
   const widgetRef = useRef(null);
 
-  const companyId = localStorage.getItem('ipo_company_id') || 'aarav-precision';
+  const companyId = user?.companyId || localStorage.getItem('ipo_company_id') || '';
   const pathname = location.pathname;
 
   const getModuleDetails = (path) => {

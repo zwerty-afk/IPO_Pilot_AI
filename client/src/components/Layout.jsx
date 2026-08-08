@@ -15,9 +15,11 @@ import CopilotWidget from './CopilotWidget';
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
 function readinessColor(score) {
-  if (score >= 100) return { bar: 'bg-emerald-500', text: 'text-emerald-400', label: 'Ready for IPO filing review' };
-  if (score >= 70) return { bar: 'bg-emerald-500', text: 'text-emerald-400', label: 'Almost ready' };
-  if (score >= 40) return { bar: 'bg-amber-400',   text: 'text-amber-400',   label: 'In progress' };
+  if (score >= 100) return { bar: 'bg-emerald-500', text: 'text-emerald-400', label: 'IPO Ready' };
+  if (score >= 80) return { bar: 'bg-emerald-500', text: 'text-emerald-400', label: 'Nearly IPO ready' };
+  if (score >= 60) return { bar: 'bg-emerald-400', text: 'text-emerald-300', label: 'Strong progress' };
+  if (score >= 40) return { bar: 'bg-amber-400',   text: 'text-amber-400',   label: 'Good progress' };
+  if (score >= 20) return { bar: 'bg-amber-500',   text: 'text-amber-300',   label: 'Preparation in progress' };
   return                   { bar: 'bg-red-500',     text: 'text-red-400',     label: 'Getting started' };
 }
 
@@ -57,10 +59,15 @@ export default function Layout({ children }) {
         const res = compRes.value;
         const companies = res.data?.companies || res.data;
         if (companies && companies.length > 0) {
-          const comp = companies[0];
-          setCompany(comp);
-          const id = comp._id || comp.id;
-          localStorage.setItem('ipo_company_id', id);
+          const activeCompId = user?.companyId || localStorage.getItem('ipo_company_id');
+          const matchedComp = (user?.role === 'issuer' && user?.companyId)
+            ? companies.find(c => (c.id === user.companyId || c._id === user.companyId)) || companies[0]
+            : (companies.find(c => (c.id === activeCompId || c._id === activeCompId)) || companies[0]);
+          setCompany(matchedComp);
+          const id = matchedComp?._id || matchedComp?.id;
+          if (id) localStorage.setItem('ipo_company_id', id);
+        } else {
+          setCompany(null);
         }
       }
 
@@ -71,10 +78,15 @@ export default function Layout({ children }) {
     } catch (err) {
       console.error('Layout: failed to load sidebar data', err);
     }
-  }, []);
+  }, [user]);
 
   useEffect(() => {
     loadSidebarData();
+    const handleCompanyUpdate = () => loadSidebarData();
+    window.addEventListener('ipo-company-changed', handleCompanyUpdate);
+    return () => {
+      window.removeEventListener('ipo-company-changed', handleCompanyUpdate);
+    };
   }, [loadSidebarData]);
 
   // Close the mobile drawer on Escape and lock body scroll while it's open.
