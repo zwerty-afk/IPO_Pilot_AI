@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { getCompanyStatus, getIntake, getDocuments, getDrafts } from '../services/api';
+import { useDraftDocument } from '../context/DraftDocumentContext';
 import { SECTION_KEYS } from '../components/ChapterHealthSidebar';
 import { stepQuestions, checkFieldAgainstDocuments } from '../data/intakeSchema';
 import { classifyCompany, getIpoProfile } from '../data/companyClassifier';
@@ -30,6 +31,7 @@ import {
 export default function GapAnalysisPage() {
   const navigate = useNavigate();
   const location = useLocation();
+  const { readiness: centralReadiness } = useDraftDocument();
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState(null);
   const [intakeData, setIntakeData] = useState({});
@@ -108,7 +110,7 @@ export default function GapAnalysisPage() {
       whyGap: 'SEBI ICDR Regulations Schedule VI Part A mandates that the AOA must be attached to verify pre-emption rights, borrowing powers, and equity share restrictions prior to DRHP filing.',
       affectedChapters: ['Section V: About Our Company', 'Section VII: Legal and Other Information'],
       affectedSubsections: ['History and Certain Corporate Matters', 'Other Regulatory and Statutory Disclosures'],
-      readinessImpact: '-8% IPO Readiness',
+      readinessImpact: '+8 Pts upon Remediation',
       generationImpact: 'Blocked',
       requiredDocs: ['Articles of Association (AOA.pdf)'],
       recommendedResolution: 'Upload the latest certified Articles of Association containing standard pre-emption clauses.',
@@ -132,7 +134,7 @@ export default function GapAnalysisPage() {
       whyGap: 'SEBI ICDR Schedule VI Part A Item (11) requires 3 consecutive years of audited restated accounts (FY23, FY24, FY25) certified by Statutory Auditors.',
       affectedChapters: ['Section VI: Financial Information', 'Section III: Introduction'],
       affectedSubsections: ['Restated Financial Information', 'Summary of Restated Financial Information', "Management's Discussion & Analysis"],
-      readinessImpact: '-12% IPO Readiness',
+      readinessImpact: '+12 Pts upon Remediation',
       generationImpact: 'Incomplete',
       requiredDocs: ['Audited Financial Reports (FY23, FY24, FY25)'],
       recommendedResolution: 'Upload complete 3-year restated financial audit report certified by Statutory Auditors.',
@@ -155,7 +157,7 @@ export default function GapAnalysisPage() {
       whyGap: 'Companies Act 2013 Sec 179(3) mandates explicit board resolution for fresh equity capital issuance.',
       affectedChapters: ['Section I: General Information'],
       affectedSubsections: ['Certain Corporate Matters', 'Details of the Offer'],
-      readinessImpact: '-6% IPO Readiness',
+      readinessImpact: '+6 Pts upon Remediation',
       generationImpact: 'Warning',
       requiredDocs: ['Board Resolution Extract'],
       recommendedResolution: 'Upload certified copy of signed Board Resolution passed on or after Jan 1, 2025.',
@@ -178,7 +180,7 @@ export default function GapAnalysisPage() {
       whyGap: 'SEBI ICDR Schedule VI Part A Section VII mandates full disclosure of material civil, criminal, and tax proceedings against company & promoters.',
       affectedChapters: ['Section VII: Legal and Other Information'],
       affectedSubsections: ['Outstanding Litigation and Material Developments'],
-      readinessImpact: '-7% IPO Readiness',
+      readinessImpact: '+7 Pts upon Remediation',
       generationImpact: 'Incomplete',
       requiredDocs: ['Litigation Affidavit / Legal Register'],
       recommendedResolution: 'Complete Legal Litigation Disclosure in Intake Step 7 or upload Legal Auditor opinion.',
@@ -201,7 +203,7 @@ export default function GapAnalysisPage() {
       whyGap: 'SEBI (LODR) Regulations 2015 Reg 31 & ICDR Reg 14 require certified pre-issue shareholding pattern statement.',
       affectedChapters: ['Section III: Capital Structure'],
       affectedSubsections: ['Capital Structure', 'Shareholding Pattern'],
-      readinessImpact: '-4% IPO Readiness',
+      readinessImpact: '+4 Pts upon Remediation',
       generationImpact: 'Warning',
       requiredDocs: ['Shareholding Pattern Statement (PDF)'],
       recommendedResolution: 'Upload latest shareholding pattern statement certified by Company Secretary.',
@@ -225,7 +227,7 @@ export default function GapAnalysisPage() {
       whyGap: 'Merchant Banker must review and certify narrative disclosure compliance before filing DRHP with SEBI.',
       affectedChapters: ['Section VI: Financial Information', 'Section V: About Our Company'],
       affectedSubsections: ['Restated Financial Information', 'Our Business'],
-      readinessImpact: '-5% IPO Readiness',
+      readinessImpact: '+5 Pts upon Remediation',
       generationImpact: 'Incomplete',
       requiredDocs: ['Lead Manager Due Diligence Certificate'],
       recommendedResolution: 'Review SEBI disclosure narrative in Chapter Editor and click "Certify Chapter".',
@@ -327,10 +329,10 @@ export default function GapAnalysisPage() {
             <span className="text-[10px] text-rose-600/70 block mt-0.5">Draft Generation Blocked</span>
           </div>
 
-          <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200/70">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 font-mono block">Readiness Impact</span>
-            <span className="text-xl font-extrabold text-indigo-600">-{totalPenalty}%</span>
-            <span className="text-[10px] text-slate-400 block mt-0.5">Estimated Readiness Impact</span>
+          <div className="bg-indigo-50/60 p-3.5 rounded-xl border border-indigo-100">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-700 font-mono block">Current Readiness</span>
+            <span className="text-xl font-extrabold text-indigo-700 font-mono">{centralReadiness?.score ?? 0}%</span>
+            <span className="text-[10px] text-indigo-600/70 block mt-0.5 font-mono">{centralReadiness?.score ?? 0} / 100 Pts</span>
           </div>
         </div>
       </div>

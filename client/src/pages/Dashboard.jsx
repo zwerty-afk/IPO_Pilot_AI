@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getCompanyStatus, generateDrafts, getIpoReadiness, getIntake, getDocuments, getDrafts, getAuditLogs } from '../services/api';
 import { useAuth } from '../context/AuthContext';
+import { useDraftDocument } from '../context/DraftDocumentContext';
+import { calculateSingleSourceOfTruthReadiness } from '../utils/readinessEngine';
 import { 
   TrendingUp, 
   FileWarning, 
@@ -33,6 +35,7 @@ import { getSectionModuleStatus } from '../data/intakeSchema';
 
 export default function Dashboard() {
   const { user } = useAuth();
+  const { readiness: centralReadiness } = useDraftDocument();
   const navigate = useNavigate();
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -111,7 +114,8 @@ export default function Dashboard() {
   // Derived metrics from REAL DATA ONLY
   const companyName = stats?.companyName || intakeData.company_details?.legal_name || 'Your Company';
   const ipoType = stats?.ipoType || (intakeData.company_details?.proposed_exchange ? (intakeData.company_details.proposed_exchange === 'mainboard' ? 'Main Board IPO' : 'SME IPO (NSE Emerge / BSE SME)') : 'SME IPO (NSE Emerge / BSE SME)');
-  const readinessScore = readinessData?.overall_score ?? (stats?.completenessPercentage ?? 0);
+  // Single Source of Truth Readiness Score from central Context
+  const readinessScore = centralReadiness?.score ?? 0;
   const criticalCount = stats?.inconsistenciesCount ?? 0;
   const highCount = stats?.gapsCount ?? 0;
   const openComments = stats?.openComments ?? 0;

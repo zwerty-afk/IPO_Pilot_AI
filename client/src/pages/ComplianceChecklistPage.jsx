@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { getIntake, getDocuments, getIpoReadiness } from '../services/api';
+import { getIntake, getDocuments } from '../services/api';
+import { useDraftDocument } from '../context/DraftDocumentContext';
 import { 
   ListChecks, 
   CheckCircle2, 
@@ -18,10 +19,12 @@ import {
 } from 'lucide-react';
 
 export default function ComplianceChecklistPage() {
+  const { readiness: centralReadiness } = useDraftDocument();
+  const overallReadinessScore = centralReadiness?.score ?? 0;
+
   const [loading, setLoading] = useState(true);
   const [intakeData, setIntakeData] = useState({});
   const [documents, setDocuments] = useState([]);
-  const [readiness, setReadiness] = useState(null);
 
   // Filters
   const [selectedCategory, setSelectedCategory] = useState('all');
@@ -33,14 +36,12 @@ export default function ComplianceChecklistPage() {
   const loadData = async () => {
     try {
       setLoading(true);
-      const [intakeRes, docsRes, readinessRes] = await Promise.all([
+      const [intakeRes, docsRes] = await Promise.all([
         getIntake(companyId),
-        getDocuments(companyId),
-        getIpoReadiness(companyId)
+        getDocuments(companyId)
       ]);
       setIntakeData(intakeRes.data || intakeRes || {});
       setDocuments(docsRes.data || docsRes || []);
-      setReadiness(readinessRes.data || readinessRes || null);
     } catch (err) {
       console.error("Error loading compliance checklist data:", err);
     } finally {

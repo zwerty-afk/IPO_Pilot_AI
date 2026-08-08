@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { useDraftDocument } from '../context/DraftDocumentContext';
 import { getCompanies, getCompanyStatus, getSebiNotices, getIpoReadiness } from '../services/api';
 import {
   Shield, LayoutDashboard, ClipboardList,
@@ -30,21 +31,21 @@ const BASE_NAV = [
   { to: '/readiness',            icon: TrendingUp,      label: 'IPO Readiness' },
   { to: '/draft',                icon: Edit3,           label: 'Draft Prospectus' },
   { to: '/draft-preview',        icon: Eye,             label: 'Draft Preview' },
-  { to: '/reviewer',             icon: UserCheck,       label: 'Reviewer Workspace', reviewerOnly: true },
+  { to: '/reviewer',             icon: UserCheck,       label: 'Reviewer Workspace' },
 ];
 
 // ─── component ────────────────────────────────────────────────────────────────
 
 export default function Layout({ children }) {
   const { user, logout } = useAuth();
+  const { readiness: centralReadiness } = useDraftDocument();
   const navigate = useNavigate();
 
   const [company,       setCompany]       = useState(null);
-  const [readiness,     setReadiness]     = useState(null);   // 0-100
   const [sebiCount,     setSebiCount]     = useState(0);      // badge count
   const [mobileOpen,    setMobileOpen]    = useState(false);  // mobile drawer
 
-  // ── load company + heatmap + sebi count in parallel ────────────────────────
+  // ── load company + sebi count in parallel ──────────────────────────────────
   const loadSidebarData = useCallback(async () => {
     try {
       const [compRes, sebiRes] = await Promise.allSettled([
@@ -60,13 +61,6 @@ export default function Layout({ children }) {
           setCompany(comp);
           const id = comp._id || comp.id;
           localStorage.setItem('ipo_company_id', id);
-
-          getIpoReadiness(id).then(readinessRes => {
-            const readinessData = readinessRes.data || readinessRes;
-            if (readinessData && readinessData.overall_score !== undefined) {
-              setReadiness(readinessData.overall_score);
-            }
-          }).catch(() => {});
         }
       }
 
@@ -81,16 +75,6 @@ export default function Layout({ children }) {
 
   useEffect(() => {
     loadSidebarData();
-    // Immediate refresh when any page signals a score-affecting mutation
-    // (field save, document upload/confirm, certification). Falls back to the
-    // 30s poll for anything that doesn't dispatch the event.
-    const onChanged = () => loadSidebarData();
-    window.addEventListener('ipo-readiness-changed', onChanged);
-    const iv = setInterval(loadSidebarData, 30000);
-    return () => {
-      window.removeEventListener('ipo-readiness-changed', onChanged);
-      clearInterval(iv);
-    };
   }, [loadSidebarData]);
 
   // Close the mobile drawer on Escape and lock body scroll while it's open.
@@ -111,8 +95,6 @@ export default function Layout({ children }) {
     if (!name) return '??';
     return name.split(' ').map((n) => n[0]).join('').toUpperCase().slice(0, 2);
   };
-
-  const rd = readiness !== null ? readinessColor(readiness) : null;
 
   const navLinkClass = ({ isActive }) =>
     `flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 ${
@@ -138,41 +120,39 @@ export default function Layout({ children }) {
       </div>
 
       {/* ── IPO Readiness Score ─────────────────────────────────────────── */}
-      <div className="px-4 py-3 border-b border-white/10">
-        <div className="px-3 py-3 bg-white/5 rounded-xl border border-white/8">
-          <div className="flex items-center justify-between mb-2">
-            <div className="flex items-center gap-1.5">
-              <TrendingUp className="w-3.5 h-3.5 text-slate-400" />
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-                IPO Readiness
-              </span>
-            </div>
-            {rd && (
-              <span className={`text-[10px] font-bold ${rd.text}`}>{rd.label}</span>
-            )}
-          </div>
-
-          {readiness !== null ? (
-            <>
-              <div className="flex items-end gap-1.5 mb-2">
-                <span className="text-2xl font-bold text-white leading-none">{readiness}%</span>
+      {(() => {
+        const scoreVal = centralReadiness?.score ?? 0;
+        const colorMeta = readinessColor(scoreVal);
+        return (
+          <div className="px-4 py-3 border-b border-white/10">
+            <div className="px-3 py-3 bg-white/5 rounded-xl border border-white/8">
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-1.5">
+                  <TrendingUp className="w-3.5 h-3.5 text-slate-400" />
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                    IPO Readiness
+                  </span>
+                </div>
+                <span className={`text-[10px] font-bold ${colorMeta.text}`}>{colorMeta.label}</span>
               </div>
+
+              <div className="flex items-baseline justify-between mb-2">
+                <span className="text-2xl font-bold text-white leading-none font-mono">{scoreVal}%</span>
+                <span className="text-[10px] text-slate-400 font-mono font-bold">{scoreVal} / 100 Pts</span>
+              </div>
+
               {/* Progress bar */}
               <div className="w-full h-1.5 bg-white/10 rounded-full overflow-hidden">
                 <div
-                  className={`h-full rounded-full transition-all duration-700 ${rd.bar}`}
-                  style={{ width: `${readiness}%` }}
+                  className={`h-full rounded-full transition-all duration-700 ${colorMeta.bar}`}
+                  style={{ width: `${scoreVal}%` }}
                 />
               </div>
-              <p className="text-[10px] text-slate-500 mt-1.5">Based on intake, documents, gaps & certifications</p>
-            </>
-          ) : (
-            <div className="h-8 flex items-center">
-              <span className="text-xs text-slate-500">Calculating…</span>
+              <p className="text-[10px] text-slate-500 mt-1.5">Single Source of Truth Readiness Score</p>
             </div>
-          )}
-        </div>
-      </div>
+          </div>
+        );
+      })()}
 
       {/* ── Active company ──────────────────────────────────────────────── */}
       <div className="px-4 py-3 border-b border-white/10">

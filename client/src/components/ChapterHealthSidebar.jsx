@@ -590,23 +590,7 @@ export default function ChapterHealthSidebar({
         })}
       </div>
 
-      {/* ── REVIEW SECTION (below TOC) ────────────────────────────────────── */}
-      <ReviewSection
-        comments={comments}
-        auditLogs={auditLogs}
-        aiSuggestions={aiSuggestions}
-        openIssues={openIssues}
-        versions={versions}
-        onCommentClick={onCommentClick}
-        onIssueClick={onIssueClick}
-        onAcceptSuggestion={onAcceptSuggestion}
-        onDismissSuggestion={onDismissSuggestion}
-        onConvertSuggestionToComment={onConvertSuggestionToComment}
-        onVersionClick={onVersionClick}
-        onAddComment={onAddComment}
-        onResolveComment={onResolveComment}
-        isDark={isDark}
-      />
+      {/* Review Section removed from Draft Prospectus - kept exclusively in Review Workspace */}
     </div>
   );
 }

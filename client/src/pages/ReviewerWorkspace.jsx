@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
 import DraftCanvas from '../components/DraftCanvas';
-import { useDraftDocument } from '../context/DraftDocumentContext';
+import { useDraftDocument, filterMeaningfulAuditLogs } from '../context/DraftDocumentContext';
 import StatusBadge from '../components/StatusBadge';
 import { DRHP_HIERARCHY } from '../data/sebiDrhpSchema';
 import { 
@@ -64,6 +65,8 @@ function cleanChapterTitle(title) {
 
 export default function ReviewerWorkspace() {
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const isReviewer = user?.role === 'reviewer';
 
   const {
     companyId,
@@ -95,6 +98,8 @@ export default function ReviewerWorkspace() {
   const [newCommentText, setNewCommentText] = useState('');
   const [commentType, setCommentType] = useState('clarification_requested');
   const [updating, setUpdating] = useState(false);
+  const [expandedDiffIds, setExpandedDiffIds] = useState({});
+  const toggleDiffExpand = (id) => setExpandedDiffIds(prev => ({ ...prev, [id]: !prev[id] }));
 
   // Raise Issue Modal State
   const [showRaiseIssueModal, setShowRaiseIssueModal] = useState(false);
@@ -281,16 +286,22 @@ export default function ReviewerWorkspace() {
               </h2>
               <StatusBadge status={currentSection.status || 'not_reviewed'} />
 
-              {/* Small Lock Chapter Icon Button */}
-              <button
-                onClick={() => handleStatusUpdate('under_review')}
-                disabled={updating}
-                title="Lock Chapter"
-                className="px-2 py-0.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold border border-slate-200 rounded-lg text-[11px] transition-all flex items-center gap-1 cursor-pointer"
-              >
-                <Lock className="w-3 h-3 text-slate-600" />
-                <span>Lock</span>
-              </button>
+              {/* Lock Chapter Icon Button (Reviewer) or Read-Only Badge (Issuer) */}
+              {isReviewer ? (
+                <button
+                  onClick={() => handleStatusUpdate('under_review')}
+                  disabled={updating}
+                  title="Lock Chapter"
+                  className="px-2 py-0.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold border border-slate-200 rounded-lg text-[11px] transition-all flex items-center gap-1 cursor-pointer"
+                >
+                  <Lock className="w-3 h-3 text-slate-600" />
+                  <span>Lock</span>
+                </button>
+              ) : (
+                <span className="px-2 py-0.5 bg-slate-100 text-slate-500 border border-slate-200 rounded-lg text-[10px] font-mono flex items-center gap-1">
+                  <Lock className="w-3 h-3 text-slate-400" /> Read-Only View (Issuer)
+                </span>
+              )}
             </div>
 
             {currentSection.certified_by && (
@@ -677,52 +688,137 @@ export default function ReviewerWorkspace() {
               </div>
             )}
 
-            {/* TAB 4: AUDIT LOG HISTORY */}
-            {activeRightTab === 'history' && (
-              <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-4 font-sans max-h-[70vh] overflow-y-auto">
-                <div className="flex items-center justify-between border-b border-slate-100 pb-2">
-                  <span className="text-[11px] font-bold text-slate-700 uppercase tracking-wider font-mono flex items-center gap-1">
-                    <History className="w-3.5 h-3.5 text-slate-800" /> Audit Log & History
-                  </span>
-                </div>
+            {/* TAB 4: FULLY TRACEABLE VERSION HISTORY & AUDIT TRAIL */}
+            {activeRightTab === 'history' && (() => {
+              const cleanLogs = filterMeaningfulAuditLogs(auditLogs);
+              return (
+                <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-4 font-sans max-h-[70vh] overflow-y-auto">
+                  <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                    <span className="text-[11px] font-bold text-slate-700 uppercase tracking-wider font-mono flex items-center gap-1.5">
+                      <History className="w-4 h-4 text-indigo-600" /> Traceable Version History & Audit Trail
+                    </span>
+                    <span className="text-[10px] text-slate-400 font-mono">
+                      {cleanLogs.length} Meaningful Events
+                    </span>
+                  </div>
 
-                <div className="space-y-2 text-xs">
-                  {auditLogs.length === 0 ? (
-                    <p className="text-slate-400 italic text-center py-4">No audit logs recorded yet.</p>
-                  ) : (
-                    auditLogs.map((log, idx) => (
-                      <div key={idx} className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-1 font-mono text-[11px]">
-                        <div className="flex items-center justify-between text-slate-400 text-[10px]">
-                          <span>{log.actor || 'System'}</span>
-                          <span>{log.timestamp || log.created_at || 'Recent'}</span>
-                        </div>
-                        <p className="font-bold text-slate-800">{log.action || log.event}</p>
-                        <p className="text-slate-500 text-[10px]">{log.detail || log.description}</p>
-                      </div>
-                    ))
-                  )}
+                  <div className="space-y-3">
+                    {cleanLogs.length === 0 ? (
+                      <p className="text-xs text-slate-400 italic text-center py-4">No audit logs recorded yet.</p>
+                    ) : (
+                      cleanLogs.map((log, idx) => {
+                        const logId = log.id || `LOG-${idx}`;
+                        const isDiffExpanded = !!expandedDiffIds[logId];
+                        const actionType = log.actionType || log.action_type || 'Edit';
+                        const source = log.source || (log.actor?.includes('Issuer') ? 'Issuer' : log.actor?.includes('Reviewer') || log.actor?.includes('Banker') ? 'Reviewer' : log.actor?.includes('AI') ? 'AI Co-Pilot' : 'System');
+                        
+                        const actionBadgeColor = {
+                          'Certification': 'bg-emerald-100 text-emerald-800 border-emerald-300',
+                          'Approval': 'bg-emerald-50 text-emerald-700 border-emerald-200',
+                          'Rejection': 'bg-red-50 text-red-700 border-red-200',
+                          'Edit': 'bg-indigo-50 text-indigo-700 border-indigo-200',
+                          'Comment': 'bg-purple-50 text-purple-700 border-purple-200',
+                          'Suggestion': 'bg-amber-50 text-amber-800 border-amber-200',
+                          'Lock': 'bg-slate-100 text-slate-700 border-slate-300',
+                          'Intake Update': 'bg-blue-50 text-blue-700 border-blue-200'
+                        }[actionType] || 'bg-slate-100 text-slate-700 border-slate-200';
+
+                        const sourceBadgeColor = {
+                          'Issuer': 'bg-indigo-50 text-indigo-700 border-indigo-200',
+                          'Reviewer': 'bg-emerald-50 text-emerald-800 border-emerald-200',
+                          'AI Co-Pilot': 'bg-amber-50 text-amber-900 border-amber-200',
+                          'System': 'bg-slate-100 text-slate-700 border-slate-200'
+                        }[source] || 'bg-slate-100 text-slate-600 border-slate-200';
+
+                        return (
+                          <div key={logId} className="p-3.5 bg-slate-50 border border-slate-200/90 rounded-xl space-y-2 text-xs transition-all hover:border-indigo-300">
+                            {/* Header: Actor, Timestamp & Badges */}
+                            <div className="flex items-center justify-between gap-2 flex-wrap">
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <span className={`text-[9px] font-bold uppercase font-mono px-2 py-0.5 rounded border ${actionBadgeColor}`}>
+                                  {actionType}
+                                </span>
+                                <span className={`text-[9px] font-bold font-mono px-2 py-0.5 rounded border ${sourceBadgeColor}`}>
+                                  {source}
+                                </span>
+                              </div>
+                              <span className="text-[10px] text-slate-400 font-mono flex items-center gap-1">
+                                <Clock className="w-3 h-3 text-slate-400" />
+                                {log.timestamp || log.created_at || 'Recent'}
+                              </span>
+                            </div>
+
+                            {/* Actor / Who Made It */}
+                            <div className="text-[11px] font-bold text-slate-800 flex items-center gap-1 font-sans">
+                              <User className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
+                              <span>{log.actor || log.user || 'System'}</span>
+                            </div>
+
+                            {/* Affected Target / Chapter */}
+                            <div className="text-[10px] font-mono text-slate-500">
+                              Target: <strong className="text-slate-700">{log.affectedTarget || log.detail || log.event}</strong>
+                            </div>
+
+                            {/* Action Summary */}
+                            <p className="text-xs text-slate-700 font-sans leading-snug">{log.actionSummary || log.action || log.description}</p>
+
+                            {/* Content Delta / Previous vs Updated Expandable Diff */}
+                            {(log.prevContent || log.newContent) && (
+                              <div className="p-2.5 bg-white border border-slate-200 rounded-lg space-y-1.5 font-mono text-[10px] mt-1">
+                                <div className="flex items-center justify-between">
+                                  <span className="font-bold text-slate-500 uppercase tracking-wider text-[9px]">Content Delta / Comparison</span>
+                                  <button
+                                    type="button"
+                                    onClick={() => toggleDiffExpand(logId)}
+                                    className="text-[9px] font-bold text-indigo-600 hover:text-indigo-800 hover:underline cursor-pointer"
+                                  >
+                                    {isDiffExpanded ? 'Collapse Diff' : 'Expand Diff'}
+                                  </button>
+                                </div>
+
+                                {log.prevContent && (
+                                  <div className={`text-red-700 bg-red-50/70 p-1.5 rounded border border-red-100 font-mono leading-relaxed ${isDiffExpanded ? 'whitespace-pre-wrap' : 'truncate'}`}>
+                                    <span className="font-bold mr-1">- Previous:</span> {log.prevContent}
+                                  </div>
+                                )}
+                                {log.newContent && (
+                                  <div className={`text-emerald-700 bg-emerald-50/70 p-1.5 rounded border border-emerald-100 font-mono leading-relaxed ${isDiffExpanded ? 'whitespace-pre-wrap' : 'truncate'}`}>
+                                    <span className="font-bold mr-1">+ Updated:</span> {log.newContent}
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
                 </div>
-              </div>
-            )}
+              );
+            })()}
 
             {/* PERMANENT REVIEW ACTIONS SECTION AT BOTTOM OF RIGHT SIDEBAR */}
             <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-4 font-sans">
               <div className="flex items-center justify-between border-b border-slate-100 pb-2">
                 <span className="text-[11px] font-bold text-slate-700 uppercase tracking-wider font-mono flex items-center gap-1.5">
-                  <ShieldCheck className="w-4 h-4 text-indigo-600" /> Review Actions
+                  <ShieldCheck className="w-4 h-4 text-indigo-600" /> {isReviewer ? 'Review Actions' : 'Reviewer Decisions'}
                 </span>
-                <span className="text-[10px] text-slate-400 font-mono">Chapter Review</span>
+                <span className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded ${isReviewer ? 'bg-indigo-50 text-indigo-700' : 'bg-slate-100 text-slate-600 border border-slate-200'}`}>
+                  {isReviewer ? 'Reviewer Controls' : '🔒 Read-Only (Issuer)'}
+                </span>
               </div>
 
               {/* Primary Actions: Approve, Request Changes, Reject */}
               <div className="space-y-2">
                 <button
-                  onClick={() => handleStatusUpdate('approved')}
-                  disabled={updating}
-                  className={`w-full py-2.5 px-3 rounded-xl font-bold text-xs transition-all flex items-center justify-center gap-2 cursor-pointer ${
+                  onClick={() => isReviewer && handleStatusUpdate('approved')}
+                  disabled={!isReviewer || updating}
+                  className={`w-full py-2.5 px-3 rounded-xl font-bold text-xs transition-all flex items-center justify-center gap-2 ${
                     currentSection.status === 'approved'
                       ? 'bg-emerald-600 text-white shadow-sm'
-                      : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200'
+                      : isReviewer
+                      ? 'bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 cursor-pointer'
+                      : 'bg-slate-50 text-slate-400 border border-slate-200 cursor-not-allowed opacity-70'
                   }`}
                 >
                   <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
@@ -730,12 +826,14 @@ export default function ReviewerWorkspace() {
                 </button>
 
                 <button
-                  onClick={() => handleStatusUpdate('changes_requested')}
-                  disabled={updating}
-                  className={`w-full py-2.5 px-3 rounded-xl font-bold text-xs transition-all flex items-center justify-center gap-2 cursor-pointer ${
+                  onClick={() => isReviewer && handleStatusUpdate('changes_requested')}
+                  disabled={!isReviewer || updating}
+                  className={`w-full py-2.5 px-3 rounded-xl font-bold text-xs transition-all flex items-center justify-center gap-2 ${
                     currentSection.status === 'changes_requested'
                       ? 'bg-amber-500 text-slate-950 shadow-sm'
-                      : 'bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200'
+                      : isReviewer
+                      ? 'bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 cursor-pointer'
+                      : 'bg-slate-50 text-slate-400 border border-slate-200 cursor-not-allowed opacity-70'
                   }`}
                 >
                   <HelpCircle className="w-4 h-4 text-amber-600 shrink-0" />
@@ -743,12 +841,14 @@ export default function ReviewerWorkspace() {
                 </button>
 
                 <button
-                  onClick={() => handleStatusUpdate('draft')}
-                  disabled={updating}
-                  className={`w-full py-2.5 px-3 rounded-xl font-bold text-xs transition-all flex items-center justify-center gap-2 cursor-pointer ${
+                  onClick={() => isReviewer && handleStatusUpdate('draft')}
+                  disabled={!isReviewer || updating}
+                  className={`w-full py-2.5 px-3 rounded-xl font-bold text-xs transition-all flex items-center justify-center gap-2 ${
                     currentSection.status === 'draft'
                       ? 'bg-red-600 text-white shadow-sm'
-                      : 'bg-red-50 hover:bg-red-100 text-red-800 border border-red-200'
+                      : isReviewer
+                      ? 'bg-red-50 hover:bg-red-100 text-red-800 border border-red-200 cursor-pointer'
+                      : 'bg-slate-50 text-slate-400 border border-slate-200 cursor-not-allowed opacity-70'
                   }`}
                 >
                   <XCircle className="w-4 h-4 text-red-600 shrink-0" />
@@ -763,12 +863,12 @@ export default function ReviewerWorkspace() {
                 </span>
                 {/* Final Step: Certify Chapter */}
                 <button
-                  onClick={() => handleStatusUpdate('certified')}
-                  disabled={updating || (currentSection.status !== 'approved' && currentSection.status !== 'certified')}
+                  onClick={() => isReviewer && handleStatusUpdate('certified')}
+                  disabled={!isReviewer || updating || (currentSection.status !== 'approved' && currentSection.status !== 'certified')}
                   className={`w-full py-3 px-3 rounded-xl font-bold text-xs transition-all flex items-center justify-center gap-2 shadow-sm ${
                     currentSection.status === 'certified'
                       ? 'bg-emerald-700 text-white ring-2 ring-emerald-400 cursor-default'
-                      : currentSection.status === 'approved'
+                      : isReviewer && currentSection.status === 'approved'
                       ? 'bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer shadow-emerald-600/20'
                       : 'bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed opacity-60'
                   }`}
@@ -777,9 +877,15 @@ export default function ReviewerWorkspace() {
                   <span>Certify Chapter</span>
                 </button>
 
-                {currentSection.status !== 'approved' && currentSection.status !== 'certified' && (
-                  <p className="text-[10px] text-slate-400 text-center font-sans italic">
-                    Approve chapter first to enable final certification.
+                {isReviewer ? (
+                  currentSection.status !== 'approved' && currentSection.status !== 'certified' && (
+                    <p className="text-[10px] text-slate-400 text-center font-sans italic">
+                      Approve chapter first to enable final certification.
+                    </p>
+                  )
+                ) : (
+                  <p className="text-[10px] text-slate-500 text-center font-sans italic leading-relaxed pt-1">
+                    Read-Only Access: Approval, rejection, and certification decisions are reserved for Merchant Banker / Legal Counsel.
                   </p>
                 )}
               </div>

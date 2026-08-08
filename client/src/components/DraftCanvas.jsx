@@ -594,11 +594,6 @@ export default function DraftCanvas({ showToolbar = true, mode = 'chapter' }) {
               <span>Regenerate Chapter</span>
             </button>
 
-            <button onClick={() => setActiveVersion(prev => prev === 'current' ? 'original' : 'current')} className={`px-3 py-1.5 text-xs font-semibold rounded-lg flex items-center gap-1.5 transition-all border cursor-pointer ${activeVersion === 'original' ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200'}`}>
-              <History className="w-3.5 h-3.5" />
-              <span>Version History</span>
-            </button>
-
             <button onClick={() => handleExportSection('pdf')} disabled={exportingSectionPdf || exportingSectionDocx} className="px-3 py-1.5 bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-lg font-semibold text-xs transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50">
               {exportingSectionPdf ? <Loader2 className="w-3.5 h-3.5 text-red-500 animate-spin" /> : <FileText className="w-3.5 h-3.5 text-red-500" />}
               <span>PDF</span>
@@ -607,11 +602,6 @@ export default function DraftCanvas({ showToolbar = true, mode = 'chapter' }) {
             <button onClick={() => handleExportSection('docx')} disabled={exportingSectionPdf || exportingSectionDocx} className="px-3 py-1.5 bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-lg font-semibold text-xs transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50">
               {exportingSectionDocx ? <Loader2 className="w-3.5 h-3.5 text-blue-500 animate-spin" /> : <FileSpreadsheet className="w-3.5 h-3.5 text-blue-500" />}
               <span>DOCX</span>
-            </button>
-
-            <button onClick={handleCertifyToggle} className={`px-3 py-1.5 text-xs font-semibold rounded-lg flex items-center gap-1.5 transition-all border cursor-pointer ${currentSection.status === 'certified' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200'}`}>
-              <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
-              <span>Review Mode</span>
             </button>
           </div>
         </div>

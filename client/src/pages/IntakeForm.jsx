@@ -39,7 +39,8 @@ import {
   RefreshCw,
   Edit3,
   FileCheck2,
-  AlertTriangle
+  AlertTriangle,
+  ShieldCheck
 } from 'lucide-react';
 
 // Helper component for repeatable field groups (e.g. Promoters, Directors, Related Parties, Litigation cases, Branches)

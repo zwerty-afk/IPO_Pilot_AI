@@ -43,14 +43,7 @@ export default function App() {
                       <Route path="/compliance-checklist" element={<ComplianceChecklistPage />} />
                       <Route path="/gap-analysis" element={<GapAnalysisPage />} />
                       <Route path="/readiness" element={<IpoReadinessPage />} />
-                      <Route
-                        path="/reviewer"
-                        element={
-                          <ProtectedRoute requiredRole="reviewer">
-                            <ReviewerWorkspace />
-                          </ProtectedRoute>
-                        }
-                      />
+                      <Route path="/reviewer" element={<ReviewerWorkspace />} />
                       <Route path="/export" element={<Navigate to="/draft-preview" replace />} />
                       <Route path="/sebi-updates" element={<SebiUpdatesPage />} />
                       <Route path="/invitations" element={<InvitationsPage />} />
