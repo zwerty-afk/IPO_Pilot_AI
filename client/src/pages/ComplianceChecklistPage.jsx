@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { getIntake, getDocuments } from '../services/api';
 import { useDraftDocument } from '../context/DraftDocumentContext';
@@ -17,10 +18,12 @@ import {
   FileText,
   RefreshCw,
   Building2,
-  Scale
+  Scale,
+  ExternalLink
 } from 'lucide-react';
 
 export default function ComplianceChecklistPage() {
+  const navigate = useNavigate();
   const { user } = useAuth();
   const { readiness: centralReadiness } = useDraftDocument();
   const complianceScore = centralReadiness?.stages?.compliance?.score ?? 0;
@@ -291,8 +294,37 @@ export default function ComplianceChecklistPage() {
                     </td>
 
                     {/* Evidence Used */}
-                    <td className="py-3.5 px-4 text-slate-700 leading-normal max-w-xs">
-                      {rule.evidenceUsed}
+                    <td className="py-3.5 px-4 text-slate-700 leading-normal max-w-xs space-y-2">
+                      <p className="text-xs font-sans text-slate-700 leading-relaxed mb-1.5">{rule.evidenceUsed}</p>
+                      {rule.evidenceSources && rule.evidenceSources.length > 0 && (
+                        <div className="flex flex-col gap-1.5 pt-1">
+                          {rule.evidenceSources.map((source, sIdx) => {
+                            const badgeStyle = source.status === 'pass'
+                              ? 'bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border-emerald-200'
+                              : source.status === 'fail'
+                              ? 'bg-red-50 hover:bg-red-100 text-red-800 border-red-200'
+                              : source.status === 'warning'
+                              ? 'bg-amber-50 hover:bg-amber-100 text-amber-900 border-amber-200'
+                              : 'bg-indigo-50 hover:bg-indigo-100 text-indigo-800 border-indigo-200';
+
+                            return (
+                              <button
+                                key={sIdx}
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (source.route) navigate(source.route);
+                                }}
+                                title={`Click to navigate to exact source: ${source.label}`}
+                                className={`inline-flex items-center justify-between px-2.5 py-1 rounded-lg text-[11px] font-medium border transition-all text-left group cursor-pointer shadow-2xs ${badgeStyle}`}
+                              >
+                                <span className="truncate pr-1.5">{source.label}</span>
+                                <ExternalLink className="w-3 h-3 shrink-0 opacity-60 group-hover:opacity-100 transition-opacity" />
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
                     </td>
 
                     {/* Source Document */}

@@ -78,6 +78,11 @@ export default function GapAnalysisPage() {
     }
   };
 
+  const location = useLocation();
+  const searchParams = new URLSearchParams(location.search);
+  const targetGapId = searchParams.get('gapId');
+  const [highlightedGapId, setHighlightedGapId] = useState(null);
+
   useEffect(() => {
     loadData();
     const handleUpdate = () => loadData();
@@ -86,6 +91,21 @@ export default function GapAnalysisPage() {
       window.removeEventListener('ipo-company-changed', handleUpdate);
     };
   }, [companyId]);
+
+  useEffect(() => {
+    if (!loading && targetGapId) {
+      const timer = setTimeout(() => {
+        const el = document.getElementById(`gap-item-${targetGapId}`) || document.getElementById(targetGapId);
+        if (el) {
+          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          setHighlightedGapId(targetGapId);
+          const clearTimer = setTimeout(() => setHighlightedGapId(null), 3500);
+          return () => clearTimeout(clearTimer);
+        }
+      }, 250);
+      return () => clearTimeout(timer);
+    }
+  }, [loading, targetGapId]);
 
   if (loading) {
     return (
@@ -301,8 +321,18 @@ export default function GapAnalysisPage() {
                   </td>
                 </tr>
               ) : (
-                filteredGaps.map((gap) => (
-                  <tr key={gap.id} className="hover:bg-slate-50/60 transition-colors">
+                filteredGaps.map((gap) => {
+                  const isHighlighted = highlightedGapId && (highlightedGapId.toLowerCase() === gap.id.toLowerCase());
+                  return (
+                    <tr
+                      key={gap.id}
+                      id={`gap-item-${gap.id}`}
+                      className={`transition-all duration-500 ${
+                        isHighlighted
+                          ? 'bg-amber-100/80 ring-2 ring-amber-500 font-medium'
+                          : 'hover:bg-slate-50/60'
+                      }`}
+                    >
                     {/* Gap ID & Priority */}
                     <td className="py-3.5 px-4 space-y-1 align-top">
                       <span className="font-mono font-bold text-indigo-700 block">
@@ -388,8 +418,9 @@ export default function GapAnalysisPage() {
                       </div>
                     </td>
                   </tr>
-                ))
-              )}
+                );
+              })
+            )}
             </tbody>
           </table>
         </div>

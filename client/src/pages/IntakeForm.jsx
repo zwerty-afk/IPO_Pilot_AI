@@ -699,6 +699,7 @@ export default function IntakeForm() {
   const [searchParams] = useSearchParams();
   const targetStep = searchParams.get('step');
   const targetField = searchParams.get('field');
+  const targetDocType = searchParams.get('docType') || searchParams.get('highlightDoc');
 
   const [currentStepIndex, setCurrentStepIndex] = useState(() => {
     if (targetStep) {
@@ -772,6 +773,22 @@ export default function IntakeForm() {
       return () => clearTimeout(timer);
     }
   }, [loading, currentStepIndex, targetField]);
+
+  // Scroll to and highlight target document slot when navigating from evidence link
+  useEffect(() => {
+    if (!loading && targetDocType) {
+      const timer = setTimeout(() => {
+        const el = document.getElementById(`doc-slot-${targetDocType}`) || document.getElementById(`doc-${targetDocType}`) || document.getElementById(targetDocType);
+        if (el) {
+          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          setHighlightedField(targetDocType);
+          const clearTimer = setTimeout(() => setHighlightedField(null), 3500);
+          return () => clearTimeout(clearTimer);
+        }
+      }, 250);
+      return () => clearTimeout(timer);
+    }
+  }, [loading, currentStepIndex, targetDocType]);
 
   // Fetch data for the current step
   const loadStepData = async () => {
