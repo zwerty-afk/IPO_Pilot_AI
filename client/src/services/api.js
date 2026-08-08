@@ -150,7 +150,16 @@ export const createNotification = (data) => callApi('post', '/notifications', da
 export const getSebiNotices = () => callApi('get', '/sebi-notices');
 export const refreshSebiNotices = () => callApi('post', '/sebi-notices/refresh');
 
-export const chatbotQuery = (question, history = []) => callApi('post', '/chatbot/query', { question, history });
+export const chatbotQuery = (question, history = [], context = {}) => callApi('post', '/chatbot/query', { question, history, context });
+
+// Fraud & Verification — reviewer-only identity/authenticity checks. Server
+// enforces the role gate too; these calls just 403 for an issuer.
+export const getVerificationSummary = (companyId) => callApi('get', `/verification/${companyId}/summary`);
+export const getVerificationDetail = (companyId, type) => callApi('get', `/verification/${companyId}/${type}`);
+export const rerunVerification = (companyId, type) => callApi('post', `/verification/${companyId}/${type}/rerun`);
+export const verificationAction = (companyId, type, action, note = '') =>
+  callApi('post', `/verification/${companyId}/${type}/action`, { action, note });
+export const getVerificationHistory = (companyId) => callApi('get', `/verification/${companyId}/history/all`);
 
 export const getAuditLogs = (companyId, page = 1, limit = 10, search = '') => {
   const queryParams = new URLSearchParams();

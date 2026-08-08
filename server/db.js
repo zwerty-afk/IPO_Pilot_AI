@@ -677,7 +677,11 @@ const INITIAL_SEED = {
     { id: 'mb-009', name: 'Pantomath Capital Advisors Pvt Ltd', registration_no: 'INM000012110', status: 'Registered', category: 'I', address: 'Unit No.908, 9th Floor, Hallmark Business Plaza, Sant Dnyaneshwar Marg, Bandra (E), Mumbai - 400051', sebi_source: 'https://www.sebi.gov.in', registered_since: '2007-01-01' },
     { id: 'mb-010', name: 'Saffron Capital Advisors Pvt Ltd', registration_no: 'INM000012708', status: 'Registered', category: 'II', address: 'Nariman Point, Mumbai - 400021', sebi_source: 'https://www.sebi.gov.in', registered_since: '2009-01-01' }
   ],
-  invitations: []
+  invitations: [],
+  // Fraud & Verification module — reviewer-recorded results only. Never holds a
+  // copy of intake/document/draft data; verificationEngine.js reads those live
+  // and this collection stores just the last computed snapshot + reviewer actions.
+  verifications: []
 };
 
 export function getDb() {
@@ -710,7 +714,8 @@ export function getDb() {
       sebi_notices_meta: INITIAL_SEED.sebi_notices_meta,
       ipo_readiness: {},
       merchant_bankers: INITIAL_SEED.merchant_bankers,
-      invitations: []
+      invitations: [],
+      verifications: []
     };
     Object.keys(defaults).forEach(key => {
       if (!(key in parsed)) {
@@ -1116,6 +1121,71 @@ export const db = {
     };
     saveDb(data);
     return data.ipo_readiness[companyId];
+  },
+
+  // ─── Fraud & Verification ────────────────────────────────────────────────
+  // Stores only the last computed verification snapshot + reviewer decisions.
+  // Never a copy of intake/document data — verificationEngine.js reads those
+  // live and passes in just the result to persist.
+  getVerifications: (companyId) => (getDb().verifications || []).filter(v => v.companyId === companyId),
+  getVerification: (companyId, type) => (getDb().verifications || []).find(v => v.companyId === companyId && v.type === type) || null,
+
+  upsertVerificationRun: (companyId, type, result, actorName) => {
+    const data = getDb();
+    if (!data.verifications) data.verifications = [];
+    let record = data.verifications.find(v => v.companyId === companyId && v.type === type);
+    const historyEntry = {
+      id: 'vh-' + Date.now() + '-' + Math.random().toString(36).slice(2, 7),
+      action: 'rerun_verification',
+      actor: actorName,
+      actorRole: 'reviewer',
+      at: new Date().toISOString(),
+      note: null,
+      resultSummary: `Status: ${result.status}`
+    };
+    if (!record) {
+      record = { id: 'ver-' + Date.now() + '-' + type, companyId, type, status: result.status, result, lastRunAt: historyEntry.at, lastRunBy: actorName, history: [historyEntry] };
+      data.verifications.push(record);
+    } else {
+      record.status = result.status;
+      record.result = result;
+      record.lastRunAt = historyEntry.at;
+      record.lastRunBy = actorName;
+      record.history = [...(record.history || []), historyEntry];
+    }
+    saveDb(data);
+    return record;
+  },
+
+  recordVerificationAction: (companyId, type, action, actorName, actorRole, note = '') => {
+    if (actorRole !== 'reviewer') {
+      throw new Error('Only a registered Reviewer can record a verification decision.');
+    }
+    const data = getDb();
+    if (!data.verifications) data.verifications = [];
+    let record = data.verifications.find(v => v.companyId === companyId && v.type === type);
+    if (!record) {
+      throw new Error('Run a verification before recording a reviewer decision.');
+    }
+    if (action === 'mark_verified') {
+      record.status = 'verified';
+    } else if (action === 'flag_for_review') {
+      record.status = note && /critical|severe|fraud/i.test(note) ? 'critical' : 'review_required';
+    } else {
+      throw new Error(`Unknown verification action: ${action}`);
+    }
+    const historyEntry = {
+      id: 'vh-' + Date.now() + '-' + Math.random().toString(36).slice(2, 7),
+      action,
+      actor: actorName,
+      actorRole,
+      at: new Date().toISOString(),
+      note: note || null,
+      resultSummary: `Status set to: ${record.status}`
+    };
+    record.history = [...(record.history || []), historyEntry];
+    saveDb(data);
+    return record;
   }
 };
 

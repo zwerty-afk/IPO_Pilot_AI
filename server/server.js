@@ -19,6 +19,10 @@ import {
   resolveFrontMatterContext, renderFrontMatterDocx, renderFrontMatterPdf,
   buildDocxHeaderFooter, pdfAddFooters
 } from './drhpExportEngine.js';
+import {
+  mockVerifyGST, mockVerifyPAN, mockVerifyCIN,
+  buildComparisonRows, assessDocumentAuthenticity, deriveStatus
+} from './verificationEngine.js';
 // Read directly from the store module: db.js deliberately does not re-export
 // these, but /api/health needs to report whether DynamoDB is configured and live.
 import { dynamoEnabled, isReady as isDbReady } from './dynamoStore.js';
@@ -2284,6 +2288,155 @@ app.get('/api/drafts/:companyId/gap-report', authenticateToken, (req, res) => {
   res.json(computeGapReport(companyId, intake, docs));
 });
 
+// ─── FRAUD & VERIFICATION (reviewer-only) ──────────────────────────────────
+// Identity/authenticity verification, deliberately separate from Gap Analysis
+// (data consistency) and Compliance Checklist (requirement completeness) — see
+// verificationEngine.js. Reads intake/documents live; persists only the last
+// computed snapshot + reviewer decisions via db.js's verifications collection.
+
+const VERIFICATION_TYPES = ['gst', 'pan', 'cin', 'document_authenticity', 'identity_cross', 'verification_history'];
+
+function requireReviewer(req, res) {
+  if (req.user.role !== 'reviewer') {
+    res.status(403).json({ message: 'Fraud & Verification is only available to Reviewer users.' });
+    return false;
+  }
+  return true;
+}
+
+// Computes what a fresh check would currently say (does not persist).
+function computeLiveVerification(type, intake, company, docs, allHistory) {
+  if (type === 'gst') {
+    const mock = mockVerifyGST(intake, company);
+    const comparisonRows = buildComparisonRows('gst', mock, intake, docs);
+    return { type, mock, comparisonRows, status: deriveStatus(mock, comparisonRows) };
+  }
+  if (type === 'pan') {
+    const mock = mockVerifyPAN(intake, company);
+    const comparisonRows = buildComparisonRows('pan', mock, intake, docs);
+    return { type, mock, comparisonRows, status: deriveStatus(mock, comparisonRows) };
+  }
+  if (type === 'cin') {
+    const mock = mockVerifyCIN(intake, company);
+    const comparisonRows = buildComparisonRows('cin', mock, intake, docs);
+    return { type, mock, comparisonRows, status: deriveStatus(mock, comparisonRows) };
+  }
+  if (type === 'document_authenticity') {
+    const documents = assessDocumentAuthenticity(docs);
+    const status = documents.length === 0 ? 'pending' : documents.some(d => d.status === 'Not Available') ? 'review_required' : 'verified';
+    return { type, mock: { available: documents.length > 0, provider: 'Demo Verification Service (SIMULATED — document metadata heuristic, not forensic analysis)', checkedAt: new Date().toISOString() }, documents, status };
+  }
+  if (type === 'identity_cross') {
+    const gst = mockVerifyGST(intake, company);
+    const pan = mockVerifyPAN(intake, company);
+    const cin = mockVerifyCIN(intake, company);
+    const comparisonRows = [
+      ...buildComparisonRows('gst', gst, intake, docs).filter(r => r.field === 'Legal Name'),
+      ...buildComparisonRows('cin', cin, intake, docs).filter(r => r.field === 'Legal Name' || r.field === 'CIN')
+    ];
+    const available = gst.available || pan.available || cin.available;
+    return { type, mock: { available, provider: 'Synthesis of GST / PAN / CIN checks above — not an independent source', checkedAt: new Date().toISOString() }, comparisonRows, status: deriveStatus({ available }, comparisonRows) };
+  }
+  if (type === 'verification_history') {
+    return { type, mock: { available: (allHistory || []).length > 0, provider: 'Aggregated audit trail of this page\'s own actions' }, status: (allHistory || []).length > 0 ? 'verified' : 'pending' };
+  }
+  return { type, mock: { available: false }, status: 'pending' };
+}
+
+function loadVerificationRecordOrLive(companyId, type, intake, company, docs, allHistory) {
+  const persisted = db.getVerification(companyId, type);
+  if (persisted) return { ...persisted, live: false };
+  const live = computeLiveVerification(type, intake, company, docs, allHistory);
+  return { id: null, companyId, type, status: live.status, result: live, lastRunAt: null, lastRunBy: null, history: [], live: true };
+}
+
+app.get('/api/verification/:companyId/summary', authenticateToken, (req, res) => {
+  if (!requireReviewer(req, res)) return;
+  const companyId = req.params.companyId;
+  const company = db.getCompany(companyId) || {};
+  const intake = db.getIntake(companyId) || {};
+  const docs = db.getDocuments(companyId) || [];
+  const allHistory = db.getVerifications(companyId).flatMap(v => (v.history || []).map(h => ({ ...h, type: v.type })));
+
+  const modules = VERIFICATION_TYPES.map(type => {
+    const rec = loadVerificationRecordOrLive(companyId, type, intake, company, docs, allHistory);
+    return { type, status: rec.status, lastRunAt: rec.lastRunAt };
+  });
+
+  const checkable = modules.filter(m => m.type !== 'verification_history');
+  const completed = checkable.filter(m => m.status === 'verified' || m.status === 'review_required' || m.status === 'critical').length;
+  const verified = checkable.filter(m => m.status === 'verified').length;
+  const reviewRequired = checkable.filter(m => m.status === 'review_required').length;
+  const critical = checkable.filter(m => m.status === 'critical').length;
+
+  res.json({
+    modules,
+    summary: {
+      overallStatus: critical > 0 ? 'Critical Issue' : reviewRequired > 0 ? 'Review Required' : completed === checkable.length ? 'Verified' : 'In Progress',
+      completed, total: VERIFICATION_TYPES.length,
+      verified, reviewRequired, critical
+    }
+  });
+});
+
+app.get('/api/verification/:companyId/:type', authenticateToken, (req, res) => {
+  if (!requireReviewer(req, res)) return;
+  const { companyId, type } = req.params;
+  if (!VERIFICATION_TYPES.includes(type)) return res.status(404).json({ message: 'Unknown verification type.' });
+
+  const company = db.getCompany(companyId) || {};
+  const intake = db.getIntake(companyId) || {};
+  const docs = db.getDocuments(companyId) || [];
+  const allHistory = db.getVerifications(companyId).flatMap(v => (v.history || []).map(h => ({ ...h, type: v.type })));
+
+  const record = loadVerificationRecordOrLive(companyId, type, intake, company, docs, allHistory);
+  res.json({
+    ...record,
+    sourceDocuments: docs.filter(d => ['incorporation_certificate', 'gst_certificate', 'pan_certificate', 'moa_document', 'aoa_document'].includes(d.doc_type))
+  });
+});
+
+app.post('/api/verification/:companyId/:type/rerun', authenticateToken, (req, res) => {
+  if (!requireReviewer(req, res)) return;
+  const { companyId, type } = req.params;
+  if (!VERIFICATION_TYPES.includes(type) || type === 'verification_history') {
+    return res.status(400).json({ message: 'This module cannot be re-run directly.' });
+  }
+
+  const company = db.getCompany(companyId) || {};
+  const intake = db.getIntake(companyId) || {};
+  const docs = db.getDocuments(companyId) || [];
+  const live = computeLiveVerification(type, intake, company, docs, []);
+  const record = db.upsertVerificationRun(companyId, type, live, req.user.name);
+  logAudit(req, 'VERIFICATION_RERUN', 'verification', type, `${req.user.name} re-ran ${type.toUpperCase()} verification for ${companyId}. Result: ${live.status}.`, { companyId, type, status: live.status });
+  res.json(record);
+});
+
+app.post('/api/verification/:companyId/:type/action', authenticateToken, (req, res) => {
+  if (!requireReviewer(req, res)) return;
+  const { companyId, type } = req.params;
+  const { action, note } = req.body;
+  if (!['flag_for_review', 'mark_verified'].includes(action)) {
+    return res.status(400).json({ message: 'Unknown action.' });
+  }
+  try {
+    const record = db.recordVerificationAction(companyId, type, action, req.user.name, req.user.role, note);
+    logAudit(req, 'VERIFICATION_DECISION', 'verification', type, `${req.user.name} recorded "${action}" on ${type.toUpperCase()} verification for ${companyId}.${note ? ` Note: ${note}` : ''}`, { companyId, type, action, note });
+    res.json(record);
+  } catch (err) {
+    res.status(err.message.includes('Run a verification') ? 400 : 403).json({ message: err.message });
+  }
+});
+
+app.get('/api/verification/:companyId/history/all', authenticateToken, (req, res) => {
+  if (!requireReviewer(req, res)) return;
+  const companyId = req.params.companyId;
+  const allHistory = db.getVerifications(companyId)
+    .flatMap(v => (v.history || []).map(h => ({ ...h, type: v.type })))
+    .sort((a, b) => new Date(b.at) - new Date(a.at));
+  res.json(allHistory);
+});
+
 // ─── COMMENTS ─────────────────────────────────────────────────────────────────
 
 app.get('/api/comments/:sectionId', authenticateToken, (req, res) => {
@@ -2606,65 +2759,96 @@ app.put('/api/companies/:id/ipo-readiness/item-status', authenticateToken, (req,
 });
 
 app.post('/api/chatbot/query', authenticateToken, async (req, res) => {
-  const { question = '', history = [] } = req.body;
-  const companyId = req.headers['x-company-id'] || req.body.companyId || 'aarav-precision';
+  const { question = '', history = [], context = {} } = req.body;
 
-  const company = db.getCompany(companyId) || {};
-  const intake = db.getIntake(companyId) || {};
-  const docs = db.getDocuments(companyId) || [];
-  const drafts = db.getDrafts(companyId) || {};
-  const gapReport = (typeof db.getGapReport === 'function' ? db.getGapReport(companyId) : (db.getIpoReadiness(companyId)?.top_gaps || []));
-  const comments = db.getComments ? db.getComments(companyId) : [];
+  // Company scoping mirrors the pattern already used elsewhere in this file
+  // (e.g. the draft/document routes): an issuer is always pinned to their own
+  // company from the JWT, regardless of what the client sends. A reviewer has
+  // no fixed companyId (they review multiple companies via invitations), so
+  // the client-supplied companyId is trusted for that role only.
+  const companyId = req.user.role === 'issuer'
+    ? req.user.companyId
+    : (context.companyId || req.user.companyId);
 
-  const companyName = company?.legal_name || company?.name || intake.company_details?.legal_name || 'Aarav Precision Engineering Pvt Ltd';
-  const exchange = intake.company_details?.proposed_exchange || 'SME (NSE Emerge)';
-  const incDate = intake.company_details?.incorporation_date || '2015-04-12';
-  const cin = intake.company_details?.cin || 'U28910MH2015PTC263481';
-  const regOffice = intake.company_details?.registered_office || company.address || 'W-45, MIDC Industrial Area, Phase II, Dombivli East, Thane - 421204, Maharashtra, India';
+  if (!companyId) {
+    return res.status(400).json({ answer: 'Company data could not be loaded. Please refresh and try again.' });
+  }
 
-  const rev25 = intake.financials?.revenue_fy25 || '118,000,000';
-  const rev24 = intake.financials?.revenue_fy24 || '102,100,000';
-  const rev23 = intake.financials?.revenue_fy23 || '88,500,000';
-  const pat25 = intake.financials?.profit_fy25 || '11,000,000';
-  const netWorth = intake.financials?.net_worth || '425,000,000';
+  let company, intake, docs, drafts;
+  try {
+    company = db.getCompany(companyId) || {};
+    intake = db.getIntake(companyId) || {};
+    docs = db.getDocuments(companyId) || [];
+    drafts = db.getDrafts(companyId) || {};
+  } catch (err) {
+    console.error('[Copilot] Failed to load company data:', err.message);
+    return res.status(500).json({ answer: 'Company data could not be loaded. Please refresh and try again.' });
+  }
 
-  const objectsAmount = intake.objects?.amount_to_raise || '50,000,000';
-  const objectsSummary = intake.objects?.primary_object || 'Expansion of manufacturing capacity & working capital';
+  const companyName = intake.company_details?.legal_name || company?.legal_name || company?.name || 'this company';
+  const exchange = intake.company_details?.proposed_exchange || company?.exchange || 'SME Exchange';
+  const incDate = intake.company_details?.incorporation_date || 'not yet recorded';
+  const cin = intake.company_details?.cin || 'not yet recorded';
+  const regOffice = intake.company_details?.registered_office || company.address || 'not yet recorded';
 
-  const promoterNames = intake.promoters?.promoter_names || 'Aarav Mehta & Rohan Mehta';
-  const promoterHolding = intake.capital_structure?.promoter_holding_pct || '97.00%';
+  const draftChapterSummary = Object.keys(drafts).length > 0
+    ? Object.entries(drafts).map(([k, v]) => `${k}: ${v?.status || 'draft'}`).join(', ')
+    : 'No DRHP chapters generated yet';
 
-  const uploadedDocNames = docs.map(d => `${d.name} (${d.doc_type}, status: ${d.status})`).join(', ');
-  const gapCount = gapReport.length;
-  const certifiedCount = Object.values(drafts).filter(v => v?.status === 'certified').length;
-  const draftChapterSummary = Object.entries(drafts).map(([k, v]) => `${k}: ${v.status}`).join(', ');
-  const commentsSummary = (comments || []).map(c => `[${c.author || 'User'}]: ${c.content || ''}`).join(' | ');
+  // The readiness figure is never recomputed here — it is the exact snapshot
+  // already shown on the IPO Readiness page, passed through from the client's
+  // single-source-of-truth calculateSingleSourceOfTruthReadiness(). This is
+  // what guarantees the chatbot and the Readiness page always agree.
+  const r = context.readiness;
+  const readinessBlock = r
+    ? `- Overall IPO Readiness: ${r.score}/100 (${r.status || ''}), ${r.remainingPoints} points remaining
+  - Intake & Company Information: ${r.stages.intake.score}/${r.stages.intake.max}
+  - Compliance: ${r.stages.compliance.score}/${r.stages.compliance.max} — rules: ${(r.stages.compliance.rules || []).map(x => `${x.name} [${x.status}]`).join('; ') || 'none recorded'}
+  - Gap Analysis & Remediation: ${r.stages.gapAnalysis.score}/${r.stages.gapAnalysis.max} — checks: ${(r.stages.gapAnalysis.checks || []).map(x => `${x.title} [${!x.applicable ? 'not yet applicable' : x.resolved ? 'resolved' : 'open'}]${x.description ? ` — ${x.description}` : ''}`).join('; ') || 'none recorded'}
+  - Reviewer Certification: ${r.stages.certification.score}/${r.stages.certification.max} — chapters: ${(r.stages.certification.chapters || []).map(x => `${x.label} [${x.status}]`).join('; ') || 'none recorded'}
+  - Recommended next actions (highest priority first): ${(r.nextActions || []).map(a => `${a.description} (+${a.pointsRemaining} pts, stage: ${a.label})`).join(' | ') || 'none — all stages complete'}`
+    : '- Readiness data was not provided with this request. Do not state or estimate a readiness score; say it is unavailable and suggest the user open the IPO Readiness page.';
 
-  const systemContext = `You are IPO Pilot Copilot, an expert AI Merchant Banker and SEBI Compliance Officer for ${companyName} (${exchange} IPO).
-User: ${req.user.name} (${req.user.role}).
+  const openComments = (context.openComments || []);
+  const commentsBlock = openComments.length > 0
+    ? openComments.map(c => `[${c.author || 'User'}${c.type ? `, ${c.type}` : ''}${c.section ? `, section: ${c.section}` : ''}]: ${c.content || ''}`).join(' | ')
+    : 'No open/unresolved comments';
 
-REAL COMPANY WORKSPACE DATA:
-- Company: ${companyName} | Inc Date: ${incDate} | CIN: ${cin} | Exchange: ${exchange} | Registered Office: ${regOffice}
-- Financials: FY25 Revenue ₹${(Number(rev25)/10000000).toFixed(2)} Cr, FY24 ₹${(Number(rev24)/10000000).toFixed(2)} Cr, FY23 ₹${(Number(rev23)/10000000).toFixed(2)} Cr, FY25 PAT ₹${(Number(pat25)/10000000).toFixed(2)} Cr, Net Worth ₹${(Number(netWorth)/10000000).toFixed(2)} Cr
-- Objects of Issue: Raising ₹${(Number(objectsAmount)/10000000).toFixed(2)} Cr for ${objectsSummary}
-- Promoters: ${promoterNames} (Holding: ${promoterHolding})
-- Uploaded Docs (${docs.length}): ${uploadedDocNames || 'None'}
-- Gaps (${gapCount}): ${gapReport.map(g => g.title || g.issue || 'Discrepancy').join(', ') || 'No critical gaps'}
-- DRHP Chapters (${certifiedCount} certified): ${draftChapterSummary || 'All chapters in draft state'}
-- Reviewer Comments: ${commentsSummary || 'No open reviewer comments'}
+  const recentActivity = (context.recentActivity || []);
+  const activityBlock = recentActivity.length > 0
+    ? recentActivity.map(a => `${a.actor || 'Someone'} ${a.action || 'did an action'}: ${a.detail || ''}`).join(' | ')
+    : 'No recent activity recorded';
+
+  const chapterStatuses = (context.chapterStatuses || []);
+  const chapterStatusBlock = chapterStatuses.length > 0
+    ? chapterStatuses.map(c => `${c.key}: ${c.status}`).join(', ')
+    : draftChapterSummary;
+
+  const systemContext = `You are IPO Pilot Copilot, an AI assistant embedded inside the IPO Pilot AI platform for ${companyName} (${exchange} IPO).
+
+WHO IS ASKING:
+- User: ${req.user.name}, role: ${req.user.role}.
+- Current page: ${context.pathname || 'unknown'}${context.currentChapter ? `, viewing: ${context.currentChapter}` : ''}.
+
+REAL COMPANY WORKSPACE DATA (this is the only data you may treat as fact — everything below is live, company-scoped, and already verified by the application):
+- Company: ${companyName} | Incorporation Date: ${incDate} | CIN: ${cin} | Exchange: ${exchange} | Registered Office: ${regOffice}
+${readinessBlock}
+- DRHP Chapter Statuses: ${chapterStatusBlock}
+- Documents uploaded: ${docs.length}
+- Open/unresolved comments: ${commentsBlock}
+- Recent activity: ${activityBlock}
 
 RULES:
-1. Provide direct, factual, precise answers grounded in the company's real workspace data above.
-2. Cite sources using [Source: Section Name](file:///intake?step=stepKey) or [Draft: Chapter](file:///draft?section=sectionKey).
-3. Reference relevant SEBI ICDR Regulations (e.g. Reg 6(1), Reg 14, Schedule VI) where applicable.
-4. If charts or visual data comparisons are requested, format clean Markdown tables or append a JSON chart block at the very end formatted as:
-\`\`\`chart
-{
-  "type": "bar" | "pie" | "line" | "radar" | "matrix" | "progress",
-  "title": "Chart Title",
-  "data": [ { "label": "Label 1", "value": 10, "category": "optional" } ]
-}
-\`\`\``;
+1. Answer ONLY the question the user actually asked, using the REAL COMPANY WORKSPACE DATA above. Do not append unrelated sections (e.g. don't dump the full readiness breakdown, all gaps, and all audit findings when the user asked a narrow question like "what is AOA?"). Keep responses proportional to the question — a short question gets a short answer.
+2. Never invent revenue, financial figures, promoter information, legal facts, compliance status, SEBI status, certifications, company addresses, or regulatory approvals. If the data needed to answer isn't present above, say plainly: "I don't have enough verified data to answer that." — do not guess or estimate.
+3. If asked for the IPO readiness score or breakdown, use the exact numbers given above — never recalculate or approximate them.
+4. If asked "what should I do next", answer using the "Recommended next actions" list above, ordered by priority, with the point value of each.
+5. If you generate draft prospectus content (e.g. a risk factor) or a specific requested artifact (e.g. a 3-year revenue/PAT table), generate ONLY what was asked for, clearly prefixed as "AI draft — verify against the underlying source before using in the prospectus", and base it only on the real company data available above; do not fabricate specifics that aren't in the data, and do not attach unrelated audit findings or executive summaries to it.
+6. Role restrictions: only a Reviewer can approve, reject, request changes on, or certify a DRHP chapter. If the current user's role is "issuer" and they ask you to perform (or claim you performed) one of those actions, do NOT say it was done — explain that only the assigned Reviewer can do that, and state the chapter's actual current status instead. You have no ability to execute any action in this application — you can only inform and guide; always point the user to the relevant page instead of claiming to have done something. Any action or navigation suggestion you offer must correspond to what the user is actually asking about — don't suggest unrelated actions.
+7. Be concise. For a simple question, give a direct answer in a sentence or two. For a data-heavy question, use a short Markdown table or bullet list rather than a long paragraph.
+8. If the question is genuinely ambiguous between two real interpretations, ask a short clarifying question instead of guessing.
+9. Maintain conversation context — if the user asks a short follow-up ("why?", "how do I fix it?", "will that affect X?"), resolve it against the immediately preceding turn without asking them to repeat the company or topic.
+10. If asked something outside the data available in this workspace, say so clearly and offer what you can answer instead.`;
 
   try {
     let modelUsed = GEMINI_MODEL;
@@ -2686,152 +2870,8 @@ RULES:
     const answer = result.response.text();
     res.json({ answer, model: modelUsed });
   } catch (err) {
-    console.warn('[Copilot] Gemini API fallback active:', err.message);
-
-    const q = String(question || '').toLowerCase().trim();
-    let answer = '';
-    let chartDirective = null;
-
-    if (q.includes('cin') || q.includes('registration') || q.includes('legal name') || q.includes('incorporated') || q.includes('address') || q.includes('office')) {
-      answer = `### 🏢 Company Profile & Regulatory Identity\n\n` +
-        `**Legal Name**: **${companyName}**\n` +
-        `**Corporate Identity Number (CIN)**: \`${cin}\`\n` +
-        `**Date of Incorporation**: **${incDate}**\n` +
-        `**Registered & Corporate Office**: ${regOffice}\n` +
-        `**Proposed Exchange**: **${exchange}**\n\n` +
-        `[Source: Company Details](file:///intake?step=company_details)`;
-    } else if (q.includes('object') || q.includes('raise') || q.includes('use of proceeds') || q.includes('proceed') || q.includes('fund')) {
-      answer = `### 🎯 Objects of the Issue\n\n` +
-        `**Target Raise Amount**: **INR ${(Number(objectsAmount)/10000000).toFixed(2)} Crores** (₹${Number(objectsAmount).toLocaleString('en-IN')})\n` +
-        `**Primary Purpose**: ${objectsSummary}\n\n` +
-        `| Allocation Head | Amount (INR Cr) | Percentage |\n` +
-        `| :--- | :--- | :--- |\n` +
-        `| Capital Expenditure (5-Axis VMC Acquisition) | ₹2.85 Cr | 57.00% |\n` +
-        `| Long-term Working Capital Funding | ₹1.20 Cr | 24.00% |\n` +
-        `| General Corporate Purposes & Issue Expenses | ₹0.95 Cr | 19.00% |\n\n` +
-        `**SEBI Alignment**: Schedule VI, Part A (Item 4) compliance verified.\n` +
-        `[Source: Objects of the Issue](file:///intake?step=objects)`;
-    } else if (q.includes('pending') || q.includes('missing doc') || q.includes('upload') || q.includes('document')) {
-      const allRequired = [
-        { label: 'COI (Certificate of Incorporation)', step: 'company_details', type: 'incorporation_certificate' },
-        { label: 'Audited Financial Statements', step: 'financials', type: 'audited_financials' },
-        { label: 'Certified Cap Table', step: 'capital_structure', type: 'cap_table' },
-        { label: 'Factory Images & Photographs', step: 'business_overview', type: 'factory_images' },
-        { label: 'Plant Layout & Blueprint', step: 'business_overview', type: 'plant_layout' },
-        { label: 'Certifications (ISO / AS9100)', step: 'business_overview', type: 'certifications' },
-        { label: 'Company Product Brochure', step: 'business_overview', type: 'company_brochure' }
-      ];
-      const uploadedTypes = new Set(docs.map(d => d.doc_type));
-      const missing = allRequired.filter(r => !uploadedTypes.has(r.type));
-
-      answer = `### 📋 Document Audit & Pending Uploads\n\n` +
-        `**Executive Summary**: You have uploaded **${docs.length} of ${allRequired.length}** required supporting documents. ` +
-        `**${missing.length} document(s)** are still pending upload.\n\n` +
-        `| Document Name | Section | Status | Action Required |\n` +
-        `| :--- | :--- | :--- | :--- |\n` +
-        allRequired.map(r => {
-          const isUploaded = uploadedTypes.has(r.type);
-          return `| [Document: ${r.label}](file:///intake?step=${r.step}) | ${r.step.replace(/_/g, ' ')} | ${isUploaded ? '✅ Uploaded' : '❌ Missing'} | ${isUploaded ? 'Verified' : 'Upload File'} |`;
-        }).join('\n') +
-        `\n\n**AI Recommendation**: Upload missing documents in [Source: Section Uploads](file:///intake?step=business_overview).`;
-
-      chartDirective = {
-        type: 'donut',
-        title: 'Document Completion Status',
-        data: [
-          { label: 'Uploaded Documents', value: docs.length },
-          { label: 'Pending Uploads', value: missing.length }
-        ]
-      };
-    } else if (q.includes('risk') || q.includes('matrix') || q.includes('threat') || q.includes('concern')) {
-      answer = `### ⚠️ Enterprise Risk Analysis & Matrix\n\n` +
-        `**Executive Summary**: AI analysis evaluated potential risk parameters across 5 risk dimensions. ` +
-        `The highest risk concentration lies in **Raw Material Volatility & Working Capital Expansion**.\n\n` +
-        `| Risk Category | Severity | Likelihood | Impact Area | Mitigation Strategy |\n` +
-        `| :--- | :--- | :--- | :--- | :--- |\n` +
-        `| Raw Material Price Fluctuation | High | High | Operating Margins | Long-term price lock arrangements |\n` +
-        `| Debtor Collection Cycle | Medium | High | Working Capital | Interest clause on 60+ days receivables |\n` +
-        `| Single Vendor Alloy Supply | Medium | Medium | Production Lines | Onboard alternate tier-2 suppliers |\n` +
-        `| Customer Concentration | Medium | Medium | Revenue Stability | Expand export OEM sales |\n\n` +
-        `**SEBI ICDR Clause**: See [Draft: Risk Factors](file:///draft?section=risk_factors) aligned with Schedule VI, Part A.`;
-
-      chartDirective = {
-        type: 'matrix',
-        title: 'Risk Matrix Breakdown',
-        data: [
-          { label: 'High Impact / High Likelihood', value: 1, category: 'critical' },
-          { label: 'High Impact / Med Likelihood', value: 4, category: 'high' },
-          { label: 'Med Impact / High Likelihood', value: 2, category: 'medium' },
-          { label: 'Low Impact / Low Likelihood', value: 7, category: 'low' }
-        ]
-      };
-    } else if (q.includes('revenue') || q.includes('chart') || q.includes('financial') || q.includes('profit') || q.includes('pat') || q.includes('growth') || q.includes('margin')) {
-      answer = `### 📈 Financial Health & Growth Performance\n\n` +
-        `**Executive Summary**: Revenue from operations reached **₹${(Number(rev25)/10000000).toFixed(2)} Cr** in FY25. Net PAT stands at **₹${(Number(pat25)/10000000).toFixed(2)} Cr**.\n\n` +
-        `| Financial Metric | FY 2022-23 | FY 2023-24 | FY 2024-25 | Status |\n` +
-        `| :--- | :--- | :--- | :--- | :--- |\n` +
-        `| Revenue from Operations | ₹${(Number(rev23)/10000000).toFixed(2)} Cr | ₹${(Number(rev24)/10000000).toFixed(2)} Cr | ₹${(Number(rev25)/10000000).toFixed(2)} Cr | Verified |\n` +
-        `| Profit After Tax (PAT) | ₹7.20 Cr | ₹8.50 Cr | ₹${(Number(pat25)/10000000).toFixed(2)} Cr | Verified |\n` +
-        `| Net Worth | ₹32.00 Cr | ₹36.80 Cr | ₹${(Number(netWorth)/10000000).toFixed(2)} Cr | Compliant |\n\n` +
-        `**SEBI Regulation 6(1)**: Net Worth and Tangible Asset thresholds satisfied. See [Source: Financials](file:///intake?step=financials).`;
-
-      chartDirective = {
-        type: 'bar',
-        title: '3-Year Financial Growth (INR Cr)',
-        data: [
-          { label: 'FY23 Revenue', value: Number(rev23)/10000000 },
-          { label: 'FY24 Revenue', value: Number(rev24)/10000000 },
-          { label: 'FY25 Revenue', value: Number(rev25)/10000000 },
-          { label: 'FY25 PAT', value: Number(pat25)/10000000 }
-        ]
-      };
-    } else if (q.includes('sharehold') || q.includes('promoter') || q.includes('cap table') || q.includes('holding') || q.includes('dilut')) {
-      answer = `### 🏛️ Capital Structure & Promoter Lock-In Analysis\n\n` +
-        `**Promoter Group**: **${promoterNames}**\n` +
-        `**Pre-IPO Holding**: **${promoterHolding}**\n\n` +
-        `| Shareholder Category | Pre-IPO Shareholding | Lock-In Mandate |\n` +
-        `| :--- | :--- | :--- |\n` +
-        `| Promoter Group | ${promoterHolding} | 20% Minimum for 3 Yrs, Balance for 1 Yr |\n` +
-        `| Public / Minority | 3.00% | Freely Transferable |\n\n` +
-        `[Source: Capital Structure](file:///intake?step=capital_structure)`;
-
-      chartDirective = {
-        type: 'pie',
-        title: 'Shareholding Distribution (Pre-IPO)',
-        data: [
-          { label: 'Promoter Group', value: 97 },
-          { label: 'Public / Minority', value: 3 }
-        ]
-      };
-    } else if (q.includes('compliance') || q.includes('sebi') || q.includes('eligibility') || q.includes('rule') || q.includes('regulation')) {
-      answer = `### ⚖️ SEBI ICDR Compliance Audit\n\n` +
-        `**Overall Compliance**: **Regulation 6(1) Criteria Satisfied**\n` +
-        `• **Net Tangible Assets**: > ₹3.00 Cr (Satisfied)\n` +
-        `• **Operating Profit History**: Minimum 3 consecutive operating years (Satisfied)\n` +
-        `• **Net Worth Threshold**: > ₹1.00 Cr for all 3 preceding fiscal years (Satisfied)\n\n` +
-        `[Source: Compliance Checklist](file:///compliance-checklist)`;
-    } else {
-      answer = `### 🤖 IPO Pilot AI Assistant\n\n` +
-        `**Workspace Status for ${companyName}** (${exchange})\n` +
-        `• **Corporate Identity Number (CIN)**: \`${cin}\`\n` +
-        `• **Registered Office**: ${regOffice}\n` +
-        `• **DRHP Chapters Certified**: **${certifiedCount} of ${Object.keys(drafts).length}**\n` +
-        `• **Supporting Documents Uploaded**: **${docs.length} files**\n` +
-        `• **Open Discrepancies**: **${gapCount} gap(s)**\n\n` +
-        `**Questions you can ask me**:\n` +
-        `- *"What is the company CIN and registered address?"*\n` +
-        `- *"Summarize the objects of the issue and fund allocation"*\n` +
-        `- *"Show financial revenue growth chart"*\n` +
-        `- *"Check promoter lock-in details"*\n` +
-        `- *"List pending document uploads"*\n` +
-        `- *"Show risk matrix breakdown"*`;
-    }
-
-    if (chartDirective) {
-      answer += `\n\n\`\`\`chart\n${JSON.stringify(chartDirective, null, 2)}\n\`\`\``;
-    }
-
-    res.json({ answer, model: 'copilot-context-fallback' });
+    console.warn('[Copilot] Gemini API request failed:', err.message);
+    res.json({ answer: "I couldn't process that request right now. Please try again.", model: 'unavailable' });
   }
 });
 

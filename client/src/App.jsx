@@ -18,6 +18,7 @@ import InvitationsPage from './pages/InvitationsPage';
 import ComplianceChecklistPage from './pages/ComplianceChecklistPage';
 import GapAnalysisPage from './pages/GapAnalysisPage';
 import IpoReadinessPage from './pages/IpoReadinessPage';
+import FraudVerificationPage from './pages/FraudVerificationPage';
 
 export default function App() {
   return (
@@ -44,6 +45,7 @@ export default function App() {
                       <Route path="/gap-analysis" element={<GapAnalysisPage />} />
                       <Route path="/readiness" element={<IpoReadinessPage />} />
                       <Route path="/reviewer" element={<ReviewerWorkspace />} />
+                      <Route path="/fraud-verification" element={<ProtectedRoute requiredRole="reviewer"><FraudVerificationPage /></ProtectedRoute>} />
                       <Route path="/export" element={<Navigate to="/draft-preview" replace />} />
                       <Route path="/sebi-updates" element={<SebiUpdatesPage />} />
                       <Route path="/invitations" element={<InvitationsPage />} />

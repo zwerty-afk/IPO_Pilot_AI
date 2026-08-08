@@ -7,7 +7,7 @@ import {
   Shield, LayoutDashboard, ClipboardList,
   FileCheck2, UserCheck, Download, LogOut, Building2,
   ChevronRight, Newspaper, TrendingUp, FolderOpen, Mail,
-  Menu, X, ListChecks, AlertTriangle, Edit3, Eye
+  Menu, X, ListChecks, AlertTriangle, Edit3, Eye, Fingerprint
 } from 'lucide-react';
 import NotificationBell from './NotificationBell';
 import CopilotWidget from './CopilotWidget';
@@ -33,6 +33,7 @@ const BASE_NAV = [
   { to: '/readiness',            icon: TrendingUp,      label: 'IPO Readiness' },
   { to: '/draft',                icon: Edit3,           label: 'Draft Prospectus' },
   { to: '/reviewer',             icon: UserCheck,       label: 'Reviewer Workspace' },
+  { to: '/fraud-verification',   icon: Fingerprint,     label: 'Fraud & Verification', reviewerOnly: true },
   { to: '/draft-preview',        icon: Eye,             label: 'Export' },
 ];
 
