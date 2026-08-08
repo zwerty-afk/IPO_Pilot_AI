@@ -67,6 +67,29 @@ const CONTEXTUAL_QUICK_ACTIONS = {
 
 /** Renders a Gemini-generated Markdown answer (headers, bold, tables, lists) as real formatted content. */
 function MarkdownMessage({ content }) {
+  const navigate = useNavigate();
+
+  // The assistant cites its sources as links to real in-app routes ("/intake?
+  // step=financials"). Those must navigate within the SPA — opening them in a
+  // new tab would force a full reload and drop the user's session context.
+  // External links (http…) keep the normal new-tab behaviour.
+  const SourceLink = ({ href = '', children, ...rest }) => {
+    const isInternal = href.startsWith('/');
+    if (!isInternal) {
+      return <a className="text-indigo-600 font-semibold underline hover:text-indigo-800" href={href} target="_blank" rel="noreferrer" {...rest}>{children}</a>;
+    }
+    return (
+      <a
+        href={href}
+        onClick={(e) => { e.preventDefault(); navigate(href); }}
+        className="text-indigo-600 font-semibold underline hover:text-indigo-800 cursor-pointer"
+        {...rest}
+      >
+        {children}
+      </a>
+    );
+  };
+
   return (
     <div className="p-3.5 bg-white border border-slate-200/90 rounded-2xl shadow-sm text-xs leading-relaxed text-slate-800 font-sans [&>*:first-child]:mt-0 [&>*:last-child]:mb-0">
       <ReactMarkdown
@@ -81,7 +104,7 @@ function MarkdownMessage({ content }) {
           ul: (p) => <ul className="list-disc list-inside space-y-1 text-xs text-slate-700 pl-1 mb-1.5" {...p} />,
           ol: (p) => <ol className="list-decimal list-inside space-y-1 text-xs text-slate-700 pl-1 mb-1.5" {...p} />,
           li: (p) => <li className="text-xs" {...p} />,
-          a: (p) => <a className="text-indigo-600 font-semibold underline hover:text-indigo-800" target="_blank" rel="noreferrer" {...p} />,
+          a: SourceLink,
           code: (p) => <code className="px-1 py-0.5 bg-slate-100 text-indigo-700 rounded text-[10px] font-mono" {...p} />,
           table: (p) => <div className="overflow-x-auto my-2 rounded-lg border border-slate-200"><table className="w-full text-[10px] border-collapse" {...p} /></div>,
           thead: (p) => <thead className="bg-slate-100" {...p} />,
@@ -103,12 +126,6 @@ export default function CopilotWidget() {
   const { user } = useAuth();
   const {
     companyId,
-    intakeCache,
-    docsCache,
-    gapReport,
-    drafts,
-    comments,
-    auditLogs,
     readiness,
     selectedSectionKey,
     activeNode
@@ -197,23 +214,19 @@ export default function CopilotWidget() {
       nextActions: readiness.nextActions
     } : null;
 
+    // Deliberately small. Drafts, documents, intake sections, comments, gaps,
+    // audit trail and verifications are NOT sent from here — the server's
+    // retrieval layer loads whichever of those the question actually needs,
+    // straight from the live store. The readiness snapshot is the exception:
+    // it is computed client-side by the single-source-of-truth engine that also
+    // renders the IPO Readiness page, so passing it through is what guarantees
+    // the Copilot and that page can never quote different numbers.
     return {
       companyId,
       role: user?.role,
       pathname,
       currentChapter: activeNode?.fullTitle || selectedSectionKey,
-      readiness: readinessSnapshot,
-      chapterStatuses: Object.entries(drafts || {}).map(([key, d]) => ({ key, status: d?.status || 'draft' })),
-      openComments: (comments || []).filter(c => c.status !== 'resolved').map(c => ({ author: c.author || c.author_name, type: c.type, content: c.content, section: c.section_id })),
-      recentActivity: (auditLogs || []).slice(0, 12).map(l => ({
-        actor: l.actor_name || l.actor,
-        action: l.action || l.actionType,
-        detail: l.description || l.actionSummary,
-        when: l.timestamp || l.created_at
-      })),
-      gapCount: (gapReport || []).length,
-      documentCount: (docsCache || []).length,
-      hasIntakeData: Object.keys(intakeCache || {}).length > 0
+      readiness: readinessSnapshot
     };
   };
 

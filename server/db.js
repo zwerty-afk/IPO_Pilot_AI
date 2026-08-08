@@ -873,6 +873,10 @@ export const db = {
   },
 
   getComments: (companyId, sectionId) => getDb().comments.filter(c => c.companyId === companyId && c.section_id === sectionId),
+  // Every comment for a company across all sections. The per-section getter
+  // above backs the Reviewer Workspace panel; the Copilot needs the whole set
+  // to answer "what comments are still open?" without knowing the section.
+  getAllComments: (companyId) => (getDb().comments || []).filter(c => c.companyId === companyId),
   addComment: (companyId, sectionId, content, type, author, role, blockId = null, parentId = null) => {
     const data = getDb();
     const newComment = {

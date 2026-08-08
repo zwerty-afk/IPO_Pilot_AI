@@ -23,6 +23,9 @@ import {
   mockVerifyGST, mockVerifyPAN, mockVerifyCIN,
   buildComparisonRows, assessDocumentAuthenticity, deriveStatus
 } from './verificationEngine.js';
+import {
+  detectSources, retrieveSources, buildContextBlock, isGeneralKnowledgeQuestion
+} from './copilotRetrieval.js';
 // Read directly from the store module: db.js deliberately does not re-export
 // these, but /api/health needs to report whether DynamoDB is configured and live.
 import { dynamoEnabled, isReady as isDbReady } from './dynamoStore.js';
@@ -2774,81 +2777,78 @@ app.post('/api/chatbot/query', authenticateToken, async (req, res) => {
     return res.status(400).json({ answer: 'Company data could not be loaded. Please refresh and try again.' });
   }
 
-  let company, intake, docs, drafts;
+  // ── RETRIEVAL PIPELINE ───────────────────────────────────────────────────
+  // question -> detectSources -> load only those slices -> build context.
+  // The whole workspace is never sent; each request carries only what the
+  // question needs, labeled with the real route it came from.
+  let company, intake, docs, drafts, comments, gapReport, auditLogs, verifications, sebiNotices;
   try {
     company = db.getCompany(companyId) || {};
     intake = db.getIntake(companyId) || {};
     docs = db.getDocuments(companyId) || [];
     drafts = db.getDrafts(companyId) || {};
+    comments = db.getAllComments(companyId) || [];
+    gapReport = computeGapReport(companyId, intake, docs) || [];
+    auditLogs = db.getAuditLogs({ companyId }) || [];
+    // Fraud & Verification is a reviewer-only module — an issuer's Copilot must
+    // never see its findings, matching the 403 on the module's own routes.
+    verifications = req.user.role === 'reviewer' ? (db.getVerifications(companyId) || []) : [];
+    sebiNotices = db.getSebiNotices() || [];
   } catch (err) {
     console.error('[Copilot] Failed to load company data:', err.message);
-    return res.status(500).json({ answer: 'Company data could not be loaded. Please refresh and try again.' });
+    return res.status(500).json({ answer: "I couldn't access the current company data right now. Please try again." });
   }
 
   const companyName = intake.company_details?.legal_name || company?.legal_name || company?.name || 'this company';
-  const exchange = intake.company_details?.proposed_exchange || company?.exchange || 'SME Exchange';
-  const incDate = intake.company_details?.incorporation_date || 'not yet recorded';
-  const cin = intake.company_details?.cin || 'not yet recorded';
-  const regOffice = intake.company_details?.registered_office || company.address || 'not yet recorded';
 
-  const draftChapterSummary = Object.keys(drafts).length > 0
-    ? Object.entries(drafts).map(([k, v]) => `${k}: ${v?.status || 'draft'}`).join(', ')
-    : 'No DRHP chapters generated yet';
+  const previousQuestion = [...history].reverse().find(m => m.role === 'user')?.content || '';
+  const selectedSources = detectSources(question, {
+    previousQuestion,
+    pathname: context.pathname || '',
+    role: req.user.role
+  });
 
-  // The readiness figure is never recomputed here — it is the exact snapshot
-  // already shown on the IPO Readiness page, passed through from the client's
-  // single-source-of-truth calculateSingleSourceOfTruthReadiness(). This is
-  // what guarantees the chatbot and the Readiness page always agree.
-  const r = context.readiness;
-  const readinessBlock = r
-    ? `- Overall IPO Readiness: ${r.score}/100 (${r.status || ''}), ${r.remainingPoints} points remaining
-  - Intake & Company Information: ${r.stages.intake.score}/${r.stages.intake.max}
-  - Compliance: ${r.stages.compliance.score}/${r.stages.compliance.max} — rules: ${(r.stages.compliance.rules || []).map(x => `${x.name} [${x.status}]`).join('; ') || 'none recorded'}
-  - Gap Analysis & Remediation: ${r.stages.gapAnalysis.score}/${r.stages.gapAnalysis.max} — checks: ${(r.stages.gapAnalysis.checks || []).map(x => `${x.title} [${!x.applicable ? 'not yet applicable' : x.resolved ? 'resolved' : 'open'}]${x.description ? ` — ${x.description}` : ''}`).join('; ') || 'none recorded'}
-  - Reviewer Certification: ${r.stages.certification.score}/${r.stages.certification.max} — chapters: ${(r.stages.certification.chapters || []).map(x => `${x.label} [${x.status}]`).join('; ') || 'none recorded'}
-  - Recommended next actions (highest priority first): ${(r.nextActions || []).map(a => `${a.description} (+${a.pointsRemaining} pts, stage: ${a.label})`).join(' | ') || 'none — all stages complete'}`
-    : '- Readiness data was not provided with this request. Do not state or estimate a readiness score; say it is unavailable and suggest the user open the IPO Readiness page.';
+  const retrieved = retrieveSources(selectedSources, {
+    role: req.user.role,
+    question,
+    company, intake, docs, drafts, comments, gapReport, auditLogs, verifications,
+    sebiNotices: Array.isArray(sebiNotices) ? sebiNotices : (sebiNotices?.notices || []),
+    // Readiness/compliance/gap scores are NOT recomputed here — this is the
+    // exact snapshot the IPO Readiness page is showing, passed through from the
+    // client's single-source-of-truth engine, so the two can never disagree.
+    readiness: context.readiness
+  });
 
-  const openComments = (context.openComments || []);
-  const commentsBlock = openComments.length > 0
-    ? openComments.map(c => `[${c.author || 'User'}${c.type ? `, ${c.type}` : ''}${c.section ? `, section: ${c.section}` : ''}]: ${c.content || ''}`).join(' | ')
-    : 'No open/unresolved comments';
+  const retrievedBlock = buildContextBlock(retrieved);
+  const isGeneral = isGeneralKnowledgeQuestion(question);
 
-  const recentActivity = (context.recentActivity || []);
-  const activityBlock = recentActivity.length > 0
-    ? recentActivity.map(a => `${a.actor || 'Someone'} ${a.action || 'did an action'}: ${a.detail || ''}`).join(' | ')
-    : 'No recent activity recorded';
+  const systemContext = `You are IPO Pilot Copilot, an AI assistant embedded inside the IPO Pilot AI workspace for ${companyName}.
 
-  const chapterStatuses = (context.chapterStatuses || []);
-  const chapterStatusBlock = chapterStatuses.length > 0
-    ? chapterStatuses.map(c => `${c.key}: ${c.status}`).join(', ')
-    : draftChapterSummary;
-
-  const systemContext = `You are IPO Pilot Copilot, an AI assistant embedded inside the IPO Pilot AI platform for ${companyName} (${exchange} IPO).
-
-WHO IS ASKING:
+WHO IS ASKING
 - User: ${req.user.name}, role: ${req.user.role}.
-- Current page: ${context.pathname || 'unknown'}${context.currentChapter ? `, viewing: ${context.currentChapter}` : ''}.
+- Current page: ${context.pathname || 'unknown'}${context.currentChapter ? ` (viewing: ${context.currentChapter})` : ''}.
 
-REAL COMPANY WORKSPACE DATA (this is the only data you may treat as fact — everything below is live, company-scoped, and already verified by the application):
-- Company: ${companyName} | Incorporation Date: ${incDate} | CIN: ${cin} | Exchange: ${exchange} | Registered Office: ${regOffice}
-${readinessBlock}
-- DRHP Chapter Statuses: ${chapterStatusBlock}
-- Documents uploaded: ${docs.length}
-- Open/unresolved comments: ${commentsBlock}
-- Recent activity: ${activityBlock}
+HOW THIS CONTEXT WAS BUILT
+The user's question was classified and only the relevant parts of their live workspace were retrieved. The blocks below are the CURRENT saved state of this specific company — they are the only facts you may assert. Anything not present below is genuinely absent from the workspace.
 
-RULES:
-1. Answer ONLY the question the user actually asked, using the REAL COMPANY WORKSPACE DATA above. Do not append unrelated sections (e.g. don't dump the full readiness breakdown, all gaps, and all audit findings when the user asked a narrow question like "what is AOA?"). Keep responses proportional to the question — a short question gets a short answer.
-2. Never invent revenue, financial figures, promoter information, legal facts, compliance status, SEBI status, certifications, company addresses, or regulatory approvals. If the data needed to answer isn't present above, say plainly: "I don't have enough verified data to answer that." — do not guess or estimate.
-3. If asked for the IPO readiness score or breakdown, use the exact numbers given above — never recalculate or approximate them.
-4. If asked "what should I do next", answer using the "Recommended next actions" list above, ordered by priority, with the point value of each.
-5. If you generate draft prospectus content (e.g. a risk factor) or a specific requested artifact (e.g. a 3-year revenue/PAT table), generate ONLY what was asked for, clearly prefixed as "AI draft — verify against the underlying source before using in the prospectus", and base it only on the real company data available above; do not fabricate specifics that aren't in the data, and do not attach unrelated audit findings or executive summaries to it.
-6. Role restrictions: only a Reviewer can approve, reject, request changes on, or certify a DRHP chapter. If the current user's role is "issuer" and they ask you to perform (or claim you performed) one of those actions, do NOT say it was done — explain that only the assigned Reviewer can do that, and state the chapter's actual current status instead. You have no ability to execute any action in this application — you can only inform and guide; always point the user to the relevant page instead of claiming to have done something. Any action or navigation suggestion you offer must correspond to what the user is actually asking about — don't suggest unrelated actions.
-7. Be concise. For a simple question, give a direct answer in a sentence or two. For a data-heavy question, use a short Markdown table or bullet list rather than a long paragraph.
-8. If the question is genuinely ambiguous between two real interpretations, ask a short clarifying question instead of guessing.
-9. Maintain conversation context — if the user asks a short follow-up ("why?", "how do I fix it?", "will that affect X?"), resolve it against the immediately preceding turn without asking them to repeat the company or topic.
-10. If asked something outside the data available in this workspace, say so clearly and offer what you can answer instead.`;
+RETRIEVED WORKSPACE DATA
+${retrievedBlock}
+
+QUESTION TYPE: ${isGeneral
+  ? 'This looks like a GENERAL IPO/SEBI concept question, not a question about this company\'s own data. Answer it from general IPO/SEBI knowledge. You may optionally add one short line connecting it to this company\'s actual state if the retrieved data supports it, clearly separated from the general explanation.'
+  : 'This is a COMPANY-SPECIFIC question. Answer it from the retrieved workspace data above, not from general knowledge. Do not give a textbook definition when the user is asking about their own workspace.'}
+
+RULES
+1. Answer ONLY what was asked, using the retrieved data. Never pad the response with unrelated modules — if the user asked about revenue, do not append compliance findings, gaps, or a readiness breakdown.
+2. NEVER invent or estimate: financial figures, GSTIN, PAN, CIN, dates, company details, legal proceedings, compliance status, SEBI status, reviewer decisions, certification status, document names, or verification results. If the retrieved data does not contain what was asked, say exactly: "I couldn't find that information in the current company data." If it is partially there, say what you found and name what is missing.
+3. Cite where each company-specific fact came from. End the answer with a "Source:" line using markdown links to the routes given with each SOURCE block, e.g. "Source: [Financial Information](/intake?step=financials)". Use only routes that appear in the retrieved blocks above — never invent a route or link to a page that wasn't provided.
+4. When there is an obvious next step in the app, offer it as a markdown link on its own line, e.g. "[Open Compliance Checklist](/compliance-checklist)". Only link to routes provided above, and only when it actually relates to the question.
+5. Readiness/compliance/gap scores must be quoted exactly as given. Never recalculate, round, or estimate them.
+6. You cannot perform any action in this application — you can only inform and navigate. Only a Reviewer can approve, reject, request changes on, or certify a chapter. If an issuer asks you to do one of those, say that only the assigned Reviewer can, and report the chapter's actual current status. Never claim an action was carried out.
+7. Be concise and proportional: a simple question gets 1–3 sentences. Use a short markdown table or bullets only for genuinely multi-item data.
+8. Multi-turn: resolve short follow-ups ("why?", "how do I fix it?", "which one is blocking?") against the immediately preceding turn. Never ask the user to repeat the company or topic.
+9. If the question is truly ambiguous between two real interpretations, ask one short clarifying question instead of guessing.
+10. If you generate draft prospectus text (e.g. a risk factor), prefix it with "AI draft — verify against the underlying source before using in the prospectus" and base it strictly on the retrieved data.`;
 
   try {
     let modelUsed = GEMINI_MODEL;
@@ -2868,7 +2868,9 @@ RULES:
     }, { label: 'chatbot', onModel: (m) => { modelUsed = m; } });
 
     const answer = result.response.text();
-    res.json({ answer, model: modelUsed });
+    // `sources` is returned for observability/debugging of the retrieval layer —
+    // it shows which slices this specific answer was grounded in.
+    res.json({ answer, model: modelUsed, sources: retrieved.map(r => ({ id: r.id, label: r.label, route: r.route })) });
   } catch (err) {
     console.warn('[Copilot] Gemini API request failed:', err.message);
     res.json({ answer: "I couldn't process that request right now. Please try again.", model: 'unavailable' });
